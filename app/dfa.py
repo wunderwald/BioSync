@@ -186,8 +186,8 @@ def dfa_wxcorr(wxcorr_data, max_lag, order=1):
     """
     
     if not wxcorr_data:
-        return np.array([-1]), np.array([-1])
-    
+        return []
+
     # extract horizontal lines of wxcorr plot (lists of correlation values per in-window lag)
     lags = range(-max_lag, max_lag + 1)
     correlations_per_lag = {lag: [] for lag in lags}
