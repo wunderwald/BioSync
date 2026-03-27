@@ -212,6 +212,7 @@ def update_xcorr_parameter_groups(*args):
         _w['subgroup_standard_xcorr_parameters'].grid_forget()
         _w['subgroup_lag_hint'].grid(row=2, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
         _w['subgroup_lag_info'].grid_forget()
+        _w['subgroup_visualisation'].grid(row=1, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
     else:
         _w['subgroup_windowed_xcorr_parameters'].grid_forget()
         _w['subgroup_standard_xcorr_parameters'].grid(
@@ -219,6 +220,7 @@ def update_xcorr_parameter_groups(*args):
         )
         _w['subgroup_lag_hint'].grid_forget()
         _w['subgroup_lag_info'].grid(row=2, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
+        _w['subgroup_visualisation'].grid_forget()
 
 
 def update_batch_input_num_subdirs(*args):

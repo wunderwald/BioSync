@@ -435,6 +435,7 @@ def build_layout(app, validate_numeric_input):
         'subgroup_standard_xcorr_parameters':  subgroup_standard_xcorr_parameters,
         'subgroup_lag_hint':                   subgroup_lag_hint,
         'subgroup_lag_info':                   subgroup_lag_info,
+        'subgroup_visualisation':              subgroup_visualisation,
         'label_batch_input_folder':            label_batch_input_folder,
         'label_output_dir':                    label_output_dir,
         'label_batch_input_num_subdirs':       label_batch_input_num_subdirs,
