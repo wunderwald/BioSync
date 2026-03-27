@@ -15,7 +15,7 @@ tk.set_appearance_mode("Light")
 tk.set_default_color_theme("dark-blue")
 
 app = tk.CTk()
-app.title("wx")
+app.title("BioSync")
 app.withdraw()  # hide until fully built and sized
 
 screen_width  = app.winfo_screenwidth()

@@ -203,7 +203,7 @@ def main():
     print("3. Minimal (just main script)")
     
     choice = input("\nChoice [1]: ").strip() or "1"
-    app_name = input("App name [wx]: ").strip() or "wx"
+    app_name = input("App name [BioSync]: ").strip() or "BioSync"
     
     if choice == "1":
         success = run_pyinstaller_with_analysis(app_name)
