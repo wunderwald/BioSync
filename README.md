@@ -1,4 +1,4 @@
-# wx
+# BioSync
 by [Moritz Wunderwald](mailto:code@moritzwunderwald.de), 2025
 
 Interactive visual toolbox for working with windowed cross-correlation, optimized for IBI and EDA data. Validate data, tune parameters, run batches and further analysis.
