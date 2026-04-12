@@ -7,9 +7,9 @@ import numpy as np
 _cmap_wxc = mcolors.LinearSegmentedColormap.from_list(
     'wxc_diverging',
     [
-        (0.0, "#ffc6e6"),  
-        (0.5, '#000000'),  
-        (1.0, "#cdff9b"),  
+        (0.0, "#333333"),  
+        (0.5, '#ffffff'),  
+        (1.0, "#ff30a2"),  
     ]
 )
 
