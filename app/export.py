@@ -22,8 +22,8 @@ def export_wxcorr_data(file_path, params):
         'signal_a': params['signal_a_std'] if params['is_standardised'] else params['signal_a'],
         'signal_b': params['signal_b_std'] if params['is_standardised'] else params['signal_b'],
         'window start index': [o['start_idx'] for o in params['wxcorr']],
-        'max correlation (r_max)': [o['r_max'] for o in params['wxcorr']],
-        'lag of max correlation (tau_max)': [o['tau_max'] for o in params['wxcorr']],
+        'peak correlation (r_max)': [o['r_max'] for o in params['wxcorr']],
+        'lag of peak correlation (tau_max)': [o['tau_max'] for o in params['wxcorr']],
     }
     vectors['avg_z_transformed_corr'] = [o['avg_z_transformed_corr'] for o in params['wxcorr']]
     vectors['var_z_transformed_corr'] = [o['var_z_transformed_corr'] for o in params['wxcorr']]

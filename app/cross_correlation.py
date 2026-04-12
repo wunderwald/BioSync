@@ -38,7 +38,7 @@ def windowed_cross_correlation(x, y, window_size, step_size, max_lag, use_lag_fi
             Each result is a dictionary with keys:
                 - 'start_idx': Start index of the window in the time series.
                 - 'center_idx': Index of window center in time series (allows aligning correlation result with input time series).
-                - 'r_max': Peak cross-correlation value in the window.
+                - 'r_max': Peak cross-correlation value in the window (largest magnitude, signed).
                 - 'tau_max': Lag at which the peak correlation occurs (see lag convention above).
                 - 'correlations': Array of cross-correlation values for all lags.
                 - 'correlations_sigmoid': Array of sigmoid-scaled cross-correlation values for all lags.
@@ -106,11 +106,13 @@ def windowed_cross_correlation(x, y, window_size, step_size, max_lag, use_lag_fi
             avg_sigmoid = np.mean(np.array(correlations_sigmoid))
             correlations_sigmoid = [avg_sigmoid for _ in correlations_sigmoid]
 
-        # Find the peak correlation and its corresponding lag
-        r_max = np.max(correlations)
-        tau_max = np.argmax(correlations) + _min_lag if not average_windows else 0
-        r_max_sigmoid = np.max(correlations_sigmoid)
-        tau_max_sigmoid = np.argmax(correlations_sigmoid) + _min_lag if not average_windows else 0
+        # Find the peak correlation (largest magnitude, signed) and its corresponding lag
+        _abs_idx = np.argmax(np.abs(correlations))
+        r_max = correlations[_abs_idx]
+        tau_max = _abs_idx + _min_lag if not average_windows else 0
+        _abs_idx_sigmoid = np.argmax(np.abs(correlations_sigmoid))
+        r_max_sigmoid = correlations_sigmoid[_abs_idx_sigmoid]
+        tau_max_sigmoid = _abs_idx_sigmoid + _min_lag if not average_windows else 0
 
         result = {
             'start_idx': start,
