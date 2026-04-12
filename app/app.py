@@ -12,7 +12,7 @@ import corr_plot
 # ------------------
 
 tk.set_appearance_mode("Light")
-tk.set_default_color_theme("dark-blue")
+tk.set_default_color_theme("green")
 
 app = tk.CTk()
 app.title("BioSync")

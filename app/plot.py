@@ -7,9 +7,9 @@ import numpy as np
 _cmap_wxc = mcolors.LinearSegmentedColormap.from_list(
     'wxc_diverging',
     [
-        (0.0, "#333333"),  
+        (0.0, "#000000"),  
         (0.5, '#ffffff'),  
-        (1.0, "#ff30a2"),  
+        (1.0, "#00ff3c"),  
     ]
 )
 
@@ -139,7 +139,7 @@ def plot_standard_cross_correlation(sxc_data, signal_a, signal_b):
 
     # Plot cross-correlation
     ax2 = fig.add_subplot(gs[0])
-    ax2.plot(lags, corr, marker='o', markersize=1.5, color='black')
+    ax2.plot(lags, corr, marker='o', markersize=.5, color='#333333')
     ax2.set_xlabel('Lag')
     ax2.set_ylabel('Cross-correlation')
     ax2.set_title('Standard Cross-correlation')
@@ -147,14 +147,14 @@ def plot_standard_cross_correlation(sxc_data, signal_a, signal_b):
 
     # Plot input signal a over time
     ax1 = fig.add_subplot(gs[1])
-    ax1.plot(signal_a, label='Signal a', color='blue')
+    ax1.plot(signal_a, label='Signal a', color='#333333')
     ax1.set_xlabel('Index')
     ax1.set_ylabel('Signal a')
     ax1.grid()
 
     # Plot input signal b over time
     ax1 = fig.add_subplot(gs[2])
-    ax1.plot(signal_b, label='Signal b', color='purple')
+    ax1.plot(signal_b, label='Signal b', color='#333333')
     ax1.set_xlabel('Index')
     ax1.set_ylabel('Signal b')
     ax1.grid()
@@ -198,7 +198,7 @@ def plot_preprocessed_signals(signal_a, signal_b, plot_titles):
     
     # Plot signal_a
     ax1 = fig.add_subplot(gs[0])
-    ax1.plot(signal_a, color='blue')
+    ax1.plot(signal_a, color='#333333')
     ax1.set_title(plot_titles['a'])
     ax1.set_xlabel('Index')
     ax1.set_ylabel('Value')
@@ -206,7 +206,7 @@ def plot_preprocessed_signals(signal_a, signal_b, plot_titles):
     
     # Plot signal_b
     ax2 = fig.add_subplot(gs[1])
-    ax2.plot(signal_b, color='purple')
+    ax2.plot(signal_b, color='#333333')
     ax2.set_title(plot_titles['b'])
     ax2.set_xlabel('Index')
     ax2.set_ylabel('Value')
