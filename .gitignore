@@ -7,6 +7,7 @@
 *.xlsx
 !simulated_data/dyad_recording/*/*.xlsx
 !simulated_data/dyads_simulated/*/*.xlsx
+!siumlated_data/dyads_recording/*.xlsx
 /papers
 /data
 /simulated_data/*save
