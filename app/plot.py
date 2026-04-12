@@ -1,14 +1,22 @@
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import matplotlib.colors as mcolors
 import numpy as np
 
+# Custom diverging colormap
+_cmap_wxc = mcolors.LinearSegmentedColormap.from_list(
+    'wxc_diverging',
+    [
+        (0.0, "#ffc6e6"),  
+        (0.5, '#000000'),  
+        (1.0, "#cdff9b"),  
+    ]
+)
 
 SCALING_PARAMS = {
     'FIGSIZE': (5, 4),
     'DPI': 100,
 }
-
-
 
 def plot_init(is_retina):
     # rcParams — font/line sizes depend on display type, not on window size
@@ -71,14 +79,14 @@ def plot_windowed_cross_correlation(wxc_data, window_size, max_lag, step_size, s
     im = ax0.imshow(
         heatmap_data.T,
         aspect='auto',
-        cmap='magma', # options: viridis, plasma, magma...
+        cmap=_cmap_wxc,
         extent=[0, len(wxc_data) * step_size, _min_lag, _max_lag],
         origin='lower',
         vmin=-1,
         vmax=1
     )
     fig.colorbar(im, ax=ax0, label='Correlation')
-    ax0.axhline(y=0, color='black', linestyle='dotted', linewidth=0.2)
+    ax0.axhline(y=0, color='white', linestyle='dotted', linewidth=0.5)
     ax0.set_xlabel('Window Start Index')
     ax0.set_ylabel('Lag')
     ax0.set_title(f"Correlation Heatmap{' (sigmoid-scaled)' if show_sigmoid_correlations else ''}")
