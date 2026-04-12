@@ -9,7 +9,7 @@ _cmap_wxc = mcolors.LinearSegmentedColormap.from_list(
     [
         (0.0, "#000000"),  
         (0.5, '#ffffff'),  
-        (1.0, "#00ff3c"),  
+        (1.0, "#cc00bb"),  
     ]
 )
 
