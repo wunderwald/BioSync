@@ -571,7 +571,7 @@ def run_random_pair():
         'lag_filter_min':             state.val_lag_filter_min.get(),
         'lag_filter_max':             state.val_lag_filter_max.get(),
     }
-    t_stat, p_value, avg_corr_rp, avg_corr_real = random_pair_analysis(
+    t_stat, p_value, avg_corr_rp, avg_corr_real, avg_wxcorr_real, avg_wxcorr_rp = random_pair_analysis(
         params=params,
         random_pair_count=state.val_rp_n.get(),
         input_dir=state.val_random_pair_input_folder.get(),
@@ -584,6 +584,8 @@ def run_random_pair():
         p_value=p_value,
         avg_corr_rp=avg_corr_rp,
         avg_corr_real=avg_corr_real,
+        avg_wxcorr_real=avg_wxcorr_real,
+        avg_wxcorr_rp=avg_wxcorr_rp,
     )
 
 

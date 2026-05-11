@@ -132,6 +132,55 @@ def windowed_cross_correlation(x, y, window_size, step_size, max_lag, use_lag_fi
 
     return results
 
+def average_wxcorr_matrices(list_of_wxcorr, min_lag):
+    """
+    Average multiple wxcorr result lists element-wise, truncating to the shortest.
+
+    min_lag must be supplied by the caller:
+      - no lag filter: -max_lag
+      - lag filter active: min(lag_filter_min, lag_filter_max)
+    Never infer min_lag from array length — asymmetric filters break that assumption.
+
+    Returns a list of window dicts with the same keys as windowed_cross_correlation output,
+    directly passable to plot_windowed_cross_correlation.
+    """
+    if not list_of_wxcorr:
+        return []
+
+    n_windows = min(len(w) for w in list_of_wxcorr)
+
+    avg = []
+    for i in range(n_windows):
+        all_corrs         = np.array([d[i]['correlations']         for d in list_of_wxcorr])
+        all_corrs_sigmoid = np.array([d[i]['correlations_sigmoid'] for d in list_of_wxcorr])
+
+        avg_corr         = np.mean(all_corrs, axis=0)
+        avg_corr_sigmoid = np.mean(all_corrs_sigmoid, axis=0)
+
+        abs_idx     = int(np.argmax(np.abs(avg_corr)))
+        r_max       = float(avg_corr[abs_idx])
+        tau_max     = int(abs_idx + min_lag)
+
+        abs_idx_sig     = int(np.argmax(np.abs(avg_corr_sigmoid)))
+        r_max_sigmoid   = float(avg_corr_sigmoid[abs_idx_sig])
+        tau_max_sigmoid = int(abs_idx_sig + min_lag)
+
+        avg.append({
+            'start_idx':             list_of_wxcorr[0][i]['start_idx'],
+            'center_idx':            list_of_wxcorr[0][i]['center_idx'],
+            'correlations':          avg_corr.tolist(),
+            'correlations_sigmoid':  avg_corr_sigmoid.tolist(),
+            'r_max':                 r_max,
+            'tau_max':               tau_max,
+            'r_max_sigmoid':         r_max_sigmoid,
+            'tau_max_sigmoid':       tau_max_sigmoid,
+            'avg_z_transformed_corr': float(np.mean([d[i]['avg_z_transformed_corr'] for d in list_of_wxcorr])),
+            'var_z_transformed_corr': float(np.mean([d[i]['var_z_transformed_corr'] for d in list_of_wxcorr])),
+        })
+
+    return avg
+
+
 def standard_cross_correlation(x, y, max_lag, absolute=False):
     """
     Compute standard (1D) cross-correlation between two time series.

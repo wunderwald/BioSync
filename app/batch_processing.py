@@ -1,8 +1,8 @@
 import os
 import xlsx
 from signal_processing import preprocess_dyad
-from export import export_sxcorr_data, export_wxcorr_data
-from cross_correlation import windowed_cross_correlation, standard_cross_correlation
+from export import export_sxcorr_data, export_wxcorr_data, export_avg_wxcorr_data
+from cross_correlation import windowed_cross_correlation, standard_cross_correlation, average_wxcorr_matrices
 import random
 import numpy as np
 from datetime import datetime
@@ -205,12 +205,19 @@ def random_pair_analysis(params, input_dir, random_pair_count=100):
 
     # process random pairs
     all_correlations_rp = []
+    all_wxcorr_rp = []
     for pair in random_pairs:
         file_path_a, file_path_b = pair
-        corr_data = _process_dyad(file_path_a, file_path_b, None, params, export=False)
-        if not corr_data: continue
+        try:
+            corr_data = _process_dyad(file_path_a, file_path_b, None, params, export=False)
+        except Exception as e:
+            print(f"! Skipping random pair: {e}")
+            continue
+        if not corr_data:
+            continue
         if is_windowed_corr:
             all_correlations_rp.append([val for d in corr_data for val in d['correlations']])
+            all_wxcorr_rp.append(corr_data)
         else:
             all_correlations_rp.append(corr_data['corr'])
 
@@ -219,22 +226,29 @@ def random_pair_analysis(params, input_dir, random_pair_count=100):
 
     # process all real dyads
     all_correlations_real = []
+    all_wxcorr_real = []
     for dyad_folder in dyad_folders:
         dyad_path = os.path.join(input_dir, dyad_folder)
         xlsx_files = [f for f in os.listdir(dyad_path) if f.endswith('.xlsx')]
         if len(xlsx_files) >= 2:
             file_path_a = os.path.join(dyad_path, xlsx_files[0])
             file_path_b = os.path.join(dyad_path, xlsx_files[1])
-            corr_data = _process_dyad(
-                file_path_a=file_path_a, 
-                file_path_b=file_path_b, 
-                output_dir=None, 
-                params=params, 
-                export=False
-            )
-            if not corr_data: continue
+            try:
+                corr_data = _process_dyad(
+                    file_path_a=file_path_a,
+                    file_path_b=file_path_b,
+                    output_dir=None,
+                    params=params,
+                    export=False
+                )
+            except Exception as e:
+                print(f"! Skipping {dyad_folder}: {e}")
+                continue
+            if not corr_data:
+                continue
             if is_windowed_corr:
                 all_correlations_real.append([val for d in corr_data for val in d['correlations']])
+                all_wxcorr_real.append(corr_data)
             else:
                 all_correlations_real.append(corr_data['corr'])
 
@@ -244,7 +258,20 @@ def random_pair_analysis(params, input_dir, random_pair_count=100):
     # run Welch's t-test
     t_stat, p_value = ttest_ind(average_correlations_rp, average_correlations_real, equal_var=False)
 
-    return t_stat, p_value, average_correlations_rp, average_correlations_real
+    # compute group-average correlation matrices for wxcorr
+    avg_wxcorr_real = None
+    avg_wxcorr_rp   = None
+    if is_windowed_corr:
+        min_lag = (
+            min(params['lag_filter_min'], params['lag_filter_max'])
+            if params['use_lag_filter'] else -params['max_lag']
+        )
+        if all_wxcorr_real:
+            avg_wxcorr_real = average_wxcorr_matrices(all_wxcorr_real, min_lag)
+        if all_wxcorr_rp:
+            avg_wxcorr_rp = average_wxcorr_matrices(all_wxcorr_rp, min_lag)
+
+    return t_stat, p_value, average_correlations_rp, average_correlations_real, avg_wxcorr_real, avg_wxcorr_rp
 
 
 def batch_process(params):
@@ -288,10 +315,41 @@ def batch_process(params):
 
     # process dyads in folder
     dyad_folders = [f for f in os.listdir(batch_input_folder) if os.path.isdir(os.path.join(batch_input_folder, f))]
+    all_wxcorr_results = []
     for dyad_folder in dyad_folders:
         dyad_path = os.path.join(batch_input_folder, dyad_folder)
         xlsx_files = [f for f in os.listdir(dyad_path) if f.endswith('.xlsx')]
         if len(xlsx_files) >= 2:
             file_path_a = os.path.join(dyad_path, xlsx_files[0])
             file_path_b = os.path.join(dyad_path, xlsx_files[1])
-            _process_dyad(file_path_a, file_path_b, output_dir, params, dyad_dir=dyad_path, export=True)
+            try:
+                corr_data = _process_dyad(file_path_a, file_path_b, output_dir, params, dyad_dir=dyad_path, export=True)
+                if params['checkbox_windowed_xcorr'] and corr_data:
+                    all_wxcorr_results.append(corr_data)
+            except Exception as e:
+                print(f"! Skipping {dyad_folder}: {e}")
+
+    # export group-average heatmap after all dyads are processed
+    if params['checkbox_windowed_xcorr'] and all_wxcorr_results:
+        min_lag = (
+            min(params['lag_filter_min'], params['lag_filter_max'])
+            if params['use_lag_filter'] else -params['max_lag']
+        )
+        avg_wxcorr = average_wxcorr_matrices(all_wxcorr_results, min_lag)
+        if avg_wxcorr:
+            export_avg_wxcorr_data(
+                os.path.join(output_dir, 'grand_avg_wxcorr.xlsx'),
+                avg_wxcorr, len(all_wxcorr_results), params
+            )
+            fig = plot_windowed_cross_correlation(
+                wxc_data=avg_wxcorr,
+                signal_a=[], signal_b=[],
+                window_size=params['window_size'],
+                max_lag=params['max_lag'],
+                step_size=params['step_size'],
+                show_sigmoid_correlations=params['sigmoid_correlations'],
+                use_lag_filter=params['use_lag_filter'],
+                lag_filter_min=params['lag_filter_min'],
+                lag_filter_max=params['lag_filter_max'],
+            )
+            save_figure_to_png(fig=fig, filepath=os.path.join(output_dir, 'grand_avg_wxcorr.png'))
