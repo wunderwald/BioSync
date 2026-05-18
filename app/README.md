@@ -18,6 +18,23 @@ cd app
 pip install -r requirements.txt
 ```
 
+Using a virtual environment is optional but recommended to keep dependencies isolated:
+
+```bash
+cd app
+python -m venv .venv
+
+# activate (macOS / Linux)
+source .venv/bin/activate
+
+# activate (Windows)
+.venv\Scripts\activate
+
+pip install -r requirements.txt
+```
+
+The environment only needs to be created once. On subsequent sessions, just re-run the `activate` line before launching the app.
+
 ---
 
 ## Running
