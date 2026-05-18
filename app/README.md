@@ -1,13 +1,61 @@
-# BioSync
+# BioSync — App
+by [Moritz Wunderwald](mailto:code@moritzwunderwald.de), 2025-2026
 
-## Entry point
+Interactive visual toolbox for windowed cross-correlation analysis, optimized for IBI and EDA biosignal data. Load dyad recordings, tune parameters, inspect results, and export or batch-process datasets.
+
+---
+
+## Requirements
+
+- Python 3.10+
+
+---
+
+## Installation
+
+```bash
+cd app
+pip install -r requirements.txt
+```
+
+---
+
+## Running
+
+```bash
+python app.py
+```
+
+---
+
+## Building a standalone executable
+
+BioSync ships a `build.py` script that wraps PyInstaller. Run it from inside the `app/` directory:
+
+```bash
+python build.py
+```
+
+You will be prompted to choose a build method and an app name. The finished executable is placed in `dist/`.
+
+| Method | When to use |
+|---|---|
+| Smart auto-detect *(recommended)* | Standard builds — PyInstaller analyses imports automatically |
+| Brute force | When the smart build produces a broken app due to hidden imports |
+| Minimal | Quick test builds; may be missing some dependencies at runtime |
+
+---
+
+---
+
+## Developer reference
+
+### Entry point
 
 **`app.py`** (~80 lines) — orchestrator only. Creates the CTk window, then calls into the modules below in order:
 `state` → `validation` → `callbacks` → `layout` → `gui_updates` → `corr_plot` → `mainloop`.
 
----
-
-## App modules
+### App modules
 
 | Module | Responsibility |
 |---|---|
@@ -18,9 +66,7 @@
 | `gui_updates.py` | Reactive layer — functions that update widget appearance (border colours, error labels, show/hide panels, button enable/disable) in response to state-variable changes. Registered as `trace_add` callbacks via `setup_traces()`. Widget references are injected via `register_widgets()`. |
 | `corr_plot.py` | Runs windowed or standard cross-correlation + DFA on every `PARAMS_CHANGED` event, updates the matplotlib figure, and refreshes the canvas. Separated into `_update_wxcorr_data`, `_update_sxcorr_data`, `update_plot`, `update_canvas`, and the top-level `UPDATE()` loop. |
 
----
-
-## Processing modules
+### Processing modules
 
 | Module | Responsibility |
 |---|---|
@@ -33,9 +79,7 @@
 | `xlsx.py` | Thin wrappers around openpyxl for reading and writing Excel files. |
 | `utils.py` | Small helpers (`is_numeric_array`, `count_subdirectories`, …). |
 
----
-
-## Initialization order
+### Initialization order
 
 ```
 tk theme (no window needed)
@@ -49,7 +93,7 @@ tk theme (no window needed)
                                 └─ UPDATE() + mainloop()
 ```
 
-## Key design notes
+### Key design notes
 
 - **Late-registration pattern**: `callbacks.py` and `gui_updates.py` hold `_dropdowns` / `_widgets` dicts that are populated by `layout.py` after widgets are created. This avoids circular imports while keeping logic decoupled from widget construction.
 - **Sigmoid is display-only**: the sigmoid-scaled view is toggled in the *Visualisation* section of the Correlation tab and affects only the on-screen plot. All XLSX exports always contain raw correlation values.
