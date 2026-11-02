@@ -11,6 +11,7 @@
 /papers
 /data
 /simulated_data/*save
+.claude
 
 # Jupyter
 .ipynb_checkpoints
