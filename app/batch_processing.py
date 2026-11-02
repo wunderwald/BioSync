@@ -220,8 +220,9 @@ def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_
         dyad_path = os.path.join(input_dir, dyad_folder)
         xlsx_files = utils.list_dyad_files(dyad_path)
         if len(xlsx_files) >= 2:
-            file_path_a = os.path.join(dyad_path, xlsx_files[0])
-            file_path_b = os.path.join(dyad_path, xlsx_files[1])
+            file_a, file_b, _ = xlsx.choose_dyad_files(dyad_path, xlsx_files)
+            file_path_a = os.path.join(dyad_path, file_a)
+            file_path_b = os.path.join(dyad_path, file_b)
             try:
                 corr_data = _process_dyad(
                     file_path_a=file_path_a,
@@ -317,10 +318,12 @@ def batch_process(params, progress=_no_progress):
         if len(xlsx_files) < 2:
             summary['failed'].append((dyad_folder, f"needs 2 xlsx files, found {len(xlsx_files)}"))
             continue
+        file_a, file_b, sheets_match = xlsx.choose_dyad_files(dyad_path, xlsx_files)
         if len(xlsx_files) > 2:
-            summary['warnings'].append(f"{dyad_folder}: found {len(xlsx_files)} xlsx files, used {xlsx_files[0]} and {xlsx_files[1]}")
-        file_path_a = os.path.join(dyad_path, xlsx_files[0])
-        file_path_b = os.path.join(dyad_path, xlsx_files[1])
+            caveat = "" if sheets_match else ", because no two have the same sheets"
+            summary['warnings'].append(f"{dyad_folder}: found {len(xlsx_files)} xlsx files, used {file_a} and {file_b}{caveat}")
+        file_path_a = os.path.join(dyad_path, file_a)
+        file_path_b = os.path.join(dyad_path, file_b)
         try:
             corr_data = _process_dyad(file_path_a, file_path_b, output_dir, params, dyad_dir=dyad_path, export=True)
             if params['checkbox_windowed_xcorr'] and corr_data:

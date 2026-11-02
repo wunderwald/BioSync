@@ -361,13 +361,15 @@ def open_dir_picker():
     xlsx_files = utils.list_dyad_files(dir_path)
     if len(xlsx_files) < 2:
         return
+    file_a, file_b, sheets_match = xlsx.choose_dyad_files(dir_path, xlsx_files)
     if len(xlsx_files) > 2:
+        reason = "the first two with the same sheets" if sheets_match else "the first two, because no two have the same sheets"
         messagebox.showwarning(
             "More than two files",
-            f"Found {len(xlsx_files)} xlsx files, using {xlsx_files[0]} and {xlsx_files[1]}."
+            f"Found {len(xlsx_files)} xlsx files, using {file_a} and {file_b} ({reason})."
         )
-    state.val_selected_file_a.set(os.path.join(dir_path, xlsx_files[0]))
-    state.val_selected_file_b.set(os.path.join(dir_path, xlsx_files[1]))
+    state.val_selected_file_a.set(os.path.join(dir_path, file_a))
+    state.val_selected_file_b.set(os.path.join(dir_path, file_b))
     load_xlsx_data()
     state.PARAMS_CHANGED()
 

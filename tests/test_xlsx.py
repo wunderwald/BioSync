@@ -89,10 +89,9 @@ def test_formula_gives_the_value_excel_calculated(tmp_path):
     assert xlsx.get_columns(xlsx.read_xlsx(patched), "S") == {"a": [1, 2]}
 
 
-def test_file_is_closed_after_reading(tmp_path):
-    path = _write(tmp_path / "f.xlsx", {"S": [["a"], [1]]})
-    workbook = xlsx.read_xlsx(path)
-    path.unlink()   # fails on Windows if the file is still open
+def test_file_is_closed_after_reading(tmp_path, opened_workbooks):
+    workbook = xlsx.read_xlsx(_write(tmp_path / "f.xlsx", {"S": [["a"], [1]]}))
+    assert opened_workbooks[0]._archive.fp is None
     assert xlsx.get_columns(workbook, "S") == {"a": [1]}
 
 

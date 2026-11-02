@@ -1,4 +1,5 @@
-from itertools import zip_longest
+import os
+from itertools import combinations, zip_longest
 
 import math
 
@@ -96,6 +97,34 @@ def read_xlsx(input_path: str):
     finally:
         wb.close()
     return workbook
+
+def _read_sheet_names(input_path: str):
+    try:
+        wb = load_workbook(input_path, read_only=True)
+    except Exception:
+        return None  # an unreadable file can't be part of a pair
+    sheet_names = wb.sheetnames
+    wb.close()
+    return sheet_names
+
+def choose_dyad_files(directory: str, file_names: list):
+    """
+    Choose the two files of a dyad from a folder's files, which are the result of utils.list_dyad_files.
+    With more than two files, this is the first pair with the same sheets, as those are probably the same kind of
+    recording. If there is no such pair, it is the first two files.
+    Args:
+        directory (str): The path to the dyad folder.
+        file_names (list): At least two file names, in their fixed order.
+    Returns:
+        file_a (str), file_b (str), sheets_match (bool): sheets_match is False if the first two files were a fallback
+    """
+    if len(file_names) == 2:
+        return file_names[0], file_names[1], True
+    sheet_names = {name: _read_sheet_names(os.path.join(directory, name)) for name in file_names}
+    for name_a, name_b in combinations(file_names, 2):
+        if sheet_names[name_a] is not None and sheet_names[name_a] == sheet_names[name_b]:
+            return name_a, name_b, True
+    return file_names[0], file_names[1], False
 
 def get_sheet_names(workbook: dict):
     """

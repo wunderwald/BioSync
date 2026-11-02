@@ -34,6 +34,20 @@ def fake_state(monkeypatch):
 
 
 @pytest.fixture
+def opened_workbooks(monkeypatch):
+    """Records the workbooks that xlsx.py opens, so that a test can check they were closed."""
+    workbooks = []
+    real_load = xlsx.load_workbook
+
+    def recording_load(*args, **kwargs):
+        workbooks.append(real_load(*args, **kwargs))
+        return workbooks[-1]
+
+    monkeypatch.setattr(xlsx, "load_workbook", recording_load)
+    return workbooks
+
+
+@pytest.fixture
 def load_simulated_dyad():
     """Returns a function that runs a simulated dyad through file reading and preprocessing."""
     def _load(name):
