@@ -12,6 +12,7 @@
 /data
 /simulated_data/*save
 .claude
+TODO.md
 
 # Jupyter
 .ipynb_checkpoints
