@@ -2,6 +2,7 @@ import os
 import utils
 import state
 import validation
+from signal_processing import EVENT_BASED_SAMPLING_RATE_HZ
 
 # ---------------------------------------------------------------------------
 # LATE-REGISTERED WIDGET REFERENCES
@@ -36,6 +37,14 @@ def setup_traces():
     state.val_STEP_SIZE_VALID.trace_add('write', update_step_size_entry_on_validation)
 
     state.val_checkbox_lag_filter.trace_add('write', update_lag_filter_visibility)
+
+    for var in (
+        state.val_window_size, state.val_step_size, state.val_max_lag, state.val_max_lag_sxc,
+        state.val_lag_filter_min, state.val_lag_filter_max, state.val_checkbox_lag_filter, state.val_checkbox_eb,
+    ):
+        var.trace_add('write', update_parameter_labels)
+    update_parameter_labels()
+
     state.val_LAG_FILTER_VALID.trace_add('write', update_lag_filter_entries_on_validation)
 
     state.val_MAX_LAG_VALID_SXC.trace_add('write', update_max_lag_entry_on_validation_sxc)
@@ -152,6 +161,26 @@ def update_step_size_entry_on_validation(*args):
     else:
         _w['entry_step_size'].configure(border_color='red')
         _w['error_label_step_size'].grid(row=6, column=0, columnspan=2, sticky="w", padx=10, pady=0)
+
+
+def _with_seconds(text, *samples):
+    """Fixed-rate data can have any sampling rate, so only event-based data can be shown in seconds."""
+    if not state.val_checkbox_eb.get():
+        return text
+    seconds = [f"{value / EVENT_BASED_SAMPLING_RATE_HZ:g} s" for value in samples]
+    return f"{text} ({' to '.join(seconds)})"
+
+
+def update_parameter_labels(*args):
+    _w['label_window_size'].configure(text=_with_seconds('Window Size', state.val_window_size.get()))
+    _w['label_step_size'].configure(text=_with_seconds('Step Size', state.val_step_size.get()))
+    _w['label_max_lag'].configure(text=_with_seconds('Max Lag', state.val_max_lag.get()))
+    _w['label_max_lag_sxc'].configure(text=_with_seconds('Max Lag', state.val_max_lag_sxc.get()))
+    _w['checkbox_lag_filter'].configure(text=(
+        _with_seconds('Filter Range of Lags', state.val_lag_filter_min.get(), state.val_lag_filter_max.get())
+        if state.val_checkbox_lag_filter.get()
+        else 'Filter Range of Lags'
+    ))
 
 
 def update_lag_filter_visibility(*args):

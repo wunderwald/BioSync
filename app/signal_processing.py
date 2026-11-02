@@ -2,6 +2,9 @@ import numpy as np
 from scipy.interpolate import CubicSpline
 from scipy.stats import zscore
 
+# event-based signals are resampled to this rate
+EVENT_BASED_SAMPLING_RATE_HZ = 5
+
 def _replace_invalid_EDA(eda):
     '''
     Interpolates across negative samples. Deleting them would shift all later samples in time.
@@ -124,8 +127,8 @@ def preprocess_dyad(signal_a, signal_b, signal_type, remove_invalid_samples=Fals
         t_end_ms = min(beats_a[-1], beats_b[-1])
         if t_end_ms <= t_start_ms:
             raise ValueError("The two recordings do not overlap in time.")
-        signal_a = resample_ibi(ibi_a, t_offset_ms=t_offset_ms_a, target_sampling_rate_hz=5, t_start_ms=t_start_ms, t_end_ms=t_end_ms, remove_invalid_samples=remove_invalid_samples)
-        signal_b = resample_ibi(ibi_b, t_offset_ms=t_offset_ms_b, target_sampling_rate_hz=5, t_start_ms=t_start_ms, t_end_ms=t_end_ms, remove_invalid_samples=remove_invalid_samples)
+        signal_a = resample_ibi(ibi_a, t_offset_ms=t_offset_ms_a, target_sampling_rate_hz=EVENT_BASED_SAMPLING_RATE_HZ, t_start_ms=t_start_ms, t_end_ms=t_end_ms, remove_invalid_samples=remove_invalid_samples)
+        signal_b = resample_ibi(ibi_b, t_offset_ms=t_offset_ms_b, target_sampling_rate_hz=EVENT_BASED_SAMPLING_RATE_HZ, t_start_ms=t_start_ms, t_end_ms=t_end_ms, remove_invalid_samples=remove_invalid_samples)
 
     # fix lengths
     min_length = min(len(signal_a), len(signal_b))
