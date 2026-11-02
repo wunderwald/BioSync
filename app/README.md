@@ -74,7 +74,7 @@ Earlier versions also ignored the time from the start of the recording to each p
 
 - **τ can shift by a few samples** (200 ms each) for event-based data, by the difference between the two first values.
 
-Correlations of ±1 or beyond used to count as a z-value of 0. They are now limited to ±0.999 (z of about ±3.8) before the Fisher z-transform:
+Correlations of ±1 or beyond used to count as a z-value of 0. All correlations beyond ±0.999 are now limited to that value (z of about ±3.8) before the Fisher z-transform:
 
 - **`avg_z_transformed_corr` and `var_z_transformed_corr` can change** for windows that contain such values. This is rare at the default settings.
 
