@@ -2,6 +2,35 @@ import os
 import xlsx
 from plot import plot_windowed_cross_correlation, save_figure_to_png
 
+FIRST_VECTOR_COLUMN = 4  # see xlsx.write_xlsx
+
+def _correlation_matrix(wxcorr, min_lag):
+    """Real numbers with one row per window and one column per lag, labelled with the lag in samples."""
+    return {
+        'title': 'correlations',
+        'corner': 'window start index / lag',
+        'row_labels': [window['start_idx'] for window in wxcorr],
+        'column_labels': list(range(min_lag, min_lag + len(wxcorr[0]['correlations']))) if wxcorr else [],
+        'rows': [window['correlations'] for window in wxcorr],
+    }
+
+def _add_per_window_columns(vectors, metadata, wxcorr, n_columns_after=0):
+    """
+    Adds two columns per window to the first sheet. With too many windows for Excel they are left out,
+    and only the correlation matrix sheet has them.
+    """
+    if FIRST_VECTOR_COLUMN + len(vectors) + 2 * len(wxcorr) + n_columns_after - 1 > xlsx.MAX_COLUMNS:
+        metadata['Per-window columns'] = "left out: too many windows for one sheet, see sheet 'correlations'"
+        return
+    for window_index, window in enumerate(wxcorr):
+        vectors[f"w_{window_index}_correlations"] = window['correlations']
+        vectors[f"w_{window_index}_meta"] = [
+            f"start_idx={window['start_idx']}",
+            f"center_idx={window['center_idx']}",
+            f"r_max={window['r_max']}",
+            f"tau_max={window['tau_max']}",
+        ]
+
 def export_wxcorr_data(file_path, params):
     metadata = {
         'xcorr type': "windowed cross-correlation",
@@ -28,9 +57,7 @@ def export_wxcorr_data(file_path, params):
     }
     vectors['avg_z_transformed_corr'] = [o['avg_z_transformed_corr'] for o in params['wxcorr']]
     vectors['var_z_transformed_corr'] = [o['var_z_transformed_corr'] for o in params['wxcorr']]
-    for window_index, window in enumerate(params['wxcorr']):
-        vectors[f"w_{window_index}_correlations"] = window['correlations']
-        vectors[f"w_{window_index}_meta"] = [ f"start_idx={window['start_idx']}", f"center_idx={window['center_idx']}", f"r_max={window['r_max']}", f"tau_max={window['tau_max']}" ]
+    _add_per_window_columns(vectors, metadata, params['wxcorr'], n_columns_after=2)
     # DFA per lag
     if params.get('dfa_alpha_per_lag_wxcorr') is not None:
         vectors['dfa_lags'] = [d['lag'] for d in params['dfa_alpha_per_lag_wxcorr']]
@@ -39,7 +66,12 @@ def export_wxcorr_data(file_path, params):
         vectors['dfa_lags'] = ['-']
         vectors['dfa_alpha'] = ['-']
 
-    xlsx.write_xlsx(vectors=vectors, single_values=metadata, output_path=file_path)
+    min_lag = (
+        min(params['lag_filter_min'], params['lag_filter_max'])
+        if params['checkbox_lag_filter'] else -params['max_lag']
+    )
+    xlsx.write_xlsx(vectors=vectors, single_values=metadata, output_path=file_path,
+                    matrix=_correlation_matrix(params['wxcorr'], min_lag))
 
 def export_avg_wxcorr_data(file_path, avg_wxcorr, n_dyads, params):
     """Export an averaged wxcorr result (from average_wxcorr_matrices) to XLSX."""
@@ -64,15 +96,13 @@ def export_avg_wxcorr_data(file_path, avg_wxcorr, n_dyads, params):
         'avg_z_transformed_corr':           [o['avg_z_transformed_corr']  for o in avg_wxcorr],
         'var_z_transformed_corr':           [o['var_z_transformed_corr']  for o in avg_wxcorr],
     }
-    for window_index, window in enumerate(avg_wxcorr):
-        vectors[f"w_{window_index}_correlations"] = window['correlations']
-        vectors[f"w_{window_index}_meta"] = [
-            f"start_idx={window['start_idx']}",
-            f"center_idx={window['center_idx']}",
-            f"r_max={window['r_max']}",
-            f"tau_max={window['tau_max']}",
-        ]
-    xlsx.write_xlsx(vectors=vectors, single_values=metadata, output_path=file_path, sheet_title="Grand Avg WXCorr")
+    _add_per_window_columns(vectors, metadata, avg_wxcorr)
+    min_lag = (
+        min(params['lag_filter_min'], params['lag_filter_max'])
+        if params.get('use_lag_filter') else -params['max_lag']
+    )
+    xlsx.write_xlsx(vectors=vectors, single_values=metadata, output_path=file_path, sheet_title="Grand Avg WXCorr",
+                    matrix=_correlation_matrix(avg_wxcorr, min_lag))
 
 
 def export_sxcorr_data(file_path, params):

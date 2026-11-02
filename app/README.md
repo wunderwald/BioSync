@@ -94,6 +94,12 @@ Spreadsheets are now read differently:
 
 ## Developer reference
 
+### Export format
+
+Existing analysis pipelines read these files, so **the first sheet must not change**: not its columns, their order, or their text values. Add new data on another sheet.
+
+Windowed exports have a second sheet, `correlations`, with real numbers: one row per window (labelled with its start index) and one column per lag (labelled with the lag in samples). Flat windows contain the text `nan`. If a recording has too many windows for the first sheet (about 8,000), the `w_*` columns are left out, and the metadata says so.
+
 ### Tests
 
 From the repository root, with the virtual environment active:
@@ -123,6 +129,7 @@ pytest
 
 | Module | Responsibility |
 |---|---|
+| `analysis.py` | `AnalysisConfig` and `analyze_dyad`: the pipeline shared by the GUI, batch and random pairs, so that they can't give different results. |
 | `signal_processing.py` | Resampling and alignment of raw IBI / EDA signals (`preprocess_dyad`). |
 | `cross_correlation.py` | `windowed_cross_correlation` and `standard_cross_correlation` algorithms. |
 | `dfa.py` | Detrended Fluctuation Analysis — `dfa`, `dfa_wxcorr`, `dfa_wxcorr_window_averages`. |
