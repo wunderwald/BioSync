@@ -1,7 +1,11 @@
 """
 The GUI, batch and random pairs must give identical results, and existing pipelines must keep working on exports.
 """
+from pathlib import Path
+
+import matplotlib
 import numpy as np
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 import openpyxl
 import pytest
 from openpyxl import Workbook
@@ -12,6 +16,8 @@ import callbacks
 import corr_plot
 import export
 import gui_updates
+import layout
+import plot
 import state
 import xlsx
 
@@ -173,7 +179,7 @@ def test_first_sheet_keeps_the_layout_pipelines_rely_on(tmp_path):
     assert [(row[0], row[1]) for row in rows[:14]] == [
         ('xcorr type', 'windowed cross-correlation'), ('Input dyad directory', 'dyad'), ('Input file A', 'a.xlsx'),
         ('Input file B', 'b.xlsx'), ('Data type', 'event-based (resampled to 5hz)'), ('Standardised (z-score)', 'False'),
-        ('Window size', '150'), ('Max lag', '1'), ('Step size', '75'), ('Absolute correlation values', 'False'),
+        ('Window size', 150), ('Max lag', 1), ('Step size', 75), ('Absolute correlation values', 'False'),
         ('Per-window averages', 'False'), ('Lag filter used', 'False'), ('Lag filter minimum', '-'), ('Lag filter maximum', '-'),
     ]
     assert rows[0][2] is None
@@ -183,7 +189,7 @@ def test_first_sheet_keeps_the_layout_pipelines_rely_on(tmp_path):
         'w_1_meta', 'dfa_lags', 'dfa_alpha',
     ]
     assert list(rows[1][3:]) == [
-        '1.5', '3.5', '0', '0.5', '-1', '0.25', '0.75', '0.5', 'start_idx=0', '0.5', 'start_idx=1', '-', '-',
+        1.5, 3.5, 0, 0.5, -1, 0.25, 0.75, 0.5, 'start_idx=0', 0.5, 'start_idx=1', '-', '-',
     ]
 
 
@@ -239,6 +245,8 @@ def test_most_windows_that_fit_keep_their_columns(monkeypatch):
 def test_flat_window_value_is_text_excel_can_open(tmp_path):
     assert xlsx._cell_value(np.nan) == "nan"
     assert xlsx._cell_value(np.inf) == "inf"
+    assert xlsx._cell_value(True) == "True" and xlsx._cell_value(np.True_) == "True"
+    assert xlsx._cell_value(None) == "None" and xlsx._cell_value("-") == "-"
     assert xlsx._cell_value(np.float64(0.5)) == 0.5 and type(xlsx._cell_value(np.float64(0.5))) is float
     assert type(xlsx._cell_value(np.int64(2))) is int
 
@@ -257,12 +265,15 @@ class FakeWidget:
         self.text = text
 
 
+SECONDS_LABELS = (
+    'label_window_size_seconds', 'label_step_size_seconds', 'label_max_lag_seconds', 'label_max_lag_sxc_seconds',
+    'label_lag_filter_min_seconds', 'label_lag_filter_max_seconds',
+)
+
+
 @pytest.fixture
 def labels(gui, monkeypatch):
-    widgets = {
-        key: FakeWidget()
-        for key in ('label_window_size', 'label_step_size', 'label_max_lag', 'label_max_lag_sxc', 'checkbox_lag_filter')
-    }
+    widgets = {key: FakeWidget() for key in SECONDS_LABELS}
     monkeypatch.setattr(gui_updates, "_w", widgets)
     return widgets
 
@@ -270,21 +281,75 @@ def labels(gui, monkeypatch):
 def test_event_based_parameters_show_seconds(gui, labels):
     gui({"use_lag_filter": True, "lag_filter_min": -5, "lag_filter_max": 12})
     gui_updates.update_parameter_labels()
-    assert labels['label_window_size'].text == 'Window Size (30 s)'
-    assert labels['label_step_size'].text == 'Step Size (15 s)'
-    assert labels['label_max_lag'].text == 'Max Lag (6 s)'
-    assert labels['label_max_lag_sxc'].text == 'Max Lag (20 s)'
-    assert labels['checkbox_lag_filter'].text == 'Filter Range of Lags (-1 s to 2.4 s)'
+    assert {key: widget.text for key, widget in labels.items()} == {
+        'label_window_size_seconds': '30 s', 'label_step_size_seconds': '15 s', 'label_max_lag_seconds': '6 s',
+        'label_max_lag_sxc_seconds': '20 s', 'label_lag_filter_min_seconds': '-1 s', 'label_lag_filter_max_seconds': '2.4 s',
+    }
 
 
 def test_fixed_rate_parameters_have_no_seconds_because_the_rate_is_unknown(gui, labels):
     gui({"checkbox_eb": False, "checkbox_fr": True, "use_lag_filter": True})
     gui_updates.update_parameter_labels()
-    assert labels['label_window_size'].text == 'Window Size'
-    assert labels['checkbox_lag_filter'].text == 'Filter Range of Lags'
+    assert {widget.text for widget in labels.values()} == {''}
 
 
-def test_lag_filter_range_only_shows_when_it_is_used(gui, labels):
-    gui({})
-    gui_updates.update_parameter_labels()
-    assert labels['checkbox_lag_filter'].text == 'Filter Range of Lags'
+class FakeRowWidget:
+    def __init__(self):
+        self.visible = False
+
+    def grid(self):
+        self.visible = True
+
+    def grid_remove(self):
+        self.visible = False
+
+    def grid_forget(self):
+        self.visible = False
+
+
+@pytest.mark.parametrize("ticked", [True, False])
+def test_lag_filter_rows_follow_the_checkbox(gui, monkeypatch, ticked):
+    rows = [FakeRowWidget() for _ in range(8)]
+    error = FakeRowWidget()
+    error.visible = True
+    monkeypatch.setattr(gui_updates, "_w", {'lag_filter_rows': rows, 'error_label_lag_filter': error})
+    gui({"use_lag_filter": ticked})
+    gui_updates.update_lag_filter_visibility()
+    assert all(widget.visible == ticked for widget in rows)
+    assert error.visible == ticked
+
+
+def test_dropdowns_open_when_clicked_anywhere():
+    # A CTkComboBox only opens from its small arrow. Its text is an editable field, and typing
+    # there changes the selection without recomputing anything.
+    source = Path(layout.__file__).read_text(encoding="utf-8")
+    assert "CTkComboBox" not in source and source.count("CTkOptionMenu(") == 3
+
+
+@pytest.mark.parametrize("retina, title_size", [(True, 12), (False, 16)])
+def test_plot_text_is_readable(retina, title_size):
+    plot.plot_init(is_retina=retina)
+    assert matplotlib.rcParams['axes.titlesize'] == title_size
+    assert matplotlib.rcParams['xtick.labelsize'] >= 10
+
+
+def test_long_preview_title_stays_inside_the_figure():
+    plot.plot_init(is_retina=True)
+    title = "Data in column 'IBI_ms' of sheet 'IBI Series' of 'a_very_long_file_name.xlsx' " * 3
+    fig = plot.plot_preprocessed_signals([1, 2, 3], [1, 2, 3], {'a': title, 'b': title})
+    fig.set_size_inches(10.5, 8.6)
+    canvas = FigureCanvasAgg(fig)
+    canvas.draw()
+    for ax in fig.axes:
+        extent = ax.title.get_window_extent(canvas.get_renderer())
+        assert extent.x0 >= 0 and extent.x1 <= fig.bbox.width
+
+
+@pytest.mark.parametrize("retina", [True, False])
+def test_batch_figure_has_room_for_its_text(retina, tmp_path, recwarn):
+    plot.plot_init(is_retina=retina)
+    signal = np.convolve(np.random.default_rng(0).normal(size=600), np.ones(9) / 9, mode="same")
+    windows = analysis.windowed_cross_correlation(signal, np.roll(signal, 3), 150, 75, 30)
+    fig = plot.plot_windowed_cross_correlation(windows, 150, 30, 75, signal, signal)
+    plot.save_figure_to_png(fig, tmp_path / "f.png")
+    assert not [w for w in recwarn.list if "constrained_layout" in str(w.message)]

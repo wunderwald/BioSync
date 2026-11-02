@@ -5,6 +5,35 @@ import state
 import callbacks as cb
 
 
+DROPDOWN_WIDTH = 240
+PARAMETER_ENTRY_WIDTH = 80
+PARAMETER_SECONDS_WIDTH = 60  # room for values like -19.8 s, so that the panel keeps its width
+
+
+def _parameter_row(parent, row, name, variable, validator):
+    """
+    Adds '<name> <entry> samples <value in seconds>' to a row of a grid.
+    Returns the widgets, and the seconds label is filled in by gui_updates.
+    """
+    label = tk.CTkLabel(parent, text=name)
+    label.grid(row=row, column=0, sticky="w", padx=10, pady=5)
+
+    entry = tk.CTkEntry(
+        parent, width=PARAMETER_ENTRY_WIDTH,
+        validate="key", validatecommand=(validator, "%P"),
+        textvariable=variable, border_color='#777777'
+    )
+    entry.grid(row=row, column=1, sticky="w", padx=(0, 5), pady=5)
+
+    label_samples = tk.CTkLabel(parent, text="samples")
+    label_samples.grid(row=row, column=2, sticky="w", padx=(0, 10), pady=5)
+
+    label_seconds = tk.CTkLabel(parent, text="", width=PARAMETER_SECONDS_WIDTH, anchor="w")
+    label_seconds.grid(row=row, column=3, sticky="w", padx=(0, 10), pady=5)
+
+    return label, entry, label_samples, label_seconds
+
+
 def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     """
     Creates all widgets and grid/packs them into the app window.
@@ -55,10 +84,10 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     label_select_sheet = tk.CTkLabel(subgroup_input_data, text="Select Sheet", font=("Arial", 14, "bold"))
     label_select_sheet.grid(row=3, column=0, sticky="w", padx=10, pady=5)
 
-    dropdown_select_sheet = tk.CTkComboBox(
+    dropdown_select_sheet = tk.CTkOptionMenu(
         subgroup_input_data, values=['- None -'],
         command=cb.on_dropdown_select_sheet_change,
-        variable=state.val_selected_sheet
+        variable=state.val_selected_sheet, width=DROPDOWN_WIDTH, dynamic_resizing=False
     )
     dropdown_select_sheet.grid(row=4, column=0, sticky="w", padx=10, pady=5)
 
@@ -71,20 +100,20 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     label_select_column_a = tk.CTkLabel(subgroup_input_data, text="Select Column A", font=("Arial", 14, "bold"))
     label_select_column_a.grid(row=6, column=0, sticky="w", padx=10, pady=5)
 
-    dropdown_select_column_a = tk.CTkComboBox(
+    dropdown_select_column_a = tk.CTkOptionMenu(
         subgroup_input_data, values=['- None -'],
         command=cb.on_dropdown_select_column_a_change,
-        variable=state.val_selected_column_a
+        variable=state.val_selected_column_a, width=DROPDOWN_WIDTH, dynamic_resizing=False
     )
     dropdown_select_column_a.grid(row=7, column=0, sticky="w", padx=10, pady=5)
 
     label_select_column_b = tk.CTkLabel(subgroup_input_data, text="Select Column B", font=("Arial", 14, "bold"))
     label_select_column_b.grid(row=8, column=0, sticky="w", padx=10, pady=5)
 
-    dropdown_select_column_b = tk.CTkComboBox(
+    dropdown_select_column_b = tk.CTkOptionMenu(
         subgroup_input_data, values=['- None -'],
         command=cb.on_dropdown_select_column_b_change,
-        variable=state.val_selected_column_b
+        variable=state.val_selected_column_b, width=DROPDOWN_WIDTH, dynamic_resizing=False
     )
     dropdown_select_column_b.grid(row=9, column=0, sticky="w", padx=10, pady=5)
 
@@ -147,19 +176,13 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     subgroup_windowed_xcorr_parameters.grid(row=2, sticky='ew', column=0, columnspan=2, padx=0, pady=0)
 
     label_wxp = tk.CTkLabel(
-        subgroup_windowed_xcorr_parameters, text='Windowed cross-correlation parameters (# samples)'
+        subgroup_windowed_xcorr_parameters, text='Windowed cross-correlation parameters'
     )
-    label_wxp.grid(row=0, column=0, columnspan=2, padx=10, pady=5, sticky='w')
+    label_wxp.grid(row=0, column=0, columnspan=4, padx=10, pady=5, sticky='w')
 
-    label_window_size = tk.CTkLabel(subgroup_windowed_xcorr_parameters, text='Window Size')
-    label_window_size.grid(row=1, column=0, sticky="w", padx=10, pady=5)
-
-    entry_window_size = tk.CTkEntry(
-        subgroup_windowed_xcorr_parameters,
-        validate="key", validatecommand=(validate_numeric_input, "%P"),
-        textvariable=state.val_window_size_input, border_color='#777777'
+    _, entry_window_size, _, label_window_size_seconds = _parameter_row(
+        subgroup_windowed_xcorr_parameters, 1, 'Window Size', state.val_window_size_input, validate_numeric_input
     )
-    entry_window_size.grid(row=1, column=1, sticky="w", padx=10, pady=5)
 
     error_label_window_size = tk.CTkLabel(
         subgroup_windowed_xcorr_parameters,
@@ -167,15 +190,9 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     )
     # initially hidden
 
-    label_max_lag = tk.CTkLabel(subgroup_windowed_xcorr_parameters, text='Max Lag')
-    label_max_lag.grid(row=3, column=0, sticky="w", padx=10, pady=5)
-
-    entry_max_lag = tk.CTkEntry(
-        subgroup_windowed_xcorr_parameters,
-        validate="key", validatecommand=(validate_numeric_input, "%P"),
-        textvariable=state.val_max_lag_input, border_color='#777777'
+    _, entry_max_lag, _, label_max_lag_seconds = _parameter_row(
+        subgroup_windowed_xcorr_parameters, 3, 'Max Lag', state.val_max_lag_input, validate_numeric_input
     )
-    entry_max_lag.grid(row=3, column=1, sticky="w", padx=10, pady=5)
 
     error_label_max_lag = tk.CTkLabel(
         subgroup_windowed_xcorr_parameters,
@@ -183,15 +200,9 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     )
     # initially hidden
 
-    label_step_size = tk.CTkLabel(subgroup_windowed_xcorr_parameters, text='Step Size')
-    label_step_size.grid(row=5, column=0, sticky="w", padx=10, pady=5)
-
-    entry_step_size = tk.CTkEntry(
-        subgroup_windowed_xcorr_parameters,
-        validate="key", validatecommand=(validate_numeric_input, "%P"),
-        textvariable=state.val_step_size_input, border_color='#777777'
+    _, entry_step_size, _, label_step_size_seconds = _parameter_row(
+        subgroup_windowed_xcorr_parameters, 5, 'Step Size', state.val_step_size_input, validate_numeric_input
     )
-    entry_step_size.grid(row=5, column=1, sticky="w", padx=10, pady=5)
 
     error_label_step_size = tk.CTkLabel(
         subgroup_windowed_xcorr_parameters,
@@ -203,18 +214,18 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
         subgroup_windowed_xcorr_parameters, text='Filter Range of Lags',
         variable=state.val_checkbox_lag_filter, command=cb.on_lag_filter_checkbox_change
     )
-    checkbox_lag_filter.grid(row=9, column=0, sticky="w", padx=10, pady=5)
+    checkbox_lag_filter.grid(row=9, column=0, columnspan=4, sticky="w", padx=10, pady=5)
 
-    entry_lag_filter_min = tk.CTkEntry(
-        subgroup_windowed_xcorr_parameters,
-        validate="key", validatecommand=(validate_signed_numeric_input, "%P"),
-        textvariable=state.val_lag_filter_min_input, border_color='#777777'
+    # shown when the filter is used, see gui_updates.update_lag_filter_visibility
+    lag_filter_row_min = _parameter_row(
+        subgroup_windowed_xcorr_parameters, 10, 'Minimum', state.val_lag_filter_min_input, validate_signed_numeric_input
     )
-    entry_lag_filter_max = tk.CTkEntry(
-        subgroup_windowed_xcorr_parameters,
-        validate="key", validatecommand=(validate_signed_numeric_input, "%P"),
-        textvariable=state.val_lag_filter_max_input, border_color='#777777'
+    lag_filter_row_max = _parameter_row(
+        subgroup_windowed_xcorr_parameters, 11, 'Maximum', state.val_lag_filter_max_input, validate_signed_numeric_input
     )
+    for widget in (*lag_filter_row_min, *lag_filter_row_max):
+        widget.grid_remove()
+
     error_label_lag_filter = tk.CTkLabel(
         subgroup_windowed_xcorr_parameters, text='', text_color='red'
     )
@@ -224,13 +235,13 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
         subgroup_windowed_xcorr_parameters, text='Absolute Correlation Values',
         variable=state.val_checkbox_absolute_corr, command=cb.on_absolute_corr_change
     )
-    checkbox_absolute_corr.grid(row=15, column=0, sticky="w", padx=10, pady=5)
+    checkbox_absolute_corr.grid(row=15, column=0, columnspan=4, sticky="w", padx=10, pady=5)
 
     checkbox_average_windows = tk.CTkCheckBox(
         subgroup_windowed_xcorr_parameters, text='Average Values in Windows',
         variable=state.val_checkbox_average_windows, command=cb.on_average_windows_change
     )
-    checkbox_average_windows.grid(row=16, column=0, sticky="w", padx=10, pady=5)
+    checkbox_average_windows.grid(row=16, column=0, columnspan=4, sticky="w", padx=10, pady=5)
 
     # Standard xcorr parameters subgroup (initially hidden)
     subgroup_standard_xcorr_parameters = tk.CTkFrame(subgroup_corr_settings)
@@ -238,17 +249,11 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     label_sxp = tk.CTkLabel(
         subgroup_standard_xcorr_parameters, text='Standard cross-correlation parameters'
     )
-    label_sxp.grid(row=0, column=0, sticky='ew', columnspan=2, padx=10, pady=5)
+    label_sxp.grid(row=0, column=0, sticky='w', columnspan=4, padx=10, pady=5)
 
-    label_max_lag_sxc = tk.CTkLabel(subgroup_standard_xcorr_parameters, text='Max Lag')
-    label_max_lag_sxc.grid(row=1, column=0, sticky="w", padx=10, pady=5)
-
-    entry_max_lag_sxc = tk.CTkEntry(
-        subgroup_standard_xcorr_parameters,
-        validate="key", validatecommand=(validate_numeric_input, "%P"),
-        textvariable=state.val_max_lag_input_sxc, border_color='#777777'
+    _, entry_max_lag_sxc, _, label_max_lag_sxc_seconds = _parameter_row(
+        subgroup_standard_xcorr_parameters, 1, 'Max Lag', state.val_max_lag_input_sxc, validate_numeric_input
     )
-    entry_max_lag_sxc.grid(row=1, column=1, sticky="w", padx=10, pady=5)
 
     error_label_max_lag_sxc = tk.CTkLabel(
         subgroup_standard_xcorr_parameters,
@@ -260,7 +265,7 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
         subgroup_standard_xcorr_parameters, text='Absolute Correlation Values',
         variable=state.val_checkbox_absolute_corr_sxc, command=cb.on_absolute_corr_change_sxc
     )
-    checkbox_absolute_corr_sxc.grid(row=3, column=0, sticky="w", padx=10, pady=5)
+    checkbox_absolute_corr_sxc.grid(row=3, column=0, columnspan=4, sticky="w", padx=10, pady=5)
 
     # ---------------------------
     # TAB: CORRELATION — Visualisation subgroup
@@ -427,19 +432,21 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
         'label_select_column_a':               label_select_column_a,
         'label_select_column_b':               label_select_column_b,
         'error_label_input_data':              error_label_input_data,
-        'label_window_size':                   label_window_size,
-        'label_step_size':                     label_step_size,
-        'label_max_lag':                       label_max_lag,
-        'label_max_lag_sxc':                   label_max_lag_sxc,
-        'checkbox_lag_filter':                 checkbox_lag_filter,
+        'label_window_size_seconds':           label_window_size_seconds,
+        'label_step_size_seconds':             label_step_size_seconds,
+        'label_max_lag_seconds':               label_max_lag_seconds,
+        'label_max_lag_sxc_seconds':           label_max_lag_sxc_seconds,
+        'label_lag_filter_min_seconds':        lag_filter_row_min[3],
+        'label_lag_filter_max_seconds':        lag_filter_row_max[3],
+        'lag_filter_rows':                     (*lag_filter_row_min, *lag_filter_row_max),
         'entry_window_size':                   entry_window_size,
         'error_label_window_size':             error_label_window_size,
         'entry_max_lag':                       entry_max_lag,
         'error_label_max_lag':                 error_label_max_lag,
         'entry_step_size':                     entry_step_size,
         'error_label_step_size':               error_label_step_size,
-        'entry_lag_filter_min':                entry_lag_filter_min,
-        'entry_lag_filter_max':                entry_lag_filter_max,
+        'entry_lag_filter_min':                lag_filter_row_min[1],
+        'entry_lag_filter_max':                lag_filter_row_max[1],
         'error_label_lag_filter':              error_label_lag_filter,
         'entry_max_lag_sxc':                   entry_max_lag_sxc,
         'error_label_max_lag_sxc':             error_label_max_lag_sxc,

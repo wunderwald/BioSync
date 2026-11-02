@@ -40,7 +40,7 @@ def setup_traces():
 
     for var in (
         state.val_window_size, state.val_step_size, state.val_max_lag, state.val_max_lag_sxc,
-        state.val_lag_filter_min, state.val_lag_filter_max, state.val_checkbox_lag_filter, state.val_checkbox_eb,
+        state.val_lag_filter_min, state.val_lag_filter_max, state.val_checkbox_eb,
     ):
         var.trace_add('write', update_parameter_labels)
     update_parameter_labels()
@@ -145,7 +145,7 @@ def update_window_size_entry_on_validation(*args):
         _w['error_label_window_size'].grid_forget()
     else:
         _w['entry_window_size'].configure(border_color='red')
-        _w['error_label_window_size'].grid(row=2, column=0, columnspan=2, sticky="w", padx=10, pady=0)
+        _w['error_label_window_size'].grid(row=2, column=0, columnspan=4, sticky="w", padx=10, pady=0)
 
 
 def update_max_lag_entry_on_validation(*args):
@@ -154,7 +154,7 @@ def update_max_lag_entry_on_validation(*args):
         _w['error_label_max_lag'].grid_forget()
     else:
         _w['entry_max_lag'].configure(border_color='red')
-        _w['error_label_max_lag'].grid(row=4, column=0, columnspan=2, sticky="w", padx=10, pady=0)
+        _w['error_label_max_lag'].grid(row=4, column=0, columnspan=4, sticky="w", padx=10, pady=0)
 
 
 def update_step_size_entry_on_validation(*args):
@@ -163,36 +163,35 @@ def update_step_size_entry_on_validation(*args):
         _w['error_label_step_size'].grid_forget()
     else:
         _w['entry_step_size'].configure(border_color='red')
-        _w['error_label_step_size'].grid(row=6, column=0, columnspan=2, sticky="w", padx=10, pady=0)
+        _w['error_label_step_size'].grid(row=6, column=0, columnspan=4, sticky="w", padx=10, pady=0)
 
 
-def _with_seconds(text, *samples):
+def _seconds_text(samples):
     """Fixed-rate data can have any sampling rate, so only event-based data can be shown in seconds."""
     if not state.val_checkbox_eb.get():
-        return text
-    seconds = [f"{value / EVENT_BASED_SAMPLING_RATE_HZ:g} s" for value in samples]
-    return f"{text} ({' to '.join(seconds)})"
+        return ''
+    return f"{samples / EVENT_BASED_SAMPLING_RATE_HZ:g} s"
 
 
 def update_parameter_labels(*args):
-    _w['label_window_size'].configure(text=_with_seconds('Window Size', state.val_window_size.get()))
-    _w['label_step_size'].configure(text=_with_seconds('Step Size', state.val_step_size.get()))
-    _w['label_max_lag'].configure(text=_with_seconds('Max Lag', state.val_max_lag.get()))
-    _w['label_max_lag_sxc'].configure(text=_with_seconds('Max Lag', state.val_max_lag_sxc.get()))
-    _w['checkbox_lag_filter'].configure(text=(
-        _with_seconds('Filter Range of Lags', state.val_lag_filter_min.get(), state.val_lag_filter_max.get())
-        if state.val_checkbox_lag_filter.get()
-        else 'Filter Range of Lags'
-    ))
+    for label, var in (
+        ('label_window_size_seconds', state.val_window_size),
+        ('label_step_size_seconds', state.val_step_size),
+        ('label_max_lag_seconds', state.val_max_lag),
+        ('label_max_lag_sxc_seconds', state.val_max_lag_sxc),
+        ('label_lag_filter_min_seconds', state.val_lag_filter_min),
+        ('label_lag_filter_max_seconds', state.val_lag_filter_max),
+    ):
+        _w[label].configure(text=_seconds_text(var.get()))
 
 
 def update_lag_filter_visibility(*args):
-    if state.val_checkbox_lag_filter.get():
-        _w['entry_lag_filter_min'].grid(row=10, column=0, sticky="w", padx=10, pady=5)
-        _w['entry_lag_filter_max'].grid(row=10, column=1, sticky="w", padx=10, pady=5)
-    else:
-        _w['entry_lag_filter_min'].grid_forget()
-        _w['entry_lag_filter_max'].grid_forget()
+    for widget in _w['lag_filter_rows']:
+        if state.val_checkbox_lag_filter.get():
+            widget.grid()
+        else:
+            widget.grid_remove()
+    if not state.val_checkbox_lag_filter.get():
         _w['error_label_lag_filter'].grid_forget()
 
 
@@ -216,7 +215,7 @@ def update_lag_filter_entries_on_validation(*args):
             f"{'in [-max_lag, max_lag]' if not lf_in_range else ''}"
         )
     _w['error_label_lag_filter'].configure(text=msg, text_color='red')
-    _w['error_label_lag_filter'].grid(row=11, column=0, sticky="w", padx=10, pady=5)
+    _w['error_label_lag_filter'].grid(row=12, column=0, columnspan=4, sticky="w", padx=10, pady=5)
 
 
 # ---------------------------------------------------------------------------
@@ -229,7 +228,7 @@ def update_max_lag_entry_on_validation_sxc(*args):
         _w['error_label_max_lag_sxc'].grid_forget()
     else:
         _w['entry_max_lag_sxc'].configure(border_color='red')
-        _w['error_label_max_lag_sxc'].grid(row=2, column=0, columnspan=2, sticky="w", padx=10, pady=0)
+        _w['error_label_max_lag_sxc'].grid(row=2, column=0, columnspan=4, sticky="w", padx=10, pady=0)
 
 
 # ---------------------------------------------------------------------------

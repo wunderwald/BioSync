@@ -15,7 +15,7 @@ _cmap_wxc = mcolors.LinearSegmentedColormap.from_list(
 )
 
 SCALING_PARAMS = {
-    'FIGSIZE': (5, 4),
+    'FIGSIZE': (10, 8),
     'DPI': 100,
 }
 
@@ -25,20 +25,20 @@ def plot_init(is_retina):
     # rcParams — font/line sizes depend on display type, not on window size
     if is_retina:
         matplotlib.rcParams.update({
-            'font.size': 6,
-            'axes.titlesize': 4,
-            'axes.labelsize': 4,
-            'xtick.labelsize': 4,
-            'ytick.labelsize': 4,
+            'font.size': 12,
+            'axes.titlesize': 12,
+            'axes.labelsize': 11,
+            'xtick.labelsize': 10,
+            'ytick.labelsize': 10,
             'lines.linewidth': 1,
         })
     else:
         matplotlib.rcParams.update({
-            'font.size': 12,
-            'axes.titlesize': 8,
-            'axes.labelsize': 8,
-            'xtick.labelsize': 8,
-            'ytick.labelsize': 8,
+            'font.size': 16,
+            'axes.titlesize': 16,
+            'axes.labelsize': 15,
+            'xtick.labelsize': 14,
+            'ytick.labelsize': 14,
             'lines.linewidth': 2,
         })
     # Default figsize — the canvas resize handler will set the real size at draw time
@@ -206,7 +206,7 @@ def plot_preprocessed_signals(signal_a, signal_b, plot_titles):
     # Plot signal_a
     ax1 = fig.add_subplot(gs[0])
     ax1.plot(signal_a, color='#333333')
-    ax1.set_title(plot_titles['a'])
+    ax1.set_title(plot_titles['a'], wrap=True)
     ax1.set_xlabel('Index')
     ax1.set_ylabel('Value')
     ax1.grid()
@@ -214,7 +214,7 @@ def plot_preprocessed_signals(signal_a, signal_b, plot_titles):
     # Plot signal_b
     ax2 = fig.add_subplot(gs[1])
     ax2.plot(signal_b, color='#333333')
-    ax2.set_title(plot_titles['b'])
+    ax2.set_title(plot_titles['b'], wrap=True)
     ax2.set_xlabel('Index')
     ax2.set_ylabel('Value')
     ax2.grid()
