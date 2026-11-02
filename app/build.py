@@ -12,6 +12,9 @@ from pathlib import Path
 # Always run relative to this script's directory
 os.chdir(Path(__file__).parent)
 
+# Files the app loads at runtime (see utils.resource_path)
+DATA_FILE_ARGS = ["--add-data", f"theme_dark_grey.json{os.pathsep}."]
+
 def run_pyinstaller_with_analysis(app_name="wx"):
     """Run PyInstaller with module analysis"""
     
@@ -34,6 +37,7 @@ def run_pyinstaller_with_analysis(app_name="wx"):
         "--additional-hooks-dir", ".",  # Use our hook file
         "--collect-all", "*",  # Try to collect everything (careful!)
         "--debug", "imports",  # Show what's being imported
+        *DATA_FILE_ARGS,
         "app.py"
     ]
     
@@ -177,6 +181,7 @@ def brute_force_build(app_name="wx"):
         "--clean",
         "--name", app_name,
         "--debug", "all",
+        *DATA_FILE_ARGS,
     ]
     
     # Add the most important ones (limit to avoid command line too long)
@@ -211,7 +216,7 @@ def main():
         success = brute_force_build(app_name)
     else:
         # Minimal build
-        cmd = [sys.executable, "-m", "PyInstaller", "--windowed", "--clean", "--name", app_name, "app.py"]
+        cmd = [sys.executable, "-m", "PyInstaller", "--windowed", "--clean", "--name", app_name, *DATA_FILE_ARGS, "app.py"]
         result = subprocess.run(cmd, capture_output=True, text=True)
         success = result.returncode == 0
     

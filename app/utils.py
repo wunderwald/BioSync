@@ -1,4 +1,14 @@
 import os
+import sys
+
+
+def resource_path(file_name):
+    """
+    Returns the path of a file that ships with the app, wherever the app was launched from.
+    A PyInstaller build unpacks these files to the folder in sys._MEIPASS.
+    """
+    base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_dir, file_name)
 
 
 def count_subdirectories(directory):
