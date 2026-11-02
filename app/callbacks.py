@@ -187,7 +187,7 @@ def on_change_data_has_headers(*args):
 
 def update_dropdown_options(dropdown, dropdown_state_var, new_options):
     dropdown.configure(values=new_options)
-    dropdown_state_var.set(new_options[0])
+    dropdown_state_var.set(new_options[0] if new_options else '- None -')
 
 
 # ---------------------------------------------------------------------------
@@ -254,7 +254,9 @@ def update_sheet_names():
         return
     names_a = xlsx.get_sheet_names(wb_a)
     names_b = xlsx.get_sheet_names(wb_b)
-    state.dat_workbook_data["sheet_names"] = list(set(names_a) & set(names_b))
+    state.dat_workbook_data["sheet_names"] = [name for name in names_a if name in names_b]
+    if not state.dat_workbook_data["sheet_names"]:
+        messagebox.showwarning("No common sheet", "The two files have no sheet with the same name.")
     update_dropdown_options(
         _dropdowns['sheet'],
         state.val_selected_sheet,
