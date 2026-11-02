@@ -1,5 +1,17 @@
 import numpy as np
 
+# r=±1 has an infinite Fisher z, so correlations are limited to this magnitude first (z of about ±3.8)
+FISHER_Z_MAX_R = 0.999
+
+def fisher_z(correlations):
+    '''
+    Fisher z-transforms correlation values. Values at or beyond ±FISHER_Z_MAX_R are clipped to it, because they
+    are the strongest correlations and must stay the largest z-values. NaN (from flat windows) becomes 0.
+    '''
+    clipped = np.clip(np.asarray(correlations, dtype=float), -FISHER_Z_MAX_R, FISHER_Z_MAX_R)
+    return np.nan_to_num(np.arctanh(clipped), nan=0.0)
+
+
 def scale_sigmoid(x: np.array):
     '''
     Scales values a numpy array using a modified sigmoid function. The sigmoid itsself is scaled so that it returns values
@@ -89,13 +101,7 @@ def windowed_cross_correlation(x, y, window_size, step_size, max_lag, use_lag_fi
         correlations_sigmoid = scale_sigmoid(np.array(correlations))
 
         # Fisher z-transform per-lag correlations
-        # Suppress the expected RuntimeWarning for r=±1 (arctanh(±1)=±inf); those
-        # entries are zeroed out immediately below.
-        with np.errstate(invalid='ignore', divide='ignore'):
-            # correlations_z_transformed = np.arctanh(np.array(correlations))
-            correlations_z_transformed = np.array([ .5 * np.log((1 + r) / (1 - r)) for r in correlations ])
-        correlations_z_transformed[np.isinf(correlations_z_transformed)] = 0
-        correlations_z_transformed[np.isnan(correlations_z_transformed)] = 0
+        correlations_z_transformed = fisher_z(correlations)
         avg_z_transformed_corr = np.mean(correlations_z_transformed)
         var_z_transformed_corr = np.var(correlations_z_transformed)
 
