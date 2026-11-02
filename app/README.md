@@ -67,6 +67,15 @@ You will be prompted to choose a build method and an app name. The finished exec
 
 ## Developer reference
 
+### Tests
+
+From the repository root, with the virtual environment active:
+
+```bash
+pip install -r app/requirements-dev.txt
+pytest
+```
+
 ### Entry point
 
 **`app.py`** (~80 lines) — orchestrator only. Creates the CTk window, then calls into the modules below in order:
