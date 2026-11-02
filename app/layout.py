@@ -5,7 +5,7 @@ import state
 import callbacks as cb
 
 
-def build_layout(app, validate_numeric_input):
+def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     """
     Creates all widgets and grid/packs them into the app window.
     Returns a dict of widget references needed by app_gui_updates.py and app_corr_plot.py.
@@ -201,18 +201,18 @@ def build_layout(app, validate_numeric_input):
 
     checkbox_lag_filter = tk.CTkCheckBox(
         subgroup_windowed_xcorr_parameters, text='Filter Range of Lags',
-        variable=state.val_checkbox_lag_filter
+        variable=state.val_checkbox_lag_filter, command=cb.on_lag_filter_checkbox_change
     )
     checkbox_lag_filter.grid(row=9, column=0, sticky="w", padx=10, pady=5)
 
     entry_lag_filter_min = tk.CTkEntry(
         subgroup_windowed_xcorr_parameters,
-        validate="key", validatecommand=(validate_numeric_input, "%P"),
+        validate="key", validatecommand=(validate_signed_numeric_input, "%P"),
         textvariable=state.val_lag_filter_min_input, border_color='#777777'
     )
     entry_lag_filter_max = tk.CTkEntry(
         subgroup_windowed_xcorr_parameters,
-        validate="key", validatecommand=(validate_numeric_input, "%P"),
+        validate="key", validatecommand=(validate_signed_numeric_input, "%P"),
         textvariable=state.val_lag_filter_max_input, border_color='#777777'
     )
     error_label_lag_filter = tk.CTkLabel(

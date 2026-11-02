@@ -38,13 +38,14 @@ state.init_state(screen_dpi, screen_width, screen_height, RETINA)
 # --------------------------------
 
 validate_numeric_input = validation.make_validator(app)
+validate_signed_numeric_input = validation.make_signed_validator(app)
 callbacks.setup_traces()
 
 # --------------------------------
 # BUILD UI
 # --------------------------------
 
-widget_dict = layout.build_layout(app, validate_numeric_input)
+widget_dict = layout.build_layout(app, validate_numeric_input, validate_signed_numeric_input)
 
 # --------------------------------
 # REACTIVE GUI UPDATES

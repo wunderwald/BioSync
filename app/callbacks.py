@@ -47,18 +47,21 @@ def on_window_size_input_change(name, index, mode):
     new_str_val = state.val_window_size_input.get()
     state.val_window_size.set(0 if new_str_val == '' else int(new_str_val))
     validation.check_wx_correlation_settings()
+    state.PARAMS_CHANGED()
 
 
 def on_step_size_input_change(name, index, mode):
     new_str_val = state.val_step_size_input.get()
     state.val_step_size.set(0 if new_str_val == '' else int(new_str_val))
     validation.check_wx_correlation_settings()
+    state.PARAMS_CHANGED()
 
 
 def on_max_lag_input_change(name, index, mode):
     new_str_val = state.val_max_lag_input.get()
     state.val_max_lag.set(0 if new_str_val == '' else int(new_str_val))
     validation.check_wx_correlation_settings()
+    state.PARAMS_CHANGED()
 
 
 # ENTRY CALLBACKS — standard xcorr
@@ -67,28 +70,25 @@ def on_max_lag_input_change_sxc(name, index, mode):
     new_str_val = state.val_max_lag_input_sxc.get()
     state.val_max_lag_sxc.set(0 if new_str_val == '' else int(new_str_val))
     validation.check_sx_correlation_settings()
+    state.PARAMS_CHANGED()
 
 
 # ENTRY CALLBACKS — lag filter
 
 def on_min_lag_input_change(name, index, mode):
     new_str_val = state.val_lag_filter_min_input.get()
-    if new_str_val == '' or new_str_val == '-':
-        state.val_lag_filter_min.set(0)
-        state.val_lag_filter_min_input.set(0)
-    else:
+    if new_str_val not in ('', '-'):
         state.val_lag_filter_min.set(int(new_str_val))
     validation.check_wx_correlation_settings()
+    state.PARAMS_CHANGED()
 
 
 def on_max_lag_filter_input_change(name, index, mode):
     new_str_val = state.val_lag_filter_max_input.get()
-    if new_str_val == '':
-        state.val_lag_filter_max.set(0)
-        state.val_lag_filter_max_input.set(0)
-    else:
+    if new_str_val not in ('', '-'):
         state.val_lag_filter_max.set(int(new_str_val))
     validation.check_wx_correlation_settings()
+    state.PARAMS_CHANGED()
 
 
 def on_max_lag_change_update_filter(*args):
@@ -98,6 +98,7 @@ def on_max_lag_change_update_filter(*args):
     state.val_lag_filter_min_input.set(str(-new_max_lag))
     state.val_lag_filter_max_input.set(str(new_max_lag))
     validation.check_wx_correlation_settings()
+    state.PARAMS_CHANGED()
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +146,7 @@ def on_average_windows_change():
 
 def on_lag_filter_checkbox_change():
     validation.check_wx_correlation_settings()
+    state.PARAMS_CHANGED()
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +224,7 @@ def setup_traces():
     state.val_INPUT_DATA_VALID.trace_add('write', _batch_processing_is_ready)
     state.val_CORRELATION_SETTINGS_VALID.trace_add('write', _batch_processing_is_ready)
     state.val_CORRELATION_SETTINGS_VALID_SXC.trace_add('write', _batch_processing_is_ready)
+    state.val_checkbox_windowed_xcorr.trace_add('write', _batch_processing_is_ready)
     state.val_batch_input_folder.trace_add('write', _batch_processing_is_ready)
     state.val_batch_output_folder.trace_add('write', _batch_processing_is_ready)
 
@@ -229,6 +232,7 @@ def setup_traces():
     state.val_INPUT_DATA_VALID.trace_add('write', _random_pair_is_ready)
     state.val_CORRELATION_SETTINGS_VALID.trace_add('write', _random_pair_is_ready)
     state.val_CORRELATION_SETTINGS_VALID_SXC.trace_add('write', _random_pair_is_ready)
+    state.val_checkbox_windowed_xcorr.trace_add('write', _random_pair_is_ready)
     state.val_random_pair_input_folder.trace_add('write', _random_pair_is_ready)
     state.val_random_pair_output_file.trace_add('write', _random_pair_is_ready)
 
@@ -311,6 +315,7 @@ def preprocess_data():
         d["signal_b_std"] = signal_b_std
         state.val_data_length.set(len(signal_a))
         state.val_INPUT_DATA_VALID.set(True)
+        validation.check_all_settings()
 
     except Exception as e:
         print(f"Data is invalid [{e}]")
@@ -320,12 +325,7 @@ def preprocess_data():
         d["signal_b_std"] = []
         d["raw_signal_a"] = []
         d["raw_signal_b"] = []
-        state.dat_plot_data['fig'] = plot_init(
-            dpi=state.screen_dpi,
-            screen_width=state.screen_width,
-            screen_height=state.screen_height,
-            is_retina=state.RETINA
-        )
+        state.dat_plot_data['fig'] = plot_init(is_retina=state.RETINA)
         state.val_INPUT_DATA_VALID.set(False)
 
 
@@ -537,11 +537,7 @@ def _format_batch_summary(summary):
 
 
 def _batch_processing_is_ready(*args):
-    data_is_valid = (
-        state.val_INPUT_DATA_VALID.get() and
-        state.val_CORRELATION_SETTINGS_VALID.get() and
-        state.val_CORRELATION_SETTINGS_VALID_SXC.get()
-    )
+    data_is_valid = state.val_INPUT_DATA_VALID.get() and validation.check_active_settings_valid()
     io_is_ready = (
         state.val_batch_input_folder.get() != '' and
         state.val_batch_output_folder.get() != ''
@@ -570,11 +566,7 @@ def handle_run_batch_button():
 # ---------------------------------------------------------------------------
 
 def _random_pair_is_ready(*args):
-    data_is_valid = (
-        state.val_INPUT_DATA_VALID.get() and
-        state.val_CORRELATION_SETTINGS_VALID.get() and
-        state.val_CORRELATION_SETTINGS_VALID_SXC.get()
-    )
+    data_is_valid = state.val_INPUT_DATA_VALID.get() and validation.check_active_settings_valid()
     io_is_ready = (
         state.val_random_pair_input_folder.get() != '' and
         state.val_random_pair_output_file.get() != ''

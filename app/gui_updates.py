@@ -170,19 +170,21 @@ def update_lag_filter_entries_on_validation(*args):
         _w['entry_lag_filter_max'].configure(border_color='#777777')
         _w['error_label_lag_filter'].grid_forget()
         return
-    _w['entry_lag_filter_min'].configure(border_color='#777777')
-    _w['entry_lag_filter_max'].configure(border_color='#777777')
-    lf_sorted   = validation.check_lag_filter_sorted()
-    lf_in_range = validation.check_lag_filter_in_range()
-    if not lf_sorted or not lf_in_range:
+    _w['entry_lag_filter_min'].configure(border_color='red')
+    _w['entry_lag_filter_max'].configure(border_color='red')
+    if not validation.check_lag_filter_exists():
+        msg = "Enter both filter limits"
+    else:
+        lf_sorted   = validation.check_lag_filter_sorted()
+        lf_in_range = validation.check_lag_filter_in_range()
         msg = (
             f"Filter limits must be "
             f"{'sorted' if not lf_sorted else ''}"
             f"{' and ' if not lf_sorted and not lf_in_range else ''}"
             f"{'in [-max_lag, max_lag]' if not lf_in_range else ''}"
         )
-        _w['error_label_lag_filter'].configure(text=msg, text_color='red')
-        _w['error_label_lag_filter'].grid(row=11, column=0, sticky="w", padx=10, pady=5)
+    _w['error_label_lag_filter'].configure(text=msg, text_color='red')
+    _w['error_label_lag_filter'].grid(row=11, column=0, sticky="w", padx=10, pady=5)
 
 
 # ---------------------------------------------------------------------------
