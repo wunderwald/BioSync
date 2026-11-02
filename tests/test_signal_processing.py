@@ -5,7 +5,7 @@ At 5 Hz one sample is 200 ms.
 import numpy as np
 import pytest
 
-from cross_correlation import standard_cross_correlation
+from cross_correlation import standard_cross_correlation, windowed_cross_correlation
 from signal_processing import preprocess_dyad
 
 
@@ -110,3 +110,16 @@ def test_negative_fixed_rate_samples_are_bridged_without_moving_later_samples():
 def test_fixed_rate_signal_without_valid_samples_is_rejected():
     with pytest.raises(ValueError, match="no valid samples"):
         _preprocess_removing_invalid(np.full(50, -1.0), np.ones(50), signal_type="fixed-rate")
+
+
+def test_standardising_does_not_change_correlations(ibi):
+    signal_a, signal_b, signal_a_std, signal_b_std = preprocess_dyad(
+        [500, *ibi, 300], [800, *reversed(ibi), 300], signal_type="event-based"
+    )
+    raw = standard_cross_correlation(signal_a, signal_b, max_lag=10)["corr"]
+    standardised = standard_cross_correlation(signal_a_std, signal_b_std, max_lag=10)["corr"]
+    assert standardised == pytest.approx(raw)
+    raw = windowed_cross_correlation(signal_a, signal_b, 150, 75, 10)
+    standardised = windowed_cross_correlation(signal_a_std, signal_b_std, 150, 75, 10)
+    for raw_window, standardised_window in zip(raw, standardised):
+        assert standardised_window["correlations"] == pytest.approx(raw_window["correlations"])

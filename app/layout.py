@@ -121,7 +121,7 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     )
     checkbox_standardise.grid(row=8, column=0, sticky="w", padx=10, pady=5)
 
-    label_standardise = tk.CTkLabel(subgroup_data_type, text="Scales to zero mean, unit variance.")
+    label_standardise = tk.CTkLabel(subgroup_data_type, text="Scales to zero mean, unit variance. Correlations don't change.")
     label_standardise.grid(row=9, column=0, columnspan=2, sticky="w", padx=10, pady=5)
 
     # ---------------------------
