@@ -1,5 +1,9 @@
 import numpy as np
 
+# Below this, DFA has too few distinct window sizes for a usable estimate. With 200 values, alpha of
+# white noise (true value 0.5) is between 0.33 and 0.71 in 90% of cases.
+MIN_DFA_VALUES = 200
+
 def _detrended_fluctuation_analysis(data, window_sizes, order=1):
     """
     Perform Detrended Fluctuation Analysis (DFA) on a time series to estimate 
@@ -109,21 +113,22 @@ def _make_window_sizes(data, order=1):
     Raises
     ------
     ValueError
-        If the data length is less than 100 samples.
+        If the data length is less than MIN_DFA_VALUES.
     ValueError
         If the data length is too short for the specified polynomial order.
     
     """
     N = len(data)
     
-    if N < 100:
-        raise ValueError(f"Data length must be at least 100 samples for reliable DFA (got {N}).")
+    if N < MIN_DFA_VALUES:
+        raise ValueError(f"DFA needs at least {MIN_DFA_VALUES} values (got {N}).")
 
     max_window = int(0.1 * N)  # Max window size is 10% of data length
     if max_window < order + 1:
         raise ValueError(f"Data length ({N}) is too short for polynomial order {order}.")
     
-    window_sizes = np.logspace(np.log10(10), np.log10(max_window), num=10).astype(int)
+    # rounding can give the same size several times, which would count double in the fit
+    window_sizes = np.unique(np.logspace(np.log10(10), np.log10(max_window), num=10).astype(int))
     
     return window_sizes
 
@@ -150,55 +155,44 @@ def dfa(data, order=1):
         Fluctuation function values for each window in `window_sizes`.    
     """
 
+    data = np.asarray(data, dtype=float)
     window_sizes = _make_window_sizes(data, order)
+    if np.isnan(data).any():
+        raise ValueError("DFA can't use a series with missing values, such as flat windows.")
+    if np.ptp(data) == 0:
+        raise ValueError("DFA can't use a series with the same value throughout.")
     return _detrended_fluctuation_analysis(data, window_sizes, order)
 
-def dfa_wxcorr_window_averages(wxcorr_data, max_lag, order=1):
-    if not wxcorr_data:
-        return np.array([-1]), np.array([-1])
-    
-    # calculate correlation averages per window
-    per_window_averages = []
-    for window in wxcorr_data:
-        avg_corr = np.mean(window['correlations'])
-        per_window_averages.append(avg_corr)
-
-    A, F = dfa(per_window_averages,  order)
-
+def dfa_wxcorr_window_averages(wxcorr_data, order=1):
+    """
+    Performs DFA on the correlation averaged across lags, over time.
+    Args:
+        wxcorr_data (list of dict): Result of windowed_cross_correlation, from windows that don't overlap.
+        order (int, optional): The order of the polynomial for detrending in DFA. Default is 1 (linear detrending).
+    Returns:
+        float: The scaling exponent alpha.
+    """
+    A, _ = dfa([np.mean(window['correlations']) for window in wxcorr_data], order)
     return A[0]
 
-def dfa_wxcorr(wxcorr_data, max_lag, order=1):
+def dfa_wxcorr(wxcorr_data, min_lag, order=1):
     """
-    Performs Detrended Fluctuation Analysis (DFA) on cross-correlation data for each lag.
+    Performs DFA on the correlation at each lag, over time.
     Args:
-        wxcorr_data (list of dict): List of dictionaries, each representing a window of cross-correlation data.
-            Each dictionary should have the keys:
-                - 'lags': list or array of lag values.
-                - 'correlations': list or array of correlation values corresponding to each lag.
-        max_lag (int): The maximum lag value of wxcorr windows (lags in windows go from -max_lag to +max_lag).
+        wxcorr_data (list of dict): Result of windowed_cross_correlation, from windows that don't overlap.
+        min_lag (int): The lag of the first correlation value in each window.
         order (int, optional): The order of the polynomial for detrending in DFA. Default is 1 (linear detrending).
     Returns:
         list of dict: A list where each element is a dictionary with keys:
             - 'lag': The lag value.
             - 'A': ndarray [alpha, intercept] where `alpha` is the scaling exponent for this lag.
             - 'F': ndarray of Fluctuation function values for each window in `window_sizes` for this lag.
-        If `wxcorr_data` is empty or None, returns (np.array([-1]), np.array([-1])).
     """
-    
-    if not wxcorr_data:
-        return []
+    correlations_per_lag = np.array([window['correlations'] for window in wxcorr_data]).T
 
-    # extract horizontal lines of wxcorr plot (lists of correlation values per in-window lag)
-    lags = range(-max_lag, max_lag + 1)
-    correlations_per_lag = {lag: [] for lag in lags}
-    for window in wxcorr_data:
-        for i, correlation in enumerate(window['correlations']):
-            correlations_per_lag[i-max_lag].append(correlation)
-    
-    # for each correlation line, perform DFA
     dfa_per_lag = []
-    for lag, correlations in correlations_per_lag.items():
+    for lag_index, correlations in enumerate(correlations_per_lag):
         A, F = dfa(correlations, order)
-        dfa_per_lag.append({'lag': lag, 'A': A, 'F': F})
+        dfa_per_lag.append({'lag': min_lag + lag_index, 'A': A, 'F': F})
 
     return dfa_per_lag
