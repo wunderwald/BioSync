@@ -53,7 +53,7 @@ BioSync ships a `build.py` script that wraps PyInstaller. Run it from inside the
 python build.py
 ```
 
-You will be prompted to choose a build method and an app name. The finished executable is placed in `dist/`.
+You will be prompted to choose a build method and an app name. The finished executable is placed in `dist/`. Files the app loads at runtime, such as the theme, are listed in `DATA_FILE_ARGS` in `build.py`.
 
 | Method | When to use |
 |---|---|
@@ -77,6 +77,18 @@ Earlier versions also ignored the time from the start of the recording to each p
 Correlations of ±1 or beyond used to count as a z-value of 0. All correlations beyond ±0.999 are now limited to that value (z of about ±3.8) before the Fisher z-transform:
 
 - **`avg_z_transformed_corr` and `var_z_transformed_corr` can change** for windows that contain such values. This is rare at the default settings.
+
+Windows where a signal doesn't change have no correlation. They used to report τ at the lowest lag and a z-value of 0, and one such window made its group-average window and its random-pair average `nan`:
+
+- **Flat windows are now `nan` in every column**, including τ and the z-values.
+- **Averages leave them out**, so group averages and random-pair averages can change for data that contains them.
+- **A signal with the same value throughout is now rejected** as invalid data. In a batch, that dyad is skipped and listed in the summary.
+
+Spreadsheets are now read differently:
+
+- **Repeated column names can select a different column.** A name used twice used to mean the last column with that name. It now means the first, and the others are listed as `name (2)` and so on.
+- **Cells with formulas now give their calculated value.** They used to count as text, which made the column invalid.
+- **The first sheet in the dropdown is now the first sheet both files share.** It used to vary between runs. Results only change if you relied on the default sheet.
 
 ---
 
@@ -117,8 +129,8 @@ pytest
 | `plot.py` | Matplotlib figure factories for preprocessing preview, windowed xcorr, and standard xcorr plots. |
 | `export.py` | Writes XLSX result files for wxcorr, sxcorr, and random-pair analysis. Always exports raw (non-sigmoid) correlation values. |
 | `batch_processing.py` | Iterates a folder of dyads, runs the full analysis pipeline on each, and saves per-dyad XLSX + PNG output. Also contains `random_pair_analysis`. |
-| `xlsx.py` | Thin wrappers around openpyxl for reading and writing Excel files. |
-| `utils.py` | Small helpers (`is_numeric_array`, `count_subdirectories`, …). |
+| `xlsx.py` | Thin wrappers around openpyxl for reading and writing Excel files. `read_xlsx` returns the values of all sheets and closes the file. |
+| `utils.py` | Small helpers (`is_numeric_array`, `count_subdirectories`, `resource_path`, …). |
 
 ### Initialization order
 
