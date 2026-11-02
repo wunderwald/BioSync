@@ -13,6 +13,5 @@ Interactive visual toolbox for working with windowed cross-correlation, optimize
 BioSync/
 ├── app/              # Main application 
 ├── simulated_data/   # Jupyter notebook for generating test data
-├── preprocessing/    # preprocessing utilities
-└── materials/        # Reference papers and code
+└── preprocessing/    # preprocessing utilities
 ```
