@@ -183,8 +183,6 @@ def init_state(dpi, sw, sh, retina):
         'columns_b': {},
         'column_names_a': [],
         'column_names_b': [],
-        'selected_column_a': None,
-        'selected_column_b': None,
         'has_headers': True
     })
 
