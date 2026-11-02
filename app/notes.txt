@@ -1,9 +1,11 @@
 # Build
 
-python3 build.py <app_name>
+pip install -r requirements-build.txt
+python build.py
 
 ! Windows build must be done on Windows
 
-# Collect requirements
+# Requirements
 
-pip-chill --no-version > requirements.txt
+requirements.txt lists what the app imports, with exact versions.
+requirements-dev.txt adds the tests, and requirements-build.txt adds the build tool.

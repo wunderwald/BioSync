@@ -7,7 +7,7 @@ Interactive visual toolbox for windowed cross-correlation analysis, optimized fo
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.11+
 
 ---
 
@@ -47,19 +47,14 @@ python app.py
 
 ## Building a standalone executable
 
-BioSync ships a `build.py` script that wraps PyInstaller. Run it from inside the `app/` directory:
+BioSync ships a `build.py` script that runs PyInstaller with `BioSync.spec`. From inside the `app/` directory:
 
 ```bash
+pip install -r requirements-build.txt
 python build.py
 ```
 
-You will be prompted to choose a build method and an app name. The finished executable is placed in `dist/`. Files the app loads at runtime, such as the theme, are listed in `DATA_FILE_ARGS` in `build.py`.
-
-| Method | When to use |
-|---|---|
-| Smart auto-detect *(recommended)* | Standard builds — PyInstaller analyses imports automatically |
-| Brute force | When the smart build produces a broken app due to hidden imports |
-| Minimal | Quick test builds; may be missing some dependencies at runtime |
+The finished app is placed in `dist/`. A Windows build has to be made on Windows. Files the app loads at runtime, such as the theme, are listed in `datas` in `BioSync.spec`.
 
 ---
 
