@@ -8,6 +8,11 @@ Interactive visual toolbox for windowed cross-correlation analysis, optimized fo
 ## Requirements
 
 - Python 3.11+
+- On macOS: Tk 8.6.13 or newer, which python.org installers include from Python 3.11.7. With Tk 8.6.12, the window can ignore clicks until its title bar is clicked ([python/cpython#110218](https://github.com/python/cpython/issues/110218)). To check your version:
+
+  ```bash
+  python -c "import tkinter; print(tkinter.Tcl().eval('info patchlevel'))"
+  ```
 
 ---
 
