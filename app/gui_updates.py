@@ -94,6 +94,7 @@ def setup_traces():
 
     state.val_job_running.trace_add('write', update_job_progress_visibility)
     state.val_job_progress.trace_add('write', update_job_progress_bar)
+    state.val_job_cancel_requested.trace_add('write', update_active_state_cancel_button)
 
 
 # ---------------------------------------------------------------------------
@@ -265,6 +266,10 @@ def update_job_progress_visibility(*args):
         _w['subgroup_job_progress'].grid(row=3, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
     else:
         _w['subgroup_job_progress'].grid_forget()
+
+
+def update_active_state_cancel_button(*args):
+    _w['button_cancel_job'].configure(state="disabled" if state.val_job_cancel_requested.get() else "normal")
 
 
 def update_job_progress_bar(*args):

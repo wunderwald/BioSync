@@ -503,6 +503,12 @@ def export_plot():
 
 JOB_POLL_MS = 100
 
+_job_cancel_event = threading.Event()
+
+
+class JobCancelled(Exception):
+    pass
+
 
 def _format_progress(done, total, text):
     return f"{text} ({done + 1} of {total})" if done < total else text
@@ -512,17 +518,27 @@ def _start_job(title, work, on_success):
     """
     Runs work(progress) on another thread, so that the window stays responsive.
     work must not use state or any widget. on_success(result) runs on the main thread.
+    A job stops when it next reports progress after cancel_job, so the dyad it is working on gets finished.
     """
     messages = queue.Queue()
+    _job_cancel_event.clear()
+
+    def progress(done, total, text):
+        if _job_cancel_event.is_set():
+            raise JobCancelled
+        messages.put(('progress', done, total, text))
 
     def run():
         try:
-            result = work(lambda done, total, text: messages.put(('progress', done, total, text)))
+            result = work(progress)
+        except JobCancelled:
+            messages.put(('cancelled',))
         except Exception as e:
             messages.put(('error', e))
         else:
             messages.put(('done', result))
 
+    state.val_job_cancel_requested.set(False)
     state.val_job_progress.set(0)
     state.val_job_progress_text.set(title)
     state.val_job_running.set(True)
@@ -542,16 +558,25 @@ def _poll_job(messages, title, on_success):
         if message[0] == 'progress':
             _, done, total, text = message
             state.val_job_progress.set(done / total if total else 0)
-            state.val_job_progress_text.set(_format_progress(done, total, text))
+            if not _job_cancel_event.is_set():
+                state.val_job_progress_text.set(_format_progress(done, total, text))
             continue
         state.val_job_running.set(False)
         _batch_processing_is_ready()
         _random_pair_is_ready()
         if message[0] == 'error':
             messagebox.showerror(f"{title} failed", str(message[1]))
+        elif message[0] == 'cancelled':
+            messagebox.showinfo(f"{title} cancelled", "Stopped early. Files that were already written are kept.")
         else:
             on_success(message[1])
         return
+
+
+def cancel_job():
+    _job_cancel_event.set()
+    state.val_job_cancel_requested.set(True)
+    state.val_job_progress_text.set("Cancelling after the current step...")
 
 
 def confirm_close():
@@ -659,6 +684,7 @@ def run_random_pair(params, random_pair_count, input_dir, output_file, progress)
         input_dir=input_dir,
         progress=progress,
     )
+    progress(1, 1, "Writing results")
     export_random_pair_data(
         file_path=output_file,
         params=params,

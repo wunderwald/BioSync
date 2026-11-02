@@ -415,6 +415,9 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     progress_bar_job = tk.CTkProgressBar(subgroup_job_progress)
     progress_bar_job.grid(row=1, column=0, padx=10, pady=5, sticky='w')
 
+    button_cancel_job = tk.CTkButton(subgroup_job_progress, text='Cancel', command=cb.cancel_job)
+    button_cancel_job.grid(row=2, column=0, padx=10, pady=5, sticky='w')
+
     # -----------------------------------------------------------------
     # Inject widget references that callbacks need for dropdown updates
     # -----------------------------------------------------------------
@@ -462,4 +465,5 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
         'button_random_pair':                  button_random_pair,
         'subgroup_job_progress':               subgroup_job_progress,
         'progress_bar_job':                    progress_bar_job,
+        'button_cancel_job':                   button_cancel_job,
     }

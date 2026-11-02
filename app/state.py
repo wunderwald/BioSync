@@ -78,6 +78,7 @@ val_random_pair_is_ready             = None
 val_job_running                      = None
 val_job_progress                     = None
 val_job_progress_text                = None
+val_job_cancel_requested             = None
 
 # data containers
 dat_plot_data         = {}
@@ -138,7 +139,7 @@ def init_state(dpi, sw, sh, retina):
     global val_checkbox_data_has_headers, val_batch_input_folder, val_batch_output_folder
     global val_batch_processing_is_ready, val_rp_n_input, val_rp_n
     global val_random_pair_input_folder, val_random_pair_output_file, val_random_pair_is_ready
-    global val_job_running, val_job_progress, val_job_progress_text
+    global val_job_running, val_job_progress, val_job_progress_text, val_job_cancel_requested
     global dat_plot_data, dat_workbook_data, dat_physiological_data, dat_correlation_data
 
     screen_dpi    = dpi
@@ -200,6 +201,7 @@ def init_state(dpi, sw, sh, retina):
     val_job_running                        = tk.BooleanVar(value=False)
     val_job_progress                       = tk.DoubleVar(value=0)
     val_job_progress_text                  = tk.StringVar(value='')
+    val_job_cancel_requested               = tk.BooleanVar(value=False)
 
     # data containers
     dat_plot_data['fig'] = plot_init(is_retina=retina)

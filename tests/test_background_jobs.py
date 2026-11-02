@@ -242,3 +242,148 @@ def test_progress_is_only_visible_while_a_job_runs(app, monkeypatch):
     app.val_job_running.set(False)
     gui_updates.update_job_progress_visibility()
     assert not frame.visible
+
+
+def _steps_until_cancelled(app, steps=3):
+    """Runs a job that waits to be cancelled during its first step. Returns the steps it started and a release."""
+    started, finished = [], []
+    in_first_step = threading.Event()
+    release = threading.Event()
+
+    def work(progress):
+        for step in range(steps):
+            progress(step, steps, f"step {step}")
+            started.append(step)
+            in_first_step.set()
+            release.wait(5)
+            finished.append(step)
+        return "complete"
+
+    callbacks._start_job("Job", work, lambda result: app.dialogs.append(("success", result, "")))
+    assert in_first_step.wait(5)
+    return started, finished, release
+
+
+def test_cancelling_finishes_the_current_step_and_runs_no_more(app):
+    started, finished, release = _steps_until_cancelled(app)
+    callbacks.cancel_job()
+    release.set()
+    app.timer.run_until_idle()
+    assert started == [0] and finished == [0]
+    assert app.dialogs == [("showinfo", "Job cancelled", "Stopped early. Files that were already written are kept.")]
+
+
+def test_buttons_are_restored_after_cancelling(app):
+    _, _, release = _steps_until_cancelled(app)
+    callbacks.cancel_job()
+    assert _both_ready(app) == (False, False)
+    release.set()
+    app.timer.run_until_idle()
+    assert app.val_job_running.get() is False
+    assert _both_ready(app) == (True, True)
+
+
+def test_cancelling_shows_at_once_and_stays_visible(app):
+    _, _, release = _steps_until_cancelled(app)
+    callbacks.cancel_job()
+    assert app.val_job_cancel_requested.get() is True
+    assert app.val_job_progress_text.get().startswith("Cancelling")
+    release.set()
+    app.timer.run_until_idle()
+    assert app.val_job_progress_text.get().startswith("Cancelling")     # a queued step must not overwrite it
+
+
+def test_next_job_is_not_affected_by_an_earlier_cancel(app):
+    _, _, release = _steps_until_cancelled(app)
+    callbacks.cancel_job()
+    release.set()
+    app.timer.run_until_idle()
+    app.dialogs.clear()
+
+    def work(progress):
+        progress(0, 1, "step")
+        return "complete"
+
+    callbacks._start_job("Job", work, lambda result: app.dialogs.append(("success", result, "")))
+    assert app.val_job_cancel_requested.get() is False
+    app.timer.run_until_idle()
+    assert app.dialogs == [("success", "complete", "")]
+
+
+def test_job_that_finishes_before_noticing_counts_as_finished(app):
+    release = threading.Event()
+
+    def work(progress):
+        progress(0, 1, "step")
+        release.wait(5)
+        return "complete"
+
+    callbacks._start_job("Job", work, lambda result: app.dialogs.append(("success", result, "")))
+    time.sleep(0.01)
+    callbacks.cancel_job()
+    release.set()
+    app.timer.run_until_idle()
+    assert app.dialogs == [("success", "complete", "")]
+
+
+def test_cancelled_batch_keeps_finished_dyads_and_skips_the_group_average(app, tmp_path, monkeypatch):
+    for index in range(3):
+        _write_dyad(tmp_path / "in" / f"dyad{index}", seed=index)
+    (tmp_path / "out").mkdir()
+    monkeypatch.setattr(callbacks, "_analysis_params", lambda: _params(tmp_path / "in", tmp_path / "out"))
+    real = batch_processing.batch_process
+
+    def cancel_during_second_dyad(params, progress):
+        def reporting(done, total, text):
+            if done == 2:
+                callbacks._job_cancel_event.set()
+            progress(done, total, text)
+        return real(params, reporting)
+
+    monkeypatch.setattr(callbacks, "batch_process", cancel_during_second_dyad)
+    callbacks.handle_run_batch_button()
+    app.timer.run_until_idle(60)
+
+    written = sorted(path.name for path in (tmp_path / "out").glob("*.xlsx"))
+    assert written == ["wx_dyad0_wxcorr.xlsx", "wx_dyad1_wxcorr.xlsx"]
+    assert app.dialogs[0][1] == "Batch processing cancelled"
+
+
+@pytest.mark.parametrize("cancel_at", ["Random pairs", "dyad1", "Writing results"])
+def test_cancelled_random_pairs_write_no_results(app, tmp_path, monkeypatch, cancel_at):
+    for index in range(2):
+        _write_dyad(tmp_path / "in" / f"dyad{index}", seed=index)
+    output = tmp_path / "rp.xlsx"
+    real = callbacks.run_random_pair
+
+    def cancelling(params, count, input_dir, output_file, progress):
+        def reporting(done, total, text):
+            if text == cancel_at:
+                callbacks._job_cancel_event.set()
+            progress(done, total, text)
+        return real(params, count, input_dir, output_file, reporting)
+
+    monkeypatch.setattr(callbacks, "run_random_pair", cancelling)
+    monkeypatch.setattr(callbacks, "_analysis_params", lambda: _params(tmp_path / "in", tmp_path))
+    app.val_random_pair_input_folder.set(str(tmp_path / "in"))
+    app.val_random_pair_output_file.set(str(output))
+
+    callbacks.handle_run_random_pair_button()
+    app.timer.run_until_idle(60)
+
+    assert not output.exists()
+    assert app.dialogs[0][1] == "Random pair analysis cancelled"
+
+
+class FakeButton:
+    def configure(self, state):
+        self.state = state
+
+
+@pytest.mark.parametrize("requested, expected", [(True, "disabled"), (False, "normal")])
+def test_cancel_button_can_only_be_clicked_once_per_run(app, monkeypatch, requested, expected):
+    button = FakeButton()
+    monkeypatch.setattr(gui_updates, "_w", {'button_cancel_job': button})
+    app.val_job_cancel_requested.set(requested)
+    gui_updates.update_active_state_cancel_button()
+    assert button.state == expected
