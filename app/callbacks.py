@@ -413,7 +413,6 @@ def _export_wxcorr_data(file_path):
         'selected_dyad_dir':              state.val_selected_dyad_dir.get(),
         'input_file_a':                   state.val_selected_file_a.get(),
         'input_file_b':                   state.val_selected_file_b.get(),
-        'checkbox_EDA':                   state.val_checkbox_fr.get(),
         'window_size':                    state.val_window_size.get(),
         'max_lag':                        state.val_max_lag.get(),
         'step_size':                      state.val_step_size.get(),

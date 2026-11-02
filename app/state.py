@@ -6,8 +6,6 @@ from plot import plot_init
 # DEFAULTS / INIT VALUES
 # ----------------------
 
-USE_MY_PARAMS = True
-
 INIT_WINDOW_SIZE = 150   # 150 := 30s for 5hz signals
 INIT_MAX_LAG     = 30    # 30 := 6s
 INIT_STEP_SIZE   = 75    # 75 := 15s

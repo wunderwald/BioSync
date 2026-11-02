@@ -65,16 +65,6 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
         # make and export correlation data
         if params['checkbox_windowed_xcorr']:
             # WXCorr
-            # dfa per lag (per horizontal line)
-            # dfa_corr_data = None
-            # try:
-            #     dfa_data = dfa_wxcorr(corr_data, max_lag, order=1)
-            #     dfa_alpha_per_lag = [{'lag': o['lag'], 'alpha': o['A'][0]} for o in dfa_data]
-            #     dfa_corr_data = dfa_alpha_per_lag
-            # except ValueError as e:
-            #     dfa_corr_data = None
-            #     print("TODO: handle dfa update error in wxcorr update", e) # TODO
-
             # export
             export_params = {
                 'selected_dyad_dir': dyad_dir,
@@ -92,7 +82,6 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
                 'signal_a_std': _signal_a_z_scored,
                 'signal_b_std': _signal_b_z_scored,
                 'wxcorr': corr_data,
-                #'dfa_alpha_per_lag_wxcorr': dfa_corr_data,
                 'checkbox_lag_filter': params['use_lag_filter'],
                 'lag_filter_min': params['lag_filter_min'],
                 'lag_filter_max': params['lag_filter_max'],
