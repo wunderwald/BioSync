@@ -204,7 +204,7 @@ def test_random_pair_metadata_reports_standard_xcorr_settings(tmp_path):
                      checkbox_absolute_corr=False, checkbox_absolute_corr_sxc=True)
     export.export_random_pair_data(str(path), params, "input", 0.1, 0.5, [0.1], [0.2])
     metadata, _ = _read_export(path)
-    assert metadata['Max lag'] == '150'
+    assert metadata['Max lag'] == 150
     assert metadata['Absolute correlation values'] == 'True'
 
 

@@ -79,6 +79,8 @@ Windows where a signal doesn't change have no correlation. They used to report Ï
 - **Averages leave them out**, so group averages and random-pair averages can change for data that contains them.
 - **A signal with the same value throughout is now rejected** as invalid data. In a batch, that dyad is skipped and listed in the summary.
 
+Exports now store numbers as numbers instead of text, in the same cells. The values don't change, but a script that handles them as text, for example with string functions, needs adjusting. Booleans, labels, `-` and `nan` are still text.
+
 Spreadsheets are now read differently:
 
 - **Repeated column names can select a different column.** A name used twice used to mean the last column with that name. It now means the first, and the others are listed as `name (2)` and so on.
@@ -91,9 +93,9 @@ Spreadsheets are now read differently:
 
 ### Export format
 
-Existing analysis pipelines read these files, so **the first sheet must not change**: not its columns, their order, or their text values. Add new data on another sheet.
+Existing analysis pipelines read these files, so **the first sheet's layout must not change**: not its columns, their order, or its text. Numbers are stored as numbers; booleans, labels, `-` and `nan` are text. Add new data on another sheet.
 
-Windowed exports have a second sheet, `correlations`, with real numbers: one row per window (labelled with its start index) and one column per lag (labelled with the lag in samples). Flat windows contain the text `nan`. If a recording has too many windows for the first sheet (about 8,000), the `w_*` columns are left out, and the metadata says so.
+Windowed exports have a second sheet, `correlations`: one row per window (labelled with its start index) and one column per lag (labelled with the lag in samples). Flat windows contain the text `nan`. If a recording has too many windows for the first sheet (about 8,000), the `w_*` columns are left out, and the metadata says so.
 
 ### Tests
 

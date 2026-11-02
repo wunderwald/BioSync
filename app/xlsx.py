@@ -1,7 +1,6 @@
 from itertools import zip_longest
 
 import math
-from numbers import Number
 
 import numpy as np
 from openpyxl import Workbook, load_workbook
@@ -12,14 +11,13 @@ MAX_COLUMNS = 16384
 
 def _cell_value(value):
     """
-    The value to store in a matrix sheet cell. Numbers stay numbers, so that they can be calculated with.
-    NaN and infinity have no cell type and would make Excel report the file as damaged, so they are written as text.
+    The value to store in a cell. Numbers are stored as numbers, so that they can be calculated with.
+    Everything else is text, including booleans. NaN and infinity have no cell type and would make Excel
+    report the file as damaged, so they are text too.
     """
     if isinstance(value, np.generic):
         value = value.item()
-    if isinstance(value, float) and not math.isfinite(value):
-        return str(value)
-    if value is None or isinstance(value, (Number, str)):
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
         return value
     return str(value)
 
@@ -40,7 +38,7 @@ def write_matrix_sheet(workbook: Workbook, matrix: dict):
 def write_xlsx(vectors: dict, single_values: dict, output_path: str, sheet_title: str="xcorr data", matrix: dict=None):
     """
     Write data to an Excel file. Existing analysis pipelines read the first sheet, so its layout and its text
-    values must stay as they are. New data belongs on another sheet.
+    must stay as they are. New data belongs on another sheet.
     Args:
         vectors (dict): A dictionary where keys are column names and values are lists of time series data.
         single_value (dict): A dictionary where keys are column names and values are single data values.
@@ -63,7 +61,7 @@ def write_xlsx(vectors: dict, single_values: dict, output_path: str, sheet_title
     row_index = 1
     for name, value in single_values.items():
         sheet.cell(row=row_index, column=1, value=name)  
-        sheet.cell(row=row_index, column=2, value=str(value))
+        sheet.cell(row=row_index, column=2, value=_cell_value(value))
         row_index += 1
     
     # Write the time series data to columns
@@ -72,7 +70,7 @@ def write_xlsx(vectors: dict, single_values: dict, output_path: str, sheet_title
     for name in vectors.keys():
         sheet.cell(row=1, column=column_index, value=name)
         for row_index, value in enumerate(vectors[name]):  
-            sheet.cell(row=row_index+2, column=column_index, value=str(value))
+            sheet.cell(row=row_index+2, column=column_index, value=_cell_value(value))
         column_index += 1
 
     if matrix is not None:
