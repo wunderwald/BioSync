@@ -1,14 +1,14 @@
 import os
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from plot import plot_init, update_sxcorr_plots, update_wxcorr_plots, update_preproc_plots
-from analysis import correlate_signals, standard_dfa_alpha
-from dfa import dfa_wxcorr, dfa_wxcorr_window_averages
+from analysis import correlate_signals, format_dfa, windowed_dfa
 
 import state
 
 canvas = None
 
 UPDATE_DEBOUNCE_MS = 250
+NO_WINDOWED_DFA = {'alpha_window_averages': None, 'alpha_per_lag': None, 'note': 'No valid results yet.'}
 
 _pending_update = None    # id of the scheduled UPDATE, if any
 _computed_wx_settings = None    # the settings behind the current wxcorr results
@@ -62,20 +62,7 @@ def _update_wxcorr_data():
     state.dat_correlation_data['wxcorr'] = correlate_signals(_signals(), config)
     _computed_wx_settings = config.windowed_settings
 
-    try:
-        dfa_data = dfa_wxcorr(state.dat_correlation_data['wxcorr'], state.val_max_lag.get(), order=1)
-        state.dat_correlation_data['dfa_alpha_per_lag_wxcorr'] = [
-            {'lag': o['lag'], 'alpha': o['A'][0]} for o in dfa_data
-        ]
-    except ValueError:
-        state.dat_correlation_data['dfa_alpha_per_lag_wxcorr'] = None
-
-    try:
-        state.dat_correlation_data['dfa_alpha_window_averages_wxcorr'] = dfa_wxcorr_window_averages(
-            state.dat_correlation_data['wxcorr'], state.val_max_lag.get(), order=1
-        )
-    except ValueError:
-        state.dat_correlation_data['dfa_alpha_window_averages_wxcorr'] = None
+    state.dat_correlation_data['dfa_windows'] = windowed_dfa(state.dat_correlation_data['wxcorr'], config)
 
 
 def _update_sxcorr_data():
@@ -89,7 +76,6 @@ def _update_sxcorr_data():
 
     state.dat_correlation_data['sxcorr'] = correlate_signals(_signals(), config)
     _computed_sx_settings = config.standard_settings
-    state.dat_correlation_data['dfa_alpha_sxcorr'] = standard_dfa_alpha(state.dat_correlation_data['sxcorr'])
 
 
 def update_corr():
@@ -194,10 +180,19 @@ def update_canvas():
 # Scheduled whenever val_UPDATE_COUNT changes, so that repeated changes run it once.
 # ---------------------------------------------------------------------------
 
+def update_dfa_text():
+    windowed = state.val_checkbox_windowed_xcorr.get()
+    state.val_dfa_text.set(format_dfa(
+        state.dat_correlation_data.get('dfa_signals'),
+        state.dat_correlation_data.get('dfa_windows') or NO_WINDOWED_DFA if windowed else None,
+    ))
+
+
 def UPDATE(*args):
     global _pending_update
     _pending_update = None
     update_corr()
+    update_dfa_text()
     update_plot()
     update_canvas()
 

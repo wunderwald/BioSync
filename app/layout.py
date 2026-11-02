@@ -299,6 +299,14 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     )
     label_lag_hint.grid(row=0, column=0, sticky="w", padx=10, pady=12)
 
+    subgroup_dfa = tk.CTkFrame(tab_correlation)
+    subgroup_dfa.grid(row=3, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
+
+    label_dfa = tk.CTkLabel(
+        subgroup_dfa, textvariable=state.val_dfa_text, justify='left', wraplength=TAB_WIDTH - 20
+    )
+    label_dfa.grid(row=0, column=0, sticky="w", padx=10, pady=12)
+
     subgroup_lag_info = tk.CTkFrame(tab_correlation)
     # initially hidden — shown when standard xcorr is selected
 
@@ -399,6 +407,22 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
         textvariable=state.val_rp_n_input, border_color='#777777'
     )
     entry_rp_n.grid(row=4, column=1, sticky="w", padx=10, pady=5)
+
+    label_rp_seed = tk.CTkLabel(subgroup_random_pair, text="Seed (optional)")
+    label_rp_seed.grid(row=5, column=0, sticky="w", padx=10, pady=5)
+
+    entry_rp_seed = tk.CTkEntry(
+        subgroup_random_pair,
+        validate="key", validatecommand=(validate_numeric_input, "%P"),
+        textvariable=state.val_rp_seed_input, border_color='#777777'
+    )
+    entry_rp_seed.grid(row=5, column=1, sticky="w", padx=10, pady=5)
+
+    label_rp_seed_info = tk.CTkLabel(
+        subgroup_random_pair, wraplength=TAB_WIDTH - 20, justify='left',
+        text="Left empty, a new seed is used. Every export records its seed, so a run can be repeated."
+    )
+    label_rp_seed_info.grid(row=6, column=0, columnspan=2, sticky="w", padx=10, pady=5)
 
     button_random_pair = tk.CTkButton(
         subgroup_random_pair, text='Run rp analysis',

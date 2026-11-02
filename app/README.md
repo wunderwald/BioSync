@@ -88,6 +88,18 @@ Exports now store numbers as numbers instead of text, in the same cells. The val
 
 The app now has one column selector, listing the columns both files have in the selected sheet. Person A and B are always analysed in the same column, so a dyad whose files name that column differently can't be loaded until the names match. Older runs could use two different columns.
 
+DFA now describes each person's signal, and the correlation over time where that can be trusted:
+
+- **The `Alpha (DFA scaling exponent)` row of standard exports is now `-`.** It was computed across lags, not over time, and didn't change with coupling.
+- **New rows at the end of the metadata** give `DFA alpha, signal A` and `signal B`, the value over time for windowed exports, and a `DFA note` with the reason when a value is missing. Event-based signals use the original intervals, because resampling raises alpha.
+- **`dfa_lags` and `dfa_alpha` can now contain numbers**, for windows that don't overlap with at least 200 windows. They used to always be `-`.
+- **Series with fewer than 200 values are refused.**
+
+Random pairs are now drawn differently, so their t-statistic and p-value can change for the same data:
+
+- **Real pairs and self-pairs are left out.** Recordings are told apart by their file content, so copies from `preprocessing/group_to_dyads.py` count as one recording. Any two recordings that share a dyad folder are a real pair. Folders from one `group_to_dyads` group have only real pairs, so they can't be used alone.
+- **Every run uses a seed**, which the export records with the number of different pairs possible. Entering the seed again repeats the run for the same files.
+
 Spreadsheets are now read differently:
 
 - **Repeated column names can select a different column.** A name used twice used to mean the last column with that name. It now means the first, and the others are listed as `name (2)` and so on.
@@ -136,7 +148,7 @@ pytest
 | `analysis.py` | `AnalysisConfig` and `analyze_dyad`: the pipeline shared by the GUI, batch and random pairs, so that they can't give different results. |
 | `signal_processing.py` | Resampling and alignment of raw IBI / EDA signals (`preprocess_dyad`). |
 | `cross_correlation.py` | `windowed_cross_correlation` and `standard_cross_correlation` algorithms. The windowed one computes many windows at once, and a test checks that it matches the original window-by-window computation exactly. |
-| `dfa.py` | Detrended Fluctuation Analysis — `dfa`, `dfa_wxcorr`, `dfa_wxcorr_window_averages`. |
+| `dfa.py` | Detrended Fluctuation Analysis — `dfa`, `dfa_wxcorr`, `dfa_wxcorr_window_averages`. `analysis.py` decides which series it runs on. |
 | `plot.py` | Matplotlib figure factories for preprocessing preview, windowed xcorr, and standard xcorr plots. |
 | `export.py` | Writes XLSX result files for wxcorr, sxcorr, and random-pair analysis. Always exports raw (non-sigmoid) correlation values. |
 | `batch_processing.py` | Iterates a folder of dyads, runs the full analysis pipeline on each, and saves per-dyad XLSX + PNG output. Also contains `random_pair_analysis`. |

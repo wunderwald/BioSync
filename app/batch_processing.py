@@ -1,7 +1,9 @@
+import hashlib
+import itertools
 import os
 import xlsx
 import utils
-from analysis import AnalysisConfig, analyze_dyad, standard_dfa_alpha
+from analysis import AnalysisConfig, analyze_dyad, signal_dfa, windowed_dfa
 from export import export_sxcorr_data, export_wxcorr_data, export_avg_wxcorr_data
 from cross_correlation import average_wxcorr_matrices, mean_ignoring_flat_windows
 import random
@@ -85,7 +87,9 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
                 'checkbox_lag_filter': params['use_lag_filter'],
                 'lag_filter_min': params['lag_filter_min'],
                 'lag_filter_max': params['lag_filter_max'],
-                'is_standardised': use_standardised_data
+                'is_standardised': use_standardised_data,
+                'dfa_signals': signal_dfa(raw_signal_a, raw_signal_b, config) if export else None,
+                'dfa_windows': windowed_dfa(corr_data, config) if export else None,
             }
             
             # export data and plot
@@ -109,9 +113,6 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
         
         else:
             # Standard XCorr
-            # calculate dfa (not possible for short lag ranges)
-            dfa_alpha = standard_dfa_alpha(corr_data)
-
             # export
             export_params = {
                 'selected_dyad_dir': dyad_dir,
@@ -127,7 +128,7 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
                 'signal_b_std': _signal_b_z_scored,
                 'sxcorr': corr_data,
                 'is_standardised': use_standardised_data,
-                'dfa_alpha': dfa_alpha
+                'dfa_signals': signal_dfa(raw_signal_a, raw_signal_b, config) if export else None,
             }
             
             # export data and plot
@@ -154,7 +155,39 @@ def _average_correlations(all_correlations):
     averages = [mean_ignoring_flat_windows(c) for c in all_correlations]
     return [average for average in averages if not np.isnan(average)]
 
-def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_progress):
+def _file_hash(file_path):
+    with open(file_path, 'rb') as file:
+        return hashlib.sha256(file.read()).hexdigest()
+
+def _eligible_random_pairs(input_dir, dyad_folders):
+    """
+    Lists the pairs of recordings that can be used as random pairs. Recordings are told apart by their content,
+    because preprocessing/group_to_dyads.py copies a person's file to many folders. This leaves out self-pairs,
+    and real pairs, which are any two recordings that share a dyad folder.
+    Args:
+        input_dir (str): Path to the input directory containing dyad folders with Excel files.
+        dyad_folders (list): Names of the dyad folders, in a fixed order.
+    Returns:
+        list: (file_path_a, file_path_b) pairs, in a fixed order.
+    """
+    path_of_recording = {}
+    real_pairs = set()
+    for dyad_folder in dyad_folders:
+        dyad_path = os.path.join(input_dir, dyad_folder)
+        recordings = set()
+        for file_name in utils.list_dyad_files(dyad_path):
+            file_path = os.path.join(dyad_path, file_name)
+            recording = _file_hash(file_path)
+            path_of_recording.setdefault(recording, file_path)
+            recordings.add(recording)
+        real_pairs.update(frozenset(pair) for pair in itertools.combinations(recordings, 2))
+    return [
+        (path_of_recording[recording_a], path_of_recording[recording_b])
+        for recording_a, recording_b in itertools.combinations(path_of_recording, 2)
+        if frozenset((recording_a, recording_b)) not in real_pairs
+    ]
+
+def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_progress, seed=None):
     """
     Perform analysis on random pairs and real dyad correlations.
     Args:
@@ -162,6 +195,7 @@ def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_
         input_dir (str): Path to the input directory containing dyad folders with Excel files.
         random_pair_count (int, optional): Number of random pairs to generate. Defaults to 100.
         progress (function, optional): Called with (done, total, text) before each pair or dyad.
+        seed (int, optional): The same seed and files give the same random pairs.
     Returns:
         tuple: A tuple containing:
             - t_stat (float): The t-statistic from Welch's t-test.
@@ -171,18 +205,17 @@ def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_
             - avg_wxcorr_real (list): Group-average wxcorr of real dyads (None for standard xcorr).
             - avg_wxcorr_rp (list): Group-average wxcorr of random pairs (None for standard xcorr).
             - failures (list): (name, error message) for each pair or dyad that could not be processed.
+            - n_eligible_pairs (int): Number of different pairs the random pairs were drawn from.
     """
 
     # get input data
     dyad_folders = sorted(f for f in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, f)))
-    xlsx_file_paths = [os.path.join(input_dir, dyad_folder, f)
-                       for dyad_folder in dyad_folders
-                       for f in utils.list_dyad_files(os.path.join(input_dir, dyad_folder))]
-    # make random_pair_count random pairs of xlsx files
-    random_pairs = []
-    for _ in range(random_pair_count):
-        pair = random.sample(xlsx_file_paths, 2)
-        random_pairs.append(pair)
+    eligible_pairs = _eligible_random_pairs(input_dir, dyad_folders)
+    if not eligible_pairs:
+        raise ValueError("No random pairs are possible: all recordings are the same person or share a dyad folder.")
+    # make random_pair_count random pairs of xlsx files, with a random person A and B
+    rng = random.Random(seed)
+    random_pairs = [rng.sample(rng.choice(eligible_pairs), 2) for _ in range(random_pair_count)]
 
     # read correlation type
     is_windowed_corr = params['checkbox_windowed_xcorr']
@@ -262,7 +295,7 @@ def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_
         if all_wxcorr_rp:
             avg_wxcorr_rp = average_wxcorr_matrices(all_wxcorr_rp, min_lag)
 
-    return t_stat, p_value, average_correlations_rp, average_correlations_real, avg_wxcorr_real, avg_wxcorr_rp, failures
+    return t_stat, p_value, average_correlations_rp, average_correlations_real, avg_wxcorr_real, avg_wxcorr_rp, failures, len(eligible_pairs)
 
 
 def batch_process(params, progress=_no_progress):

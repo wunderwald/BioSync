@@ -72,6 +72,7 @@ val_batch_output_folder              = None
 val_batch_processing_is_ready        = None
 val_rp_n_input                       = None
 val_rp_n                             = None
+val_rp_seed_input                    = None
 val_random_pair_input_folder         = None
 val_random_pair_output_file          = None
 val_random_pair_is_ready             = None
@@ -79,6 +80,7 @@ val_job_running                      = None
 val_job_progress                     = None
 val_job_progress_text                = None
 val_job_cancel_requested             = None
+val_dfa_text                         = None
 
 # data containers
 dat_plot_data         = {}
@@ -137,9 +139,10 @@ def init_state(dpi, sw, sh, retina):
     global val_selected_file_a, val_selected_file_b, val_data_length
     global val_selected_sheet, val_selected_column
     global val_checkbox_data_has_headers, val_batch_input_folder, val_batch_output_folder
-    global val_batch_processing_is_ready, val_rp_n_input, val_rp_n
+    global val_batch_processing_is_ready, val_rp_n_input, val_rp_n, val_rp_seed_input
     global val_random_pair_input_folder, val_random_pair_output_file, val_random_pair_is_ready
     global val_job_running, val_job_progress, val_job_progress_text, val_job_cancel_requested
+    global val_dfa_text
     global dat_plot_data, dat_workbook_data, dat_physiological_data, dat_correlation_data
 
     screen_dpi    = dpi
@@ -195,6 +198,7 @@ def init_state(dpi, sw, sh, retina):
     val_batch_processing_is_ready         = tk.BooleanVar(value=False)
     val_rp_n_input                         = tk.StringVar(value="100")
     val_rp_n                               = tk.IntVar(value=100)
+    val_rp_seed_input                      = tk.StringVar(value='')
     val_random_pair_input_folder           = tk.StringVar(value='')
     val_random_pair_output_file            = tk.StringVar(value='')
     val_random_pair_is_ready               = tk.BooleanVar(value=False)
@@ -202,6 +206,7 @@ def init_state(dpi, sw, sh, retina):
     val_job_progress                       = tk.DoubleVar(value=0)
     val_job_progress_text                  = tk.StringVar(value='')
     val_job_cancel_requested               = tk.BooleanVar(value=False)
+    val_dfa_text                           = tk.StringVar(value='DFA: no data')
 
     # data containers
     dat_plot_data['fig'] = plot_init(is_retina=retina)
@@ -228,7 +233,6 @@ def init_state(dpi, sw, sh, retina):
     dat_correlation_data.update({
         'wxcorr': [],
         'sxcorr': [],
-        'dfa_alpha_sxcorr': None,
-        'dfa_alpha_per_lag_wxcorr': None,
-        'dfa_alpha_window_averages_wxcorr': None,
+        'dfa_signals': None,
+        'dfa_windows': None,
     })

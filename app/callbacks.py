@@ -1,11 +1,12 @@
 import os
 import queue
+import random
 import threading
 from tkinter import filedialog, messagebox
 
 import xlsx
 import utils
-from analysis import preprocess_signals
+from analysis import preprocess_signals, signal_dfa
 from batch_processing import batch_process, random_pair_analysis
 from export import export_sxcorr_data, export_wxcorr_data, export_random_pair_data
 from plot import plot_init
@@ -316,12 +317,14 @@ def preprocess_data():
         d["signal_b"]     = signal_b
         d["signal_a_std"] = signal_a_std
         d["signal_b_std"] = signal_b_std
+        state.dat_correlation_data['dfa_signals'] = signal_dfa(d["raw_signal_a"], d["raw_signal_b"], state.analysis_config())
         state.val_data_length.set(len(signal_a))
         state.val_INPUT_DATA_VALID.set(True)
         validation.check_all_settings()
 
     except Exception as e:
         print(f"Data is invalid [{e}]")
+        state.dat_correlation_data['dfa_signals'] = None
         d["signal_a"]     = []
         d["signal_b"]     = []
         d["signal_a_std"] = []
@@ -335,6 +338,7 @@ def preprocess_data():
 def clear_correlation_data():
     state.dat_correlation_data["wxcorr"] = []
     state.dat_correlation_data["sxcorr"] = []
+    state.dat_correlation_data["dfa_windows"] = None
 
 
 # ---------------------------------------------------------------------------
@@ -431,7 +435,8 @@ def _export_wxcorr_data(file_path):
         'signal_b_std':                   state.dat_physiological_data["signal_b_std"],
         'is_standardised':                state.val_checkbox_standardise.get(),
         'wxcorr':                         state.dat_correlation_data["wxcorr"],
-        'dfa_alpha_window_averages_wxcorr': state.dat_correlation_data['dfa_alpha_window_averages_wxcorr'],
+        'dfa_signals':                    state.dat_correlation_data['dfa_signals'],
+        'dfa_windows':                    state.dat_correlation_data['dfa_windows'],
     }
     export_wxcorr_data(file_path, params)
 
@@ -451,7 +456,7 @@ def _export_sxcorr_data(file_path):
         'signal_b_std':           state.dat_physiological_data["signal_b_std"],
         'is_standardised':        state.val_checkbox_standardise.get(),
         'sxcorr':                 state.dat_correlation_data["sxcorr"],
-        'dfa_alpha':              state.dat_correlation_data['dfa_alpha_sxcorr'],
+        'dfa_signals':            state.dat_correlation_data['dfa_signals'],
     }
     export_sxcorr_data(file_path, params)
 
@@ -665,6 +670,9 @@ def handle_run_batch_button():
 # RANDOM PAIR ANALYSIS
 # ---------------------------------------------------------------------------
 
+MAX_RANDOM_SEED = 2**32
+
+
 def _random_pair_is_ready(*args):
     data_is_valid = (
         state.val_INPUT_DATA_VALID.get() and validation.check_active_settings_valid() and
@@ -677,12 +685,13 @@ def _random_pair_is_ready(*args):
     state.val_random_pair_is_ready.set(data_is_valid and io_is_ready)
 
 
-def run_random_pair(params, random_pair_count, input_dir, output_file, progress):
-    t_stat, p_value, avg_corr_rp, avg_corr_real, avg_wxcorr_real, avg_wxcorr_rp, failures = random_pair_analysis(
+def run_random_pair(params, random_pair_count, input_dir, output_file, seed, progress):
+    t_stat, p_value, avg_corr_rp, avg_corr_real, avg_wxcorr_real, avg_wxcorr_rp, failures, n_eligible_pairs = random_pair_analysis(
         params=params,
         random_pair_count=random_pair_count,
         input_dir=input_dir,
         progress=progress,
+        seed=seed,
     )
     progress(1, 1, "Writing results")
     export_random_pair_data(
@@ -695,6 +704,8 @@ def run_random_pair(params, random_pair_count, input_dir, output_file, progress)
         avg_corr_real=avg_corr_real,
         avg_wxcorr_real=avg_wxcorr_real,
         avg_wxcorr_rp=avg_wxcorr_rp,
+        seed=seed,
+        n_eligible_pairs=n_eligible_pairs,
     )
     return failures
 
@@ -711,8 +722,10 @@ def handle_run_random_pair_button():
     random_pair_count = state.val_rp_n.get()
     input_dir = state.val_random_pair_input_folder.get()
     output_file = state.val_random_pair_output_file.get()
+    seed_input = state.val_rp_seed_input.get()
+    seed = int(seed_input) if seed_input else random.randrange(MAX_RANDOM_SEED)
     _start_job(
         "Random pair analysis",
-        lambda progress: run_random_pair(params, random_pair_count, input_dir, output_file, progress),
+        lambda progress: run_random_pair(params, random_pair_count, input_dir, output_file, seed, progress),
         _show_random_pair_summary,
     )

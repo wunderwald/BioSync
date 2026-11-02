@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from cross_correlation import standard_cross_correlation, windowed_cross_correlation
-from dfa import dfa
+from dfa import dfa, dfa_wxcorr, dfa_wxcorr_window_averages
 from signal_processing import preprocess_dyad
 
 
@@ -83,13 +83,62 @@ def correlate_signals(signals, config):
     return standard_cross_correlation(x, y, max_lag=config.max_lag_sxc, absolute=config.absolute_sxc)
 
 
-def standard_dfa_alpha(sxcorr):
-    """DFA scaling exponent of a standard cross-correlation, or None for short lag ranges."""
+def signal_dfa(raw_signal_a, raw_signal_b, config):
+    """
+    DFA of each person's signal. Returns a dict with 'alpha_a', 'alpha_b' (None if not possible) and 'note'.
+    Event-based signals use the original intervals: resampling smooths short scales, which raises alpha
+    (white noise 0.49 to 0.63 at 5 Hz). Their first and last values are not intervals, see preprocess_dyad.
+    """
+    def alpha(raw_signal):
+        series = raw_signal[1:-1] if config.signal_type == 'event-based' else raw_signal
+        try:
+            return dfa(series, order=1)[0][0], None
+        except ValueError as e:
+            return None, str(e)
+
+    alpha_a, note_a = alpha(raw_signal_a)
+    alpha_b, note_b = alpha(raw_signal_b)
+    return {'alpha_a': alpha_a, 'alpha_b': alpha_b, 'note': note_a or note_b}
+
+
+def windowed_dfa(wxcorr, config):
+    """
+    DFA of the windowed correlation over time. Returns a dict with 'alpha_window_averages',
+    'alpha_per_lag' (a list of {'lag', 'alpha'}), which are None if not possible, and 'note'.
+    Overlapping windows share data, which raises alpha even for unrelated signals (0.49 without overlap,
+    1.35 at 97% overlap), so results are only given for windows that don't overlap.
+    """
+    result = {'alpha_window_averages': None, 'alpha_per_lag': None, 'note': None}
+    if config.step_size < config.window_size:
+        result['note'] = "DFA over time needs windows that don't overlap (step size of at least the window size)."
+        return result
+
+    min_lag = min(config.lag_filter_min, config.lag_filter_max) if config.use_lag_filter else -config.max_lag
     try:
-        A, _ = dfa(sxcorr['corr'], order=1)
-    except ValueError:
-        return None
-    return A[0]
+        result['alpha_window_averages'] = dfa_wxcorr_window_averages(wxcorr, order=1)
+        if not config.average_windows:     # all lags have the same values then
+            result['alpha_per_lag'] = [
+                {'lag': o['lag'], 'alpha': o['A'][0]} for o in dfa_wxcorr(wxcorr, min_lag, order=1)
+            ]
+    except ValueError as e:
+        result['note'] = str(e)
+    return result
+
+
+def format_dfa(dfa_signals, dfa_windows):
+    """The DFA results as text for the window. dfa_windows is None for standard cross-correlation."""
+    if dfa_signals is None:
+        return "DFA: no data"
+    if dfa_signals['alpha_a'] is None or dfa_signals['alpha_b'] is None:
+        lines = [f"DFA per person: not available. {dfa_signals['note']}"]
+    else:
+        lines = [f"DFA α per person: A {dfa_signals['alpha_a']:.2f}, B {dfa_signals['alpha_b']:.2f}"]
+    if dfa_windows is not None:
+        if dfa_windows['alpha_window_averages'] is None:
+            lines.append(f"DFA over time: not available. {dfa_windows['note']}")
+        else:
+            lines.append(f"DFA α over time: {dfa_windows['alpha_window_averages']:.2f}")
+    return "\n".join(lines)
 
 
 def analyze_dyad(raw_signal_a, raw_signal_b, config):

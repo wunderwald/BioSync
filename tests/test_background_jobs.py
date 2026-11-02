@@ -356,12 +356,12 @@ def test_cancelled_random_pairs_write_no_results(app, tmp_path, monkeypatch, can
     output = tmp_path / "rp.xlsx"
     real = callbacks.run_random_pair
 
-    def cancelling(params, count, input_dir, output_file, progress):
+    def cancelling(params, count, input_dir, output_file, seed, progress):
         def reporting(done, total, text):
             if text == cancel_at:
                 callbacks._job_cancel_event.set()
             progress(done, total, text)
-        return real(params, count, input_dir, output_file, reporting)
+        return real(params, count, input_dir, output_file, seed, reporting)
 
     monkeypatch.setattr(callbacks, "run_random_pair", cancelling)
     monkeypatch.setattr(callbacks, "_analysis_params", lambda: _params(tmp_path / "in", tmp_path))

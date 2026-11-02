@@ -4,6 +4,23 @@ from plot import plot_windowed_cross_correlation, save_figure_to_png
 
 FIRST_VECTOR_COLUMN = 4  # see xlsx.write_xlsx
 
+def _value_or_dash(value):
+    return '-' if value is None else value
+
+def _dfa_metadata(dfa_signals, dfa_windows=None):
+    """Rows for the end of the metadata, so that the rows before them keep their place."""
+    dfa_signals = dfa_signals or {}
+    metadata = {
+        'DFA alpha, signal A': _value_or_dash(dfa_signals.get('alpha_a')),
+        'DFA alpha, signal B': _value_or_dash(dfa_signals.get('alpha_b')),
+    }
+    notes = [dfa_signals.get('note')]
+    if dfa_windows is not None:
+        metadata['DFA alpha, over time (average across lags)'] = _value_or_dash(dfa_windows.get('alpha_window_averages'))
+        notes.append(dfa_windows.get('note'))
+    metadata['DFA note'] = ' '.join(note for note in notes if note) or '-'
+    return metadata
+
 def _correlation_matrix(wxcorr, min_lag):
     """Real numbers with one row per window and one column per lag, labelled with the lag in samples."""
     return {
@@ -59,13 +76,15 @@ def export_wxcorr_data(file_path, params):
     vectors['var_z_transformed_corr'] = [o['var_z_transformed_corr'] for o in params['wxcorr']]
     _add_per_window_columns(vectors, metadata, params['wxcorr'], n_columns_after=2)
     # DFA per lag
-    if params.get('dfa_alpha_per_lag_wxcorr') is not None:
-        vectors['dfa_lags'] = [d['lag'] for d in params['dfa_alpha_per_lag_wxcorr']]
-        vectors['dfa_alpha'] = [d['alpha'] for d in params['dfa_alpha_per_lag_wxcorr']]
+    dfa_windows = params.get('dfa_windows') or {}
+    if dfa_windows.get('alpha_per_lag') is not None:
+        vectors['dfa_lags'] = [d['lag'] for d in dfa_windows['alpha_per_lag']]
+        vectors['dfa_alpha'] = [d['alpha'] for d in dfa_windows['alpha_per_lag']]
     else:
         vectors['dfa_lags'] = ['-']
         vectors['dfa_alpha'] = ['-']
 
+    metadata.update(_dfa_metadata(params.get('dfa_signals'), dfa_windows))
     min_lag = (
         min(params['lag_filter_min'], params['lag_filter_max'])
         if params['checkbox_lag_filter'] else -params['max_lag']
@@ -115,7 +134,8 @@ def export_sxcorr_data(file_path, params):
         'Standardised (z-score)': params['is_standardised'],
         'Max lag': params['max_lag'],
         'Absolute correlation values': params['checkbox_absolute_corr'],
-        'Alpha (DFA scaling exponent)': params['dfa_alpha'] if params['dfa_alpha'] is not None else '-'
+        'Alpha (DFA scaling exponent)': '-',  # kept for existing pipelines: DFA across lags measures nothing useful
+        **_dfa_metadata(params.get('dfa_signals')),
     }
     vectors = {
         'signal_a': params['signal_a_std'] if params['is_standardised'] else params['signal_a'],
@@ -126,7 +146,7 @@ def export_sxcorr_data(file_path, params):
     xlsx.write_xlsx(vectors=vectors, single_values=metadata, output_path=file_path)
 
 def export_random_pair_data(file_path, params, input_dir, t_stat, p_value, avg_corr_rp, avg_corr_real,
-                            avg_wxcorr_real=None, avg_wxcorr_rp=None):
+                            avg_wxcorr_real=None, avg_wxcorr_rp=None, seed='-', n_eligible_pairs='-'):
     # collect metadata
     is_windowed_xcorr = params['checkbox_windowed_xcorr']
     metadata = {
@@ -153,7 +173,9 @@ def export_random_pair_data(file_path, params, input_dir, t_stat, p_value, avg_c
     single_values = {
         't-statistic': t_stat,
         'p-value': p_value,
-        **metadata
+        **metadata,
+        'Random seed': seed,
+        'Different random pairs possible': n_eligible_pairs,
     }
 
     # collect vector data

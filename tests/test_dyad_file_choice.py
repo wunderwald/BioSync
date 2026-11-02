@@ -11,7 +11,7 @@ import batch_processing
 import callbacks
 import utils
 import xlsx
-from test_batch import _params, _write_person, N_BEATS, _ibi
+from test_batch import _params, _write_dyad, _write_person, N_BEATS, _ibi
 
 
 def _write_sheets(path, sheet_names):
@@ -102,6 +102,7 @@ def test_batch_says_when_it_fell_back(tmp_path):
 
 def test_random_pairs_use_the_matching_pair_for_real_dyads(tmp_path, monkeypatch):
     _write_mismatched_dyad(tmp_path / "in" / "dyad0")
+    _write_dyad(tmp_path / "in" / "dyad1", seed=1)
     used = []
     real = batch_processing._process_dyad
 
@@ -112,7 +113,7 @@ def test_random_pairs_use_the_matching_pair_for_real_dyads(tmp_path, monkeypatch
     monkeypatch.setattr(batch_processing, "_process_dyad", recording)
     monkeypatch.setattr(batch_processing, "ttest_ind", lambda *args, **kwargs: (0, 1))
     batch_processing.random_pair_analysis(_params(tmp_path / "in", tmp_path), str(tmp_path / "in"), random_pair_count=0)
-    assert used == [("P1.xlsx", "P2.xlsx")]
+    assert used == [("P1.xlsx", "P2.xlsx"), ("P1.xlsx", "P2.xlsx")]
 
 
 @pytest.mark.parametrize("layouts, expected_files, expected_reason", [
