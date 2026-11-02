@@ -4,6 +4,7 @@ Typing must not recompute on every keystroke, and changes that only affect the d
 import numpy as np
 import pytest
 
+import analysis
 import callbacks
 import corr_plot
 import state
@@ -57,7 +58,7 @@ def app_state(fake_state, monkeypatch):
     monkeypatch.setitem(state.dat_correlation_data, "sxcorr", [])
 
     fake_state.counts = {"wx": 0, "sx": 0, "plot": 0}
-    real_wx, real_sx = corr_plot.windowed_cross_correlation, corr_plot.standard_cross_correlation
+    real_wx, real_sx = analysis.windowed_cross_correlation, analysis.standard_cross_correlation
 
     def counted(key, function):
         def wrapper(*args, **kwargs):
@@ -68,8 +69,8 @@ def app_state(fake_state, monkeypatch):
     def count_plot():
         fake_state.counts["plot"] += 1
 
-    monkeypatch.setattr(corr_plot, "windowed_cross_correlation", counted("wx", real_wx))
-    monkeypatch.setattr(corr_plot, "standard_cross_correlation", counted("sx", real_sx))
+    monkeypatch.setattr(analysis, "windowed_cross_correlation", counted("wx", real_wx))
+    monkeypatch.setattr(analysis, "standard_cross_correlation", counted("sx", real_sx))
     monkeypatch.setattr(corr_plot, "update_plot", count_plot)
     monkeypatch.setattr(corr_plot, "update_canvas", lambda: None)
     monkeypatch.setattr(corr_plot, "canvas", FakeCanvas())
@@ -201,11 +202,11 @@ def test_failed_computation_is_retried(app_state, monkeypatch):
     def fail(*args, **kwargs):
         raise RuntimeError
 
-    working = corr_plot.windowed_cross_correlation
-    monkeypatch.setattr(corr_plot, "windowed_cross_correlation", fail)
+    working = analysis.windowed_cross_correlation
+    monkeypatch.setattr(analysis, "windowed_cross_correlation", fail)
     with pytest.raises(RuntimeError):
         corr_plot.UPDATE()
-    monkeypatch.setattr(corr_plot, "windowed_cross_correlation", working)
+    monkeypatch.setattr(analysis, "windowed_cross_correlation", working)
     corr_plot.UPDATE()
 
     assert app_state.counts["wx"] == 1

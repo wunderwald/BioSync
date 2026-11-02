@@ -3,7 +3,7 @@ from tkinter import filedialog, messagebox
 
 import xlsx
 import utils
-from signal_processing import preprocess_dyad
+from analysis import preprocess_signals
 from batch_processing import batch_process, random_pair_analysis
 from export import export_sxcorr_data, export_wxcorr_data, export_random_pair_data
 from plot import plot_init
@@ -307,10 +307,8 @@ def preprocess_data():
         return
 
     try:
-        signal_a, signal_b, signal_a_std, signal_b_std = preprocess_dyad(
-            d["raw_signal_a"],
-            d["raw_signal_b"],
-            signal_type='event-based' if state.val_checkbox_eb.get() else 'fixed-rate'
+        signal_a, signal_b, signal_a_std, signal_b_std = preprocess_signals(
+            d["raw_signal_a"], d["raw_signal_b"], state.analysis_config()
         )
         d["signal_a"]     = signal_a
         d["signal_b"]     = signal_b
@@ -467,10 +465,13 @@ def export_data():
     )
     if not file_path:
         return
-    if state.val_checkbox_windowed_xcorr.get():
-        _export_wxcorr_data(file_path)
-    else:
-        _export_sxcorr_data(file_path)
+    try:
+        if state.val_checkbox_windowed_xcorr.get():
+            _export_wxcorr_data(file_path)
+        else:
+            _export_sxcorr_data(file_path)
+    except Exception as e:
+        messagebox.showerror("Export failed", str(e))
 
 
 def export_plot():

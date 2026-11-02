@@ -1,14 +1,13 @@
 import os
 import xlsx
 import utils
-from signal_processing import preprocess_dyad
+from analysis import AnalysisConfig, analyze_dyad, standard_dfa_alpha
 from export import export_sxcorr_data, export_wxcorr_data, export_avg_wxcorr_data
-from cross_correlation import windowed_cross_correlation, standard_cross_correlation, average_wxcorr_matrices, mean_ignoring_flat_windows
+from cross_correlation import average_wxcorr_matrices, mean_ignoring_flat_windows
 import random
 import numpy as np
 from datetime import datetime
 from scipy.stats import ttest_ind
-from dfa import dfa_wxcorr, dfa
 from plot import plot_windowed_cross_correlation, plot_standard_cross_correlation, save_figure_to_png
 
 def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dyad_dir=''):
@@ -54,32 +53,18 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
         raw_signal_b = columns_b[params['selected_column_b']]
 
         # process data
-        # TODO Select the right signal!
-        _signal_a, _signal_b, _signal_a_z_scored, _signal_b_z_scored = preprocess_dyad(
-            raw_signal_a,
-            raw_signal_b,
-            signal_type='event-based' if params['checkbox_eb'] else 'fixed-rate'
-        )
+        config = AnalysisConfig.from_params(params)
+        signals, corr_data = analyze_dyad(raw_signal_a, raw_signal_b, config)
+        _signal_a, _signal_b, _signal_a_z_scored, _signal_b_z_scored = signals
 
         # select signals based on standardisation flag
-        use_standardised_data = params['standardised_signals']
+        use_standardised_data = config.standardised
         signal_a = _signal_a_z_scored if use_standardised_data else _signal_a
         signal_b = _signal_b_z_scored if use_standardised_data else _signal_b
 
         # make and export correlation data
         if params['checkbox_windowed_xcorr']:
             # WXCorr
-            window_size = params['window_size']
-            step_size = params['step_size']
-            max_lag = params['max_lag']
-            absolute_values = params['checkbox_absolute_corr']
-            average_windows = params['checkbox_average_windows']
-            corr_data = windowed_cross_correlation(
-                signal_a, signal_b, window_size=window_size, step_size=step_size, max_lag=max_lag,
-                absolute=absolute_values, average_windows=average_windows,
-                use_lag_filter=params['use_lag_filter'], lag_filter_min=params['lag_filter_min'], lag_filter_max=params['lag_filter_max']
-            )
-
             # dfa per lag (per horizontal line)
             # dfa_corr_data = None
             # try:
@@ -135,16 +120,8 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
         
         else:
             # Standard XCorr
-            max_lag = params['max_lag_sxc']
-            absolute_values = params['checkbox_absolute_corr_sxc']
-            corr_data = standard_cross_correlation(signal_a, signal_b, max_lag=max_lag, absolute=absolute_values)
-            
             # calculate dfa (not possible for short lag ranges)
-            try:
-                A, F = dfa(corr_data['corr'], order=1)
-                dfa_alpha = A[0]
-            except ValueError:
-                dfa_alpha = None
+            dfa_alpha = standard_dfa_alpha(corr_data)
 
             # export
             export_params = {

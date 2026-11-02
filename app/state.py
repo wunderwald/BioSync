@@ -1,4 +1,5 @@
 import customtkinter as tk
+from analysis import AnalysisConfig
 from plot import plot_init
 
 # ----------------------
@@ -93,6 +94,25 @@ def PARAMS_CHANGED(debounce=False):
     global update_is_debounced
     update_is_debounced = debounce
     val_UPDATE_COUNT.set(val_UPDATE_COUNT.get() + 1)
+
+
+def analysis_config():
+    """The current settings for the analysis."""
+    return AnalysisConfig(
+        signal_type='event-based' if val_checkbox_eb.get() else 'fixed-rate',
+        windowed=val_checkbox_windowed_xcorr.get(),
+        standardised=val_checkbox_standardise.get(),
+        window_size=val_window_size.get(),
+        step_size=val_step_size.get(),
+        max_lag=val_max_lag.get(),
+        absolute=val_checkbox_absolute_corr.get(),
+        average_windows=val_checkbox_average_windows.get(),
+        use_lag_filter=val_checkbox_lag_filter.get(),
+        lag_filter_min=val_lag_filter_min.get(),
+        lag_filter_max=val_lag_filter_max.get(),
+        max_lag_sxc=val_max_lag_sxc.get(),
+        absolute_sxc=val_checkbox_absolute_corr_sxc.get(),
+    )
 
 
 def init_state(dpi, sw, sh, retina):

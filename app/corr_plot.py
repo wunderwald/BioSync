@@ -1,8 +1,8 @@
 import os
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from plot import plot_init, update_sxcorr_plots, update_wxcorr_plots, update_preproc_plots
-from cross_correlation import windowed_cross_correlation, standard_cross_correlation
-from dfa import dfa, dfa_wxcorr, dfa_wxcorr_window_averages
+from analysis import correlate_signals, standard_dfa_alpha
+from dfa import dfa_wxcorr, dfa_wxcorr_window_averages
 
 import state
 
@@ -44,26 +44,9 @@ def _apply_figure_size(fig, w, h):
 # CORRELATION DATA COMPUTATION
 # ---------------------------------------------------------------------------
 
-def _wx_settings():
-    return (
-        state.val_window_size.get(),
-        state.val_step_size.get(),
-        state.val_max_lag.get(),
-        state.val_checkbox_absolute_corr.get(),
-        state.val_checkbox_average_windows.get(),
-        state.val_checkbox_lag_filter.get(),
-        state.val_lag_filter_min.get(),
-        state.val_lag_filter_max.get(),
-        state.val_checkbox_standardise.get(),
-    )
-
-
-def _sx_settings():
-    return (
-        state.val_max_lag_sxc.get(),
-        state.val_checkbox_absolute_corr_sxc.get(),
-        state.val_checkbox_standardise.get(),
-    )
+def _signals():
+    d = state.dat_physiological_data
+    return d["signal_a"], d["signal_b"], d["signal_a_std"], d["signal_b_std"]
 
 
 def _update_wxcorr_data():
@@ -72,27 +55,12 @@ def _update_wxcorr_data():
         return
 
     # new data clears the results, so only the settings can make non-empty results out of date
-    settings = _wx_settings()
-    if state.dat_correlation_data['wxcorr'] and settings == _computed_wx_settings:
+    config = state.analysis_config()
+    if state.dat_correlation_data['wxcorr'] and config.windowed_settings == _computed_wx_settings:
         return
 
-    use_std   = state.val_checkbox_standardise.get()
-    signal_a  = state.dat_physiological_data["signal_a_std" if use_std else "signal_a"]
-    signal_b  = state.dat_physiological_data["signal_b_std" if use_std else "signal_b"]
-
-    state.dat_correlation_data['wxcorr'] = windowed_cross_correlation(
-        signal_a,
-        signal_b,
-        window_size=state.val_window_size.get(),
-        step_size=state.val_step_size.get(),
-        max_lag=state.val_max_lag.get(),
-        absolute=state.val_checkbox_absolute_corr.get(),
-        average_windows=state.val_checkbox_average_windows.get(),
-        use_lag_filter=state.val_checkbox_lag_filter.get(),
-        lag_filter_min=state.val_lag_filter_min.get(),
-        lag_filter_max=state.val_lag_filter_max.get(),
-    )
-    _computed_wx_settings = settings
+    state.dat_correlation_data['wxcorr'] = correlate_signals(_signals(), config)
+    _computed_wx_settings = config.windowed_settings
 
     try:
         dfa_data = dfa_wxcorr(state.dat_correlation_data['wxcorr'], state.val_max_lag.get(), order=1)
@@ -115,26 +83,13 @@ def _update_sxcorr_data():
     if not state.val_INPUT_DATA_VALID.get() or not state.val_CORRELATION_SETTINGS_VALID_SXC.get():
         return
 
-    settings = _sx_settings()
-    if state.dat_correlation_data['sxcorr'] and settings == _computed_sx_settings:
+    config = state.analysis_config()
+    if state.dat_correlation_data['sxcorr'] and config.standard_settings == _computed_sx_settings:
         return
 
-    use_std  = state.val_checkbox_standardise.get()
-    signal_a = state.dat_physiological_data["signal_a_std" if use_std else "signal_a"]
-    signal_b = state.dat_physiological_data["signal_b_std" if use_std else "signal_b"]
-
-    state.dat_correlation_data['sxcorr'] = standard_cross_correlation(
-        signal_a, signal_b,
-        max_lag=state.val_max_lag_sxc.get(),
-        absolute=state.val_checkbox_absolute_corr_sxc.get(),
-    )
-    _computed_sx_settings = settings
-
-    try:
-        A, _ = dfa(state.dat_correlation_data['sxcorr']['corr'], order=1)
-        state.dat_correlation_data['dfa_alpha_sxcorr'] = A[0]
-    except ValueError:
-        state.dat_correlation_data['dfa_alpha_sxcorr'] = None
+    state.dat_correlation_data['sxcorr'] = correlate_signals(_signals(), config)
+    _computed_sx_settings = config.standard_settings
+    state.dat_correlation_data['dfa_alpha_sxcorr'] = standard_dfa_alpha(state.dat_correlation_data['sxcorr'])
 
 
 def update_corr():
