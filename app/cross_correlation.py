@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 
 # r=±1 has an infinite Fisher z, so correlations are limited to this magnitude first (z of about ±3.8)
@@ -6,10 +8,29 @@ FISHER_Z_MAX_R = 0.999
 def fisher_z(correlations):
     '''
     Fisher z-transforms correlation values. Values at or beyond ±FISHER_Z_MAX_R are clipped to it, because they
-    are the strongest correlations and must stay the largest z-values. NaN (from flat windows) becomes 0.
+    are the strongest correlations and must stay the largest z-values. NaN stays NaN.
     '''
     clipped = np.clip(np.asarray(correlations, dtype=float), -FISHER_Z_MAX_R, FISHER_Z_MAX_R)
-    return np.nan_to_num(np.arctanh(clipped), nan=0.0)
+    return np.arctanh(clipped)
+
+
+def _flat_window_result(start, window_size, n_lags):
+    '''
+    A window where a signal doesn't change has no correlation at any lag. Every value is NaN, so that it can't be
+    mistaken for a measured result and is left out of averages.
+    '''
+    return {
+        'start_idx': start,
+        'center_idx': start + window_size // 2,
+        'correlations': [np.nan] * n_lags,
+        'r_max': np.nan,
+        'tau_max': np.nan,
+        'correlations_sigmoid': [np.nan] * n_lags,
+        'r_max_sigmoid': np.nan,
+        'tau_max_sigmoid': np.nan,
+        'avg_z_transformed_corr': np.nan,
+        'var_z_transformed_corr': np.nan,
+    }
 
 
 def scale_sigmoid(x: np.array):
@@ -79,6 +100,10 @@ def windowed_cross_correlation(x, y, window_size, step_size, max_lag, use_lag_fi
         x_window = x[start:start + window_size]
         y_window = y[start:start + window_size]
 
+        if np.ptp(x_window) == 0 or np.ptp(y_window) == 0:
+            results.append(_flat_window_result(start, window_size, len(lag_range)))
+            continue
+
         # Normalize the segments (zero mean, unit variance)
         x_window = (x_window - np.mean(x_window)) / np.std(x_window)
         y_window = (y_window - np.mean(y_window)) / np.std(y_window)
@@ -138,6 +163,19 @@ def windowed_cross_correlation(x, y, window_size, step_size, max_lag, use_lag_fi
 
     return results
 
+def mean_ignoring_flat_windows(values, axis=None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)  # all flat gives NaN, which is the right result
+        return np.nanmean(values, axis=axis)
+
+
+def _peak_of_average(avg_corr, min_lag):
+    if np.all(np.isnan(avg_corr)):
+        return np.nan, np.nan
+    abs_idx = int(np.nanargmax(np.abs(avg_corr)))
+    return float(avg_corr[abs_idx]), int(abs_idx + min_lag)
+
+
 def average_wxcorr_matrices(list_of_wxcorr, min_lag):
     """
     Average multiple wxcorr result lists element-wise, truncating to the shortest.
@@ -146,6 +184,7 @@ def average_wxcorr_matrices(list_of_wxcorr, min_lag):
       - no lag filter: -max_lag
       - lag filter active: min(lag_filter_min, lag_filter_max)
     Never infer min_lag from array length — asymmetric filters break that assumption.
+    A dyad's flat window is left out of the average for that window.
 
     Returns a list of window dicts with the same keys as windowed_cross_correlation output,
     directly passable to plot_windowed_cross_correlation.
@@ -160,16 +199,11 @@ def average_wxcorr_matrices(list_of_wxcorr, min_lag):
         all_corrs         = np.array([d[i]['correlations']         for d in list_of_wxcorr])
         all_corrs_sigmoid = np.array([d[i]['correlations_sigmoid'] for d in list_of_wxcorr])
 
-        avg_corr         = np.mean(all_corrs, axis=0)
-        avg_corr_sigmoid = np.mean(all_corrs_sigmoid, axis=0)
+        avg_corr         = mean_ignoring_flat_windows(all_corrs, axis=0)
+        avg_corr_sigmoid = mean_ignoring_flat_windows(all_corrs_sigmoid, axis=0)
 
-        abs_idx     = int(np.argmax(np.abs(avg_corr)))
-        r_max       = float(avg_corr[abs_idx])
-        tau_max     = int(abs_idx + min_lag)
-
-        abs_idx_sig     = int(np.argmax(np.abs(avg_corr_sigmoid)))
-        r_max_sigmoid   = float(avg_corr_sigmoid[abs_idx_sig])
-        tau_max_sigmoid = int(abs_idx_sig + min_lag)
+        r_max, tau_max                 = _peak_of_average(avg_corr, min_lag)
+        r_max_sigmoid, tau_max_sigmoid = _peak_of_average(avg_corr_sigmoid, min_lag)
 
         avg.append({
             'start_idx':             list_of_wxcorr[0][i]['start_idx'],
@@ -180,8 +214,8 @@ def average_wxcorr_matrices(list_of_wxcorr, min_lag):
             'tau_max':               tau_max,
             'r_max_sigmoid':         r_max_sigmoid,
             'tau_max_sigmoid':       tau_max_sigmoid,
-            'avg_z_transformed_corr': float(np.mean([d[i]['avg_z_transformed_corr'] for d in list_of_wxcorr])),
-            'var_z_transformed_corr': float(np.mean([d[i]['var_z_transformed_corr'] for d in list_of_wxcorr])),
+            'avg_z_transformed_corr': float(mean_ignoring_flat_windows([d[i]['avg_z_transformed_corr'] for d in list_of_wxcorr])),
+            'var_z_transformed_corr': float(mean_ignoring_flat_windows([d[i]['var_z_transformed_corr'] for d in list_of_wxcorr])),
         })
 
     return avg

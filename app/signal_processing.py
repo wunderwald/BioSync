@@ -132,6 +132,10 @@ def preprocess_dyad(signal_a, signal_b, signal_type, remove_invalid_samples=Fals
     signal_a = signal_a[:min_length]
     signal_b = signal_b[:min_length]
 
+    # a signal that never changes has no correlation with anything
+    if np.ptp(signal_a) == 0 or np.ptp(signal_b) == 0:
+        raise ValueError("A signal has the same value throughout.")
+
     # apply z-score standardisation
     signal_a_z_scored = standardize(signal_a)
     signal_b_z_scored = standardize(signal_b)

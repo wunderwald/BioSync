@@ -20,8 +20,8 @@ def test_stronger_correlations_never_get_a_smaller_z():
     assert np.all(np.diff(fisher_z(correlations)) >= 0)
 
 
-def test_nan_becomes_zero():
-    assert fisher_z([np.nan]) == pytest.approx([0])
+def test_nan_stays_nan():
+    assert np.isnan(fisher_z([np.nan])).all()
 
 
 def test_perfect_correlation_raises_the_window_average():

@@ -3,7 +3,7 @@ import xlsx
 import utils
 from signal_processing import preprocess_dyad
 from export import export_sxcorr_data, export_wxcorr_data, export_avg_wxcorr_data
-from cross_correlation import windowed_cross_correlation, standard_cross_correlation, average_wxcorr_matrices
+from cross_correlation import windowed_cross_correlation, standard_cross_correlation, average_wxcorr_matrices, mean_ignoring_flat_windows
 import random
 import numpy as np
 from datetime import datetime
@@ -180,6 +180,11 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
         print(f"! {os.path.basename(file_path_a)}, {os.path.basename(file_path_b)}: {e}")
         raise(e)
 
+def _average_correlations(all_correlations):
+    """One average per pair. A pair with only flat windows has no correlation to contribute."""
+    averages = [mean_ignoring_flat_windows(c) for c in all_correlations]
+    return [average for average in averages if not np.isnan(average)]
+
 def random_pair_analysis(params, input_dir, random_pair_count=100): 
     """
     Perform analysis on random pairs and real dyad correlations.
@@ -233,7 +238,7 @@ def random_pair_analysis(params, input_dir, random_pair_count=100):
             all_correlations_rp.append(corr_data['corr'])
 
     # calculate averages of all correlations
-    average_correlations_rp = [np.mean(c) for c in all_correlations_rp]
+    average_correlations_rp = _average_correlations(all_correlations_rp)
 
     # process all real dyads
     all_correlations_real = []
@@ -265,7 +270,7 @@ def random_pair_analysis(params, input_dir, random_pair_count=100):
                 all_correlations_real.append(corr_data['corr'])
 
     # calculate averages of all real dyad correlations
-    average_correlations_real = [np.mean(c) for c in all_correlations_real]
+    average_correlations_real = _average_correlations(all_correlations_real)
 
     # run Welch's t-test
     t_stat, p_value = ttest_ind(average_correlations_rp, average_correlations_real, equal_var=False)

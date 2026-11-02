@@ -45,6 +45,10 @@ def plot_init(is_retina):
     fig = Figure(figsize=SCALING_PARAMS['FIGSIZE'], dpi=SCALING_PARAMS['DPI'])
     return fig
 
+def _without_flat_windows(values):
+    values = np.asarray(values, dtype=float)
+    return values[~np.isnan(values)]
+
 def plot_windowed_cross_correlation(wxc_data, window_size, max_lag, step_size, signal_a, signal_b, show_sigmoid_correlations=False, use_lag_filter=False, lag_filter_min=None, lag_filter_max=None):
     """
     Create and return a figure plotting the wxc_data of the windowed cross-correlation.
@@ -103,7 +107,7 @@ def plot_windowed_cross_correlation(wxc_data, window_size, max_lag, step_size, s
     ax1.grid()
     num_bins_r_max = max(1, min(len(r_max_values)//3, 40))
     ax1_hist = fig.add_subplot(ax1_gs_inner[1])
-    ax1_hist.hist(r_max_values, bins=num_bins_r_max, orientation='vertical', color='black', alpha=1)
+    ax1_hist.hist(_without_flat_windows(r_max_values), bins=num_bins_r_max, orientation='vertical', color='black', alpha=1)
     ax1_hist.set_xlim(-1, 1)
 
     # Plot corresponding lags over time
@@ -115,7 +119,7 @@ def plot_windowed_cross_correlation(wxc_data, window_size, max_lag, step_size, s
     ax2.grid()
     num_bins_tau_max = max(1, min(len(tau_max_values)//4, max_lag))
     ax2_hist = fig.add_subplot(ax2_gs_inner[1])
-    ax2_hist.hist(tau_max_values, bins=num_bins_tau_max, orientation='vertical', color='black', alpha=1)
+    ax2_hist.hist(_without_flat_windows(tau_max_values), bins=num_bins_tau_max, orientation='vertical', color='black', alpha=1)
     ax2_hist.set_xlim(-max_lag, max_lag)
 
     # Return the figure
