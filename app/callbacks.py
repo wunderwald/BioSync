@@ -1,5 +1,5 @@
 import os
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 
 import xlsx
 import utils
@@ -271,9 +271,6 @@ def update_column_names():
     update_dropdown_options(_dropdowns['col_a'], state.val_selected_column_a, state.dat_workbook_data["column_names_a"])
     update_dropdown_options(_dropdowns['col_b'], state.val_selected_column_b, state.dat_workbook_data["column_names_b"])
 
-    state.dat_workbook_data["selected_column_a"] = state.dat_workbook_data["column_names_a"][0]
-    state.dat_workbook_data["selected_column_b"] = state.dat_workbook_data["column_names_b"][0]
-
     state.dat_workbook_data["columns_a"] = xlsx.get_columns(wb_a, sheet, headers=headers)
     state.dat_workbook_data["columns_b"] = xlsx.get_columns(wb_b, sheet, headers=headers)
 
@@ -358,9 +355,14 @@ def open_dir_picker():
     if not dir_path:
         return
     state.val_selected_dyad_dir.set(dir_path)
-    xlsx_files = [f for f in os.listdir(dir_path) if f.endswith('.xlsx')]
+    xlsx_files = utils.list_dyad_files(dir_path)
     if len(xlsx_files) < 2:
         return
+    if len(xlsx_files) > 2:
+        messagebox.showwarning(
+            "More than two files",
+            f"Found {len(xlsx_files)} xlsx files, using {xlsx_files[0]} and {xlsx_files[1]}."
+        )
     state.val_selected_file_a.set(os.path.join(dir_path, xlsx_files[0]))
     state.val_selected_file_b.set(os.path.join(dir_path, xlsx_files[1]))
     load_xlsx_data()
@@ -488,25 +490,18 @@ def export_plot():
 # BATCH PROCESSING
 # ---------------------------------------------------------------------------
 
-def _batch_processing_is_ready(*args):
-    data_is_valid = (
-        state.val_INPUT_DATA_VALID.get() and
-        state.val_CORRELATION_SETTINGS_VALID.get() and
-        state.val_CORRELATION_SETTINGS_VALID_SXC.get()
-    )
-    io_is_ready = (
-        state.val_batch_input_folder.get() != '' and
-        state.val_batch_output_folder.get() != ''
-    )
-    state.val_batch_processing_is_ready.set(data_is_valid and io_is_ready)
+MAX_LISTED_FAILURES = 10
 
 
-def run_batch_process():
-    params = {
+def _analysis_params():
+    """Collects the current settings for batch processing and random pair analysis."""
+    return {
         'batch_input_folder':         state.val_batch_input_folder.get(),
         'output_dir':                 state.val_batch_output_folder.get(),
         'selected_sheet':             state.val_selected_sheet.get(),
-        'workbook_data':              state.dat_workbook_data,
+        'has_headers':                state.val_checkbox_data_has_headers.get(),
+        'selected_column_a':          state.val_selected_column_a.get(),
+        'selected_column_b':          state.val_selected_column_b.get(),
         'checkbox_windowed_xcorr':    state.val_checkbox_windowed_xcorr.get(),
         'window_size':                state.val_window_size.get(),
         'step_size':                  state.val_step_size.get(),
@@ -523,13 +518,51 @@ def run_batch_process():
         'lag_filter_min':             state.val_lag_filter_min.get(),
         'lag_filter_max':             state.val_lag_filter_max.get(),
     }
-    batch_process(params)
+
+
+def _format_failures(failures):
+    lines = [f"{name}: {error}" for name, error in failures[:MAX_LISTED_FAILURES]]
+    if len(failures) > MAX_LISTED_FAILURES:
+        lines.append(f"... and {len(failures) - MAX_LISTED_FAILURES} more")
+    return lines
+
+
+def _format_batch_summary(summary):
+    lines = [f"Processed {len(summary['processed'])} dyads, skipped {len(summary['failed'])}."]
+    if summary['failed']:
+        lines += ["", "Skipped:"] + _format_failures(summary['failed'])
+    if summary['warnings']:
+        lines += ["", "Warnings:"] + summary['warnings']
+    return "\n".join(lines)
+
+
+def _batch_processing_is_ready(*args):
+    data_is_valid = (
+        state.val_INPUT_DATA_VALID.get() and
+        state.val_CORRELATION_SETTINGS_VALID.get() and
+        state.val_CORRELATION_SETTINGS_VALID_SXC.get()
+    )
+    io_is_ready = (
+        state.val_batch_input_folder.get() != '' and
+        state.val_batch_output_folder.get() != ''
+    )
+    state.val_batch_processing_is_ready.set(data_is_valid and io_is_ready)
+
+
+def run_batch_process():
+    return batch_process(_analysis_params())
 
 
 def handle_run_batch_button():
     state.val_batch_processing_is_ready.set(False)
-    run_batch_process()
-    state.val_batch_processing_is_ready.set(True)
+    try:
+        summary = run_batch_process()
+    except Exception as e:
+        messagebox.showerror("Batch processing failed", str(e))
+    else:
+        messagebox.showinfo("Batch processing finished", _format_batch_summary(summary))
+    finally:
+        _batch_processing_is_ready()
 
 
 # ---------------------------------------------------------------------------
@@ -550,28 +583,8 @@ def _random_pair_is_ready(*args):
 
 
 def run_random_pair():
-    params = {
-        'batch_input_folder':         state.val_batch_input_folder.get(),
-        'output_dir':                 state.val_batch_output_folder.get(),
-        'selected_sheet':             state.val_selected_sheet.get(),
-        'workbook_data':              state.dat_workbook_data,
-        'checkbox_windowed_xcorr':    state.val_checkbox_windowed_xcorr.get(),
-        'window_size':                state.val_window_size.get(),
-        'step_size':                  state.val_step_size.get(),
-        'max_lag':                    state.val_max_lag.get(),
-        'max_lag_sxc':                state.val_max_lag_sxc.get(),
-        'checkbox_absolute_corr':     state.val_checkbox_absolute_corr.get(),
-        'sigmoid_correlations':       state.val_checkbox_show_sigmoid_correlations.get(),
-        'checkbox_absolute_corr_sxc': state.val_checkbox_absolute_corr_sxc.get(),
-        'checkbox_average_windows':   state.val_checkbox_average_windows.get(),
-        'checkbox_eb':                state.val_checkbox_eb.get(),
-        'checkbox_fr':                state.val_checkbox_fr.get(),
-        'standardised_signals':       state.val_checkbox_standardise.get(),
-        'use_lag_filter':             state.val_checkbox_lag_filter.get(),
-        'lag_filter_min':             state.val_lag_filter_min.get(),
-        'lag_filter_max':             state.val_lag_filter_max.get(),
-    }
-    t_stat, p_value, avg_corr_rp, avg_corr_real, avg_wxcorr_real, avg_wxcorr_rp = random_pair_analysis(
+    params = _analysis_params()
+    t_stat, p_value, avg_corr_rp, avg_corr_real, avg_wxcorr_real, avg_wxcorr_rp, failures = random_pair_analysis(
         params=params,
         random_pair_count=state.val_rp_n.get(),
         input_dir=state.val_random_pair_input_folder.get(),
@@ -587,9 +600,19 @@ def run_random_pair():
         avg_wxcorr_real=avg_wxcorr_real,
         avg_wxcorr_rp=avg_wxcorr_rp,
     )
+    return failures
 
 
 def handle_run_random_pair_button():
     state.val_random_pair_is_ready.set(False)
-    run_random_pair()
-    state.val_random_pair_is_ready.set(True)
+    try:
+        failures = run_random_pair()
+    except Exception as e:
+        messagebox.showerror("Random pair analysis failed", str(e))
+    else:
+        lines = [f"Finished, {len(failures)} pairs or dyads skipped."]
+        if failures:
+            lines += ["", "Skipped:"] + _format_failures(failures)
+        messagebox.showinfo("Random pair analysis finished", "\n".join(lines))
+    finally:
+        _random_pair_is_ready()
