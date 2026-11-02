@@ -18,6 +18,8 @@ import validation
 # LATE-REGISTERED WIDGET REFERENCES
 # (populated by app_layout.build_layout after widgets are created)
 # ---------------------------------------------------------------------------
+PREVIEW_TAB = "Input Data"
+
 _dropdowns = {}   # keys: 'sheet', 'col_a', 'col_b'
 _tabview   = {}   # key: 'tabview'
 
@@ -37,8 +39,13 @@ def register_tabview(tabview):
 # ---------------------------------------------------------------------------
 
 def on_tab_change():
+    previous_tab = state.val_CURRENT_TAB.get()
     selected_tab = _tabview['tabview'].get()
     state.val_CURRENT_TAB.set(selected_tab)
+    # only the Input Data tab has its own plot, the others share one
+    if PREVIEW_TAB not in (previous_tab, selected_tab):
+        return
+    _tabview['tabview'].update_idletasks()  # show the new tab before the slower plot update
     state.PARAMS_CHANGED()
 
 

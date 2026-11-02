@@ -6,6 +6,9 @@ import callbacks as cb
 
 
 DROPDOWN_WIDTH = 240
+TAB_WIDTH = 410
+TABVIEW_WIDTH = 422
+PATH_LABEL_WRAP = 220  # long folder names wrap instead of running out of the fixed-size tabview
 PARAMETER_ENTRY_WIDTH = 80
 PARAMETER_SECONDS_WIDTH = 60  # room for values like -19.8 s, so that the panel keeps its width
 
@@ -50,8 +53,11 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     #
     # Pack order matters: tabview must be packed side='right' FIRST so it claims its
     # strip before group_plot fills all remaining space.
-    group_params_tabview = tk.CTkTabview(app)
-    group_params_tabview.pack(side='right', anchor='n', padx=(5, 20), pady=10)
+    # The tabview keeps a fixed size, also while a tab change removes its content for a moment.
+    # A size change would resize the plot next to it, and every plot resize is a slow redraw.
+    group_params_tabview = tk.CTkTabview(app, width=TABVIEW_WIDTH)
+    group_params_tabview.grid_propagate(False)
+    group_params_tabview.pack(side='right', fill='y', padx=(5, 20), pady=10)
 
     group_plot = tkinter.Frame(app)
     group_plot.pack(side='left', fill='both', expand=True, padx=(20, 5), pady=10)
@@ -64,6 +70,8 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     tab_correlation  = group_params_tabview.add("Correlation")
     tab_export_batch = group_params_tabview.add("Export & Batch")
     group_params_tabview.configure(command=cb.on_tab_change)
+    for tab in (tab_input_data, tab_correlation, tab_export_batch):
+        tab.grid_columnconfigure(0, minsize=TAB_WIDTH)
 
     # ---------------------------
     # TAB: INPUT DATA & PREPROCESS
@@ -78,7 +86,7 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     button_file_picker = tk.CTkButton(subgroup_input_data, text="Choose Dyad Folder", command=cb.open_dir_picker)
     button_file_picker.grid(row=1, column=0, sticky="w", padx=10, pady=5)
 
-    label_dir_picker = tk.CTkLabel(subgroup_input_data, text="No folder selected.", font=("Arial", 14, "bold"))
+    label_dir_picker = tk.CTkLabel(subgroup_input_data, text="No folder selected.", font=("Arial", 14, "bold"), wraplength=TAB_WIDTH - 20)
     label_dir_picker.grid(row=2, column=0, sticky="w", padx=10, pady=5)
 
     label_select_sheet = tk.CTkLabel(subgroup_input_data, text="Select Sheet", font=("Arial", 14, "bold"))
@@ -347,7 +355,7 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     )
     button_batch_input_folder.grid(row=2, column=0, padx=10, pady=10, sticky='w')
 
-    label_batch_input_folder = tk.CTkLabel(subgroup_batch, text="No folder selected.")
+    label_batch_input_folder = tk.CTkLabel(subgroup_batch, text="No folder selected.", wraplength=PATH_LABEL_WRAP)
     label_batch_input_folder.grid(row=2, column=1, padx=10, sticky='w')
 
     label_batch_input_num_subdirs = tk.CTkLabel(subgroup_batch, text="No folder selected.")
@@ -358,7 +366,7 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     )
     button_output_dir_picker.grid(row=3, column=0, padx=10, pady=10, sticky='w')
 
-    label_output_dir = tk.CTkLabel(subgroup_batch, text="No folder selected.")
+    label_output_dir = tk.CTkLabel(subgroup_batch, text="No folder selected.", wraplength=PATH_LABEL_WRAP)
     label_output_dir.grid(row=3, column=1, padx=10, sticky='w')
 
     button_batch = tk.CTkButton(
@@ -380,7 +388,7 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     )
     button_random_pair_input_folder.grid(row=2, column=0, padx=10, pady=10, sticky='w')
 
-    label_random_pair_input_folder = tk.CTkLabel(subgroup_random_pair, text="No folder selected.")
+    label_random_pair_input_folder = tk.CTkLabel(subgroup_random_pair, text="No folder selected.", wraplength=PATH_LABEL_WRAP)
     label_random_pair_input_folder.grid(row=2, column=1, padx=10, sticky='w')
 
     button_random_pair_output_file = tk.CTkButton(
@@ -389,7 +397,7 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     )
     button_random_pair_output_file.grid(row=3, column=0, padx=10, pady=10, sticky='w')
 
-    label_random_pair_output_file = tk.CTkLabel(subgroup_random_pair, text="No file selected.")
+    label_random_pair_output_file = tk.CTkLabel(subgroup_random_pair, text="No file selected.", wraplength=PATH_LABEL_WRAP)
     label_random_pair_output_file.grid(row=3, column=1, padx=10, sticky='w')
 
     label_rp_n = tk.CTkLabel(subgroup_random_pair, text="N")
