@@ -4,6 +4,8 @@ Batch processing and random pair analysis, using small synthetic dyads where eac
     'Independent' columns of a dyad are unrelated.
 """
 import os
+import subprocess
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -237,6 +239,17 @@ def test_batch_leaves_no_open_figures(batch_dirs):
     assert plt.get_fignums() == []
     assert (output_dir / "wx_dyad0_wxcorr.png").exists()
     assert (output_dir / "grand_avg_wxcorr.png").exists()
+
+
+def test_app_modules_do_not_load_pyplot():
+    # With pyplot on the macOS backend, closing a figure segfaults the Tk event loop.
+    # The tests run on Agg and can't see that crash, so guard against pyplot itself.
+    code = (
+        "import sys, plot, export, batch_processing, callbacks, corr_plot, state; "
+        "sys.exit('matplotlib.pyplot' in sys.modules)"
+    )
+    env = {**os.environ, "PYTHONPATH": os.path.dirname(callbacks.__file__)}
+    assert subprocess.run([sys.executable, "-c", code], env=env).returncode == 0
 
 
 def test_summary_reports_failed_and_incomplete_dyads(batch_dirs):
