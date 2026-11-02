@@ -63,6 +63,13 @@ You will be prompted to choose a build method and an app name. The finished exec
 
 ---
 
+## Comparing with results from older versions
+
+Earlier versions took the files in a dyad folder in the order the file system listed them. They are now sorted alphabetically (ignoring case), and Excel lock files and hidden files are ignored. This can change results from the same data:
+
+- **The sign of τ can flip.** The first file is person A and the second is person B, so a dyad whose order changed now has A and B swapped.
+- **Folders with more than two files can pair differently.** The first two files are used, and the app warns about the others. For example, `simulated_data/dyad_recording` now uses `HRV_a` + `HRV_b`, where it previously used `HRV_a` + `HRV_other`.
+
 ---
 
 ## Developer reference
