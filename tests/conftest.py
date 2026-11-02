@@ -6,10 +6,31 @@ os.environ["MPLBACKEND"] = "Agg"
 
 import pytest
 
+import state
 import xlsx
 from signal_processing import preprocess_dyad
 
 SIMULATED_DYADS = Path(__file__).parents[1] / "simulated_data" / "dyads_simulated"
+
+
+class FakeVar:
+    def __init__(self, value):
+        self.value = value
+
+    def get(self):
+        return self.value
+
+    def set(self, value):
+        self.value = value
+
+
+@pytest.fixture
+def fake_state(monkeypatch):
+    """Replaces every tk.Var in state, so GUI logic can run without a window."""
+    for name in vars(state).copy():
+        if name.startswith("val_"):
+            monkeypatch.setattr(state, name, FakeVar(""), raising=True)
+    return state
 
 
 @pytest.fixture

@@ -40,7 +40,11 @@ def setup_traces():
 
     state.val_MAX_LAG_VALID_SXC.trace_add('write', update_max_lag_entry_on_validation_sxc)
 
+    state.val_INPUT_DATA_VALID.trace_add('write', update_active_state_export_button)
     state.val_CORRELATION_SETTINGS_VALID.trace_add('write', update_active_state_export_button)
+    state.val_CORRELATION_SETTINGS_VALID_SXC.trace_add('write', update_active_state_export_button)
+    state.val_checkbox_windowed_xcorr.trace_add('write', update_active_state_export_button)
+    update_active_state_export_button()
 
     state.val_checkbox_windowed_xcorr.trace_add('write', update_xcorr_parameter_groups)
 
@@ -199,7 +203,7 @@ def update_max_lag_entry_on_validation_sxc(*args):
 # ---------------------------------------------------------------------------
 
 def update_active_state_export_button(*args):
-    state_str = "normal" if state.val_CORRELATION_SETTINGS_VALID.get() else "disabled"
+    state_str = "normal" if validation.check_export_ready() else "disabled"
     _w['button_export_data'].configure(state=state_str)
     _w['button_export_plot'].configure(state=state_str)
 

@@ -16,7 +16,6 @@ from openpyxl import Workbook
 import batch_processing
 import callbacks
 import export
-import state
 import utils
 
 N_BEATS = 1000
@@ -108,26 +107,6 @@ def test_selected_column_is_the_one_analysed(batch_dirs, column, is_coupled):
         None, _params(input_dir, output_dir, column=column), export=False,
     )
     assert (np.median([w['r_max'] for w in result]) > 0.9) == is_coupled
-
-
-class FakeVar:
-    def __init__(self, value):
-        self.value = value
-
-    def get(self):
-        return self.value
-
-    def set(self, value):
-        self.value = value
-
-
-@pytest.fixture
-def fake_state(monkeypatch):
-    """Replaces every tk.Var in state, so callbacks can run without a window."""
-    for name in vars(state).copy():
-        if name.startswith("val_"):
-            monkeypatch.setattr(state, name, FakeVar(""), raising=True)
-    return state
 
 
 def test_params_use_the_columns_selected_in_the_dropdowns(fake_state):

@@ -102,3 +102,12 @@ def check_sx_correlation_settings():
     state.val_CORRELATION_SETTINGS_VALID_SXC.set(max_lag_is_valid)
     state.PARAMS_CHANGED()
     return max_lag_is_valid
+
+
+def check_export_ready():
+    settings_valid = (
+        state.val_CORRELATION_SETTINGS_VALID.get()
+        if state.val_checkbox_windowed_xcorr.get()
+        else state.val_CORRELATION_SETTINGS_VALID_SXC.get()
+    )
+    return state.val_INPUT_DATA_VALID.get() and settings_valid
