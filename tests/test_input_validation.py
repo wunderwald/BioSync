@@ -33,8 +33,7 @@ def loaded_columns(settings, monkeypatch):
     """A selected dyad with two long enough columns, ready for preprocess_data."""
     ibi = list(800 + 50 * np.random.default_rng(0).normal(size=400))
     settings.val_selected_sheet.set("IBI Series")
-    settings.val_selected_column_a.set("IBI_ms")
-    settings.val_selected_column_b.set("IBI_ms")
+    settings.val_selected_column.set("IBI_ms")
     settings.val_checkbox_eb.set(True)
     monkeypatch.setitem(state.dat_workbook_data, "columns_a", {"IBI_ms": [500, *ibi, 300]})
     monkeypatch.setitem(state.dat_workbook_data, "columns_b", {"IBI_ms": [500, *ibi, 300]})

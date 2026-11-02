@@ -105,25 +105,15 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     )
     checkbox_data_has_headers.grid(row=5, column=0, sticky="w", padx=10, pady=5)
 
-    label_select_column_a = tk.CTkLabel(subgroup_input_data, text="Select Column A", font=("Arial", 14, "bold"))
-    label_select_column_a.grid(row=6, column=0, sticky="w", padx=10, pady=5)
+    label_select_column = tk.CTkLabel(subgroup_input_data, text="Select Column", font=("Arial", 14, "bold"))
+    label_select_column.grid(row=6, column=0, sticky="w", padx=10, pady=5)
 
-    dropdown_select_column_a = tk.CTkOptionMenu(
+    dropdown_select_column = tk.CTkOptionMenu(
         subgroup_input_data, values=['- None -'],
-        command=cb.on_dropdown_select_column_a_change,
-        variable=state.val_selected_column_a, width=DROPDOWN_WIDTH, dynamic_resizing=False
+        command=cb.on_dropdown_select_column_change,
+        variable=state.val_selected_column, width=DROPDOWN_WIDTH, dynamic_resizing=False
     )
-    dropdown_select_column_a.grid(row=7, column=0, sticky="w", padx=10, pady=5)
-
-    label_select_column_b = tk.CTkLabel(subgroup_input_data, text="Select Column B", font=("Arial", 14, "bold"))
-    label_select_column_b.grid(row=8, column=0, sticky="w", padx=10, pady=5)
-
-    dropdown_select_column_b = tk.CTkOptionMenu(
-        subgroup_input_data, values=['- None -'],
-        command=cb.on_dropdown_select_column_b_change,
-        variable=state.val_selected_column_b, width=DROPDOWN_WIDTH, dynamic_resizing=False
-    )
-    dropdown_select_column_b.grid(row=9, column=0, sticky="w", padx=10, pady=5)
+    dropdown_select_column.grid(row=7, column=0, sticky="w", padx=10, pady=5)
 
     error_label_input_data = tk.CTkLabel(subgroup_input_data, text='Data is invalid.', text_color='red')
     # initially hidden — shown reactively via gui_updates
@@ -428,7 +418,7 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     # -----------------------------------------------------------------
     # Inject widget references that callbacks need for dropdown updates
     # -----------------------------------------------------------------
-    cb.register_dropdowns(dropdown_select_sheet, dropdown_select_column_a, dropdown_select_column_b)
+    cb.register_dropdowns(dropdown_select_sheet, dropdown_select_column)
     cb.register_tabview(group_params_tabview)
 
     # -----------------------------------------------------------------
@@ -437,8 +427,6 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     return {
         'group_plot':                          group_plot,
         'label_dir_picker':                    label_dir_picker,
-        'label_select_column_a':               label_select_column_a,
-        'label_select_column_b':               label_select_column_b,
         'error_label_input_data':              error_label_input_data,
         'label_window_size_seconds':           label_window_size_seconds,
         'label_step_size_seconds':             label_step_size_seconds,

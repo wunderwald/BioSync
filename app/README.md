@@ -86,6 +86,8 @@ Windows where a signal doesn't change have no correlation. They used to report Ï
 
 Exports now store numbers as numbers instead of text, in the same cells. The values don't change, but a script that handles them as text, for example with string functions, needs adjusting. Booleans, labels, `-` and `nan` are still text.
 
+The app now has one column selector, listing the columns both files have in the selected sheet. Person A and B are always analysed in the same column, so a dyad whose files name that column differently can't be loaded until the names match. Older runs could use two different columns.
+
 Spreadsheets are now read differently:
 
 - **Repeated column names can select a different column.** A name used twice used to mean the last column with that name. It now means the first, and the others are listed as `name (2)` and so on.

@@ -1,6 +1,7 @@
 import re
 import zipfile
 
+import numpy as np
 import pytest
 from openpyxl import Workbook
 
@@ -102,7 +103,7 @@ class FakeDropdown:
 
 @pytest.fixture
 def gui_files(fake_state, monkeypatch):
-    dropdowns = {key: FakeDropdown() for key in ("sheet", "col_a", "col_b")}
+    dropdowns = {key: FakeDropdown() for key in ("sheet", "column")}
     monkeypatch.setattr(callbacks, "_dropdowns", dropdowns)
     monkeypatch.setitem(state.dat_workbook_data, "sheet_names", [])
     fake_state.warnings = []
@@ -129,13 +130,66 @@ def test_files_without_a_common_sheet_give_a_warning_instead_of_a_crash(gui_file
     assert gui_files.warnings == ["No common sheet"]
 
 
-def test_sheet_without_data_leaves_nothing_selected(gui_files, monkeypatch):
-    _load_sheets(monkeypatch, ["S"], ["S"])
-    state.dat_workbook_data["workbook_a"]["S"] = [["only header"]]
-    monkeypatch.setitem(state.dat_workbook_data, "has_headers", True)
-    gui_files.val_selected_column_a.set("old")
-
+def _load_columns(gui_files, monkeypatch, rows_a, rows_b, headers=True):
+    monkeypatch.setitem(state.dat_workbook_data, "workbook_a", {"S": rows_a})
+    monkeypatch.setitem(state.dat_workbook_data, "workbook_b", {"S": rows_b})
+    monkeypatch.setitem(state.dat_workbook_data, "has_headers", headers)
+    monkeypatch.setitem(state.dat_workbook_data, "columns_a", {})
+    monkeypatch.setitem(state.dat_workbook_data, "columns_b", {})
+    monkeypatch.setitem(state.dat_workbook_data, "column_names", [])
+    gui_files.val_selected_sheet.set("S")
+    gui_files.val_selected_column.set("old")
     callbacks.update_column_names()
 
-    assert gui_files.val_selected_column_a.get() == "- None -"
-    assert gui_files.val_selected_column_b.get() == "a"
+
+def test_dropdown_lists_the_columns_both_files_have_in_file_order(gui_files, monkeypatch):
+    _load_columns(gui_files, monkeypatch, [["only A", "Z", "IBI"], [1, 2, 3]], [["IBI", "only B", "Z"], [4, 5, 6]])
+    assert callbacks._dropdowns["column"].values == ["Z", "IBI"]
+    assert gui_files.val_selected_column.get() == "Z"
+    assert gui_files.warnings == []
+
+
+def test_files_without_a_common_column_give_a_warning_and_no_selection(gui_files, monkeypatch):
+    _load_columns(gui_files, monkeypatch, [["a"], [1]], [["b"], [2]])
+    assert callbacks._dropdowns["column"].values == []
+    assert gui_files.val_selected_column.get() == "- None -"
+    assert gui_files.warnings == ["No common column"]
+
+
+def test_column_with_only_a_header_in_one_file_is_not_common(gui_files, monkeypatch):
+    _load_columns(gui_files, monkeypatch, [["a", "b"], [1, 2]], [["a", "b"], [1, None]])
+    assert callbacks._dropdowns["column"].values == ["a"]
+
+
+def test_without_headers_columns_are_matched_by_position(gui_files, monkeypatch):
+    _load_columns(gui_files, monkeypatch, [[1, 2, 3]], [[4, 5]], headers=False)
+    assert callbacks._dropdowns["column"].values == ["Column_1", "Column_2"]
+
+
+def test_no_sheet_selected_clears_the_columns(gui_files, monkeypatch):
+    _load_columns(gui_files, monkeypatch, [["a"], [1]], [["a"], [2]])
+    gui_files.val_selected_sheet.set("- None -")
+    callbacks.update_column_names()
+    assert callbacks._dropdowns["column"].values == []
+    assert gui_files.val_selected_column.get() == "- None -"
+    assert gui_files.warnings == []
+
+
+def test_selected_column_is_used_for_both_people(gui_files, monkeypatch):
+    ibi = [500, *(800 + 50 * np.random.default_rng(0).normal(size=300)), 300]
+    other = [500, *(700 + 50 * np.random.default_rng(1).normal(size=300)), 300]
+    columns_a, columns_b = {"IBI": ibi, "x": other}, {"IBI": other, "x": ibi}
+    monkeypatch.setitem(state.dat_workbook_data, "columns_a", columns_a)
+    monkeypatch.setitem(state.dat_workbook_data, "columns_b", columns_b)
+    for key in ("raw_signal_a", "raw_signal_b", "signal_a", "signal_b", "signal_a_std", "signal_b_std"):
+        monkeypatch.setitem(state.dat_physiological_data, key, [])
+    monkeypatch.setattr(callbacks.validation, "check_all_settings", lambda: None)
+    gui_files.val_selected_sheet.set("S")
+    gui_files.val_selected_column.set("x")
+    gui_files.val_checkbox_eb.set(True)
+
+    callbacks.preprocess_data()
+
+    assert state.dat_physiological_data["raw_signal_a"] is other
+    assert state.dat_physiological_data["raw_signal_b"] is ibi
+    assert callbacks._analysis_params()["selected_column_a"] == callbacks._analysis_params()["selected_column_b"] == "x"

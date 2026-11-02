@@ -20,14 +20,13 @@ import validation
 # ---------------------------------------------------------------------------
 PREVIEW_TAB = "Input Data"
 
-_dropdowns = {}   # keys: 'sheet', 'col_a', 'col_b'
+_dropdowns = {}   # keys: 'sheet', 'column'
 _tabview   = {}   # key: 'tabview'
 
 
-def register_dropdowns(sheet_dd, col_a_dd, col_b_dd):
+def register_dropdowns(sheet_dd, column_dd):
     _dropdowns['sheet'] = sheet_dd
-    _dropdowns['col_a'] = col_a_dd
-    _dropdowns['col_b'] = col_b_dd
+    _dropdowns['column'] = column_dd
 
 
 def register_tabview(tabview):
@@ -170,13 +169,7 @@ def on_dropdown_select_sheet_change(value):
     state.PARAMS_CHANGED()
 
 
-def on_dropdown_select_column_a_change(value):
-    preprocess_data()
-    clear_correlation_data()
-    state.PARAMS_CHANGED()
-
-
-def on_dropdown_select_column_b_change(value):
+def on_dropdown_select_column_change(value):
     preprocess_data()
     clear_correlation_data()
     state.PARAMS_CHANGED()
@@ -274,21 +267,24 @@ def update_sheet_names():
 
 
 def update_column_names():
-    if not state.val_selected_sheet.get() or state.val_selected_sheet.get() == '- None -':
-        return
-    wb_a    = state.dat_workbook_data["workbook_a"]
-    wb_b    = state.dat_workbook_data["workbook_b"]
-    sheet   = state.val_selected_sheet.get()
-    headers = state.dat_workbook_data["has_headers"]
+    state.dat_workbook_data["column_names"] = []
+    if state.val_selected_sheet.get() and state.val_selected_sheet.get() != '- None -':
+        wb_a    = state.dat_workbook_data["workbook_a"]
+        wb_b    = state.dat_workbook_data["workbook_b"]
+        sheet   = state.val_selected_sheet.get()
+        headers = state.dat_workbook_data["has_headers"]
 
-    state.dat_workbook_data["column_names_a"] = list(xlsx.get_columns(wb_a, sheet, headers=headers).keys())
-    state.dat_workbook_data["column_names_b"] = list(xlsx.get_columns(wb_b, sheet, headers=headers).keys())
+        state.dat_workbook_data["columns_a"] = xlsx.get_columns(wb_a, sheet, headers=headers)
+        state.dat_workbook_data["columns_b"] = xlsx.get_columns(wb_b, sheet, headers=headers)
 
-    update_dropdown_options(_dropdowns['col_a'], state.val_selected_column_a, state.dat_workbook_data["column_names_a"])
-    update_dropdown_options(_dropdowns['col_b'], state.val_selected_column_b, state.dat_workbook_data["column_names_b"])
+        # person A and B are analysed in the same column, so it has to exist in both files
+        state.dat_workbook_data["column_names"] = [
+            name for name in state.dat_workbook_data["columns_a"] if name in state.dat_workbook_data["columns_b"]
+        ]
+        if not state.dat_workbook_data["column_names"]:
+            messagebox.showwarning("No common column", f"The two files have no column with the same name in sheet '{sheet}'.")
 
-    state.dat_workbook_data["columns_a"] = xlsx.get_columns(wb_a, sheet, headers=headers)
-    state.dat_workbook_data["columns_b"] = xlsx.get_columns(wb_b, sheet, headers=headers)
+    update_dropdown_options(_dropdowns['column'], state.val_selected_column, state.dat_workbook_data["column_names"])
 
 
 # ---------------------------------------------------------------------------
@@ -301,15 +297,12 @@ def preprocess_data():
     if not state.val_selected_sheet.get() or state.val_selected_sheet.get() == '- None -':
         state.val_INPUT_DATA_VALID.set(False)
         return
-    if not state.val_selected_column_a.get() or state.val_selected_column_a.get() == '- None -':
-        state.val_INPUT_DATA_VALID.set(False)
-        return
-    if not state.val_selected_column_b.get() or state.val_selected_column_b.get() == '- None -':
+    if not state.val_selected_column.get() or state.val_selected_column.get() == '- None -':
         state.val_INPUT_DATA_VALID.set(False)
         return
 
-    d["raw_signal_a"] = state.dat_workbook_data["columns_a"][state.val_selected_column_a.get()]
-    d["raw_signal_b"] = state.dat_workbook_data["columns_b"][state.val_selected_column_b.get()]
+    d["raw_signal_a"] = state.dat_workbook_data["columns_a"][state.val_selected_column.get()]
+    d["raw_signal_b"] = state.dat_workbook_data["columns_b"][state.val_selected_column.get()]
 
     if not (utils.is_numeric_array(d["raw_signal_a"]) and utils.is_numeric_array(d["raw_signal_b"])):
         state.val_INPUT_DATA_VALID.set(False)
@@ -580,8 +573,8 @@ def _analysis_params():
         'output_dir':                 state.val_batch_output_folder.get(),
         'selected_sheet':             state.val_selected_sheet.get(),
         'has_headers':                state.val_checkbox_data_has_headers.get(),
-        'selected_column_a':          state.val_selected_column_a.get(),
-        'selected_column_b':          state.val_selected_column_b.get(),
+        'selected_column_a':          state.val_selected_column.get(),
+        'selected_column_b':          state.val_selected_column.get(),
         'checkbox_windowed_xcorr':    state.val_checkbox_windowed_xcorr.get(),
         'window_size':                state.val_window_size.get(),
         'step_size':                  state.val_step_size.get(),

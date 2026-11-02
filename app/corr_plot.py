@@ -130,8 +130,8 @@ def _update_preprocess_plot():
         'selected_sheet': state.val_selected_sheet.get(),
         'filename_a':    os.path.basename(state.val_selected_file_a.get()),
         'filename_b':    os.path.basename(state.val_selected_file_b.get()),
-        'column_a':      state.val_selected_column_a.get(),
-        'column_b':      state.val_selected_column_b.get(),
+        'column_a':      state.val_selected_column.get(),
+        'column_b':      state.val_selected_column.get(),
         'is_resampled':  state.val_checkbox_eb.get(),
     })
 

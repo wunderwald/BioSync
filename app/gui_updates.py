@@ -26,9 +26,6 @@ def setup_traces():
     state.val_selected_file_a.trace_add('write', update_dir_picker_label)
     state.val_selected_file_b.trace_add('write', update_dir_picker_label)
 
-    state.val_selected_file_a.trace_add('write', update_select_column_a_label)
-    state.val_selected_file_b.trace_add('write', update_select_column_b_label)
-
     state.val_selected_sheet.trace_add('write', update_input_data_validation_error)
     state.val_INPUT_DATA_VALID.trace_add('write', update_input_data_validation_error)
 
@@ -107,20 +104,6 @@ def update_dir_picker_label(*args):
     dir_path = state.val_selected_dyad_dir.get()
     _w['label_dir_picker'].configure(
         text='No folder selected.' if dir_path == '' else f"Selected: {os.path.basename(dir_path)}"
-    )
-
-
-def update_select_column_a_label(*args):
-    file_a = state.val_selected_file_a.get()
-    _w['label_select_column_a'].configure(
-        text="Select Column" if not file_a else f"Select Column for {os.path.basename(file_a)}"
-    )
-
-
-def update_select_column_b_label(*args):
-    file_b = state.val_selected_file_b.get()
-    _w['label_select_column_b'].configure(
-        text="Select Column" if not file_b else f"Select Column for {os.path.basename(file_b)}"
     )
 
 

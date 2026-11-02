@@ -65,8 +65,7 @@ val_selected_file_a                  = None
 val_selected_file_b                  = None
 val_data_length                      = None
 val_selected_sheet                   = None
-val_selected_column_a                = None
-val_selected_column_b                = None
+val_selected_column                  = None
 val_checkbox_data_has_headers        = None
 val_batch_input_folder               = None
 val_batch_output_folder              = None
@@ -135,7 +134,7 @@ def init_state(dpi, sw, sh, retina):
     global val_checkbox_average_windows, val_checkbox_show_sigmoid_correlations
     global val_checkbox_standardise, val_selected_dyad_dir
     global val_selected_file_a, val_selected_file_b, val_data_length
-    global val_selected_sheet, val_selected_column_a, val_selected_column_b
+    global val_selected_sheet, val_selected_column
     global val_checkbox_data_has_headers, val_batch_input_folder, val_batch_output_folder
     global val_batch_processing_is_ready, val_rp_n_input, val_rp_n
     global val_random_pair_input_folder, val_random_pair_output_file, val_random_pair_is_ready
@@ -188,8 +187,7 @@ def init_state(dpi, sw, sh, retina):
     val_selected_file_b                    = tk.StringVar(value='')
     val_data_length                        = tk.IntVar(value=0)
     val_selected_sheet                     = tk.StringVar(value='- None -')
-    val_selected_column_a                  = tk.StringVar(value='- None -')
-    val_selected_column_b                  = tk.StringVar(value='- None -')
+    val_selected_column                    = tk.StringVar(value='- None -')
     val_checkbox_data_has_headers          = tk.BooleanVar(value=True)
     val_batch_input_folder                 = tk.StringVar(value='')
     val_batch_output_folder                = tk.StringVar(value='')
@@ -212,8 +210,7 @@ def init_state(dpi, sw, sh, retina):
         'sheet_names': [],
         'columns_a': {},
         'columns_b': {},
-        'column_names_a': [],
-        'column_names_b': [],
+        'column_names': [],
         'has_headers': True
     })
 

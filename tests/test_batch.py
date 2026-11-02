@@ -110,12 +110,10 @@ def test_selected_column_is_the_one_analysed(batch_dirs, column, is_coupled):
     assert (np.median([w['r_max'] for w in result]) > 0.9) == is_coupled
 
 
-def test_params_use_the_columns_selected_in_the_dropdowns(fake_state):
-    fake_state.val_selected_column_a.set("Column from dropdown A")
-    fake_state.val_selected_column_b.set("Column from dropdown B")
+def test_params_use_the_column_selected_in_the_dropdown(fake_state):
+    fake_state.val_selected_column.set("Column from dropdown")
     params = callbacks._analysis_params()
-    assert params['selected_column_a'] == "Column from dropdown A"
-    assert params['selected_column_b'] == "Column from dropdown B"
+    assert params['selected_column_a'] == params['selected_column_b'] == "Column from dropdown"
 
 
 # ---------------------------------------------------------------------------

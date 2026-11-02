@@ -80,8 +80,7 @@ def gui(fake_state, dyad_files, monkeypatch):
         fake_state.val_selected_file_a.set(str(dyad_files[0]))
         fake_state.val_selected_file_b.set(str(dyad_files[1]))
         fake_state.val_selected_sheet.set(SHEET)
-        fake_state.val_selected_column_a.set("IBI")
-        fake_state.val_selected_column_b.set("IBI")
+        fake_state.val_selected_column.set("IBI")
         fake_state.val_checkbox_data_has_headers.set(True)
         fake_state.val_batch_input_folder.set("")
         fake_state.val_batch_output_folder.set("")
@@ -323,7 +322,7 @@ def test_dropdowns_open_when_clicked_anywhere():
     # A CTkComboBox only opens from its small arrow. Its text is an editable field, and typing
     # there changes the selection without recomputing anything.
     source = Path(layout.__file__).read_text(encoding="utf-8")
-    assert "CTkComboBox" not in source and source.count("CTkOptionMenu(") == 3
+    assert "CTkComboBox" not in source and source.count("CTkOptionMenu(") == 2
 
 
 @pytest.mark.parametrize("retina, title_size", [(True, 12), (False, 16)])
