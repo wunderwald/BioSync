@@ -85,7 +85,13 @@ dat_physiological_data = {}
 dat_correlation_data  = {}
 
 
-def PARAMS_CHANGED():
+# whether the update requested last should wait for typing to pause
+update_is_debounced = False
+
+
+def PARAMS_CHANGED(debounce=False):
+    global update_is_debounced
+    update_is_debounced = debounce
     val_UPDATE_COUNT.set(val_UPDATE_COUNT.get() + 1)
 
 

@@ -8,6 +8,7 @@ from batch_processing import batch_process, random_pair_analysis
 from export import export_sxcorr_data, export_wxcorr_data, export_random_pair_data
 from plot import plot_init
 
+import corr_plot
 import state
 import validation
 
@@ -47,21 +48,21 @@ def on_window_size_input_change(name, index, mode):
     new_str_val = state.val_window_size_input.get()
     state.val_window_size.set(0 if new_str_val == '' else int(new_str_val))
     validation.check_wx_correlation_settings()
-    state.PARAMS_CHANGED()
+    state.PARAMS_CHANGED(debounce=True)
 
 
 def on_step_size_input_change(name, index, mode):
     new_str_val = state.val_step_size_input.get()
     state.val_step_size.set(0 if new_str_val == '' else int(new_str_val))
     validation.check_wx_correlation_settings()
-    state.PARAMS_CHANGED()
+    state.PARAMS_CHANGED(debounce=True)
 
 
 def on_max_lag_input_change(name, index, mode):
     new_str_val = state.val_max_lag_input.get()
     state.val_max_lag.set(0 if new_str_val == '' else int(new_str_val))
     validation.check_wx_correlation_settings()
-    state.PARAMS_CHANGED()
+    state.PARAMS_CHANGED(debounce=True)
 
 
 # ENTRY CALLBACKS — standard xcorr
@@ -70,7 +71,7 @@ def on_max_lag_input_change_sxc(name, index, mode):
     new_str_val = state.val_max_lag_input_sxc.get()
     state.val_max_lag_sxc.set(0 if new_str_val == '' else int(new_str_val))
     validation.check_sx_correlation_settings()
-    state.PARAMS_CHANGED()
+    state.PARAMS_CHANGED(debounce=True)
 
 
 # ENTRY CALLBACKS — lag filter
@@ -80,7 +81,7 @@ def on_min_lag_input_change(name, index, mode):
     if new_str_val not in ('', '-'):
         state.val_lag_filter_min.set(int(new_str_val))
     validation.check_wx_correlation_settings()
-    state.PARAMS_CHANGED()
+    state.PARAMS_CHANGED(debounce=True)
 
 
 def on_max_lag_filter_input_change(name, index, mode):
@@ -88,7 +89,7 @@ def on_max_lag_filter_input_change(name, index, mode):
     if new_str_val not in ('', '-'):
         state.val_lag_filter_max.set(int(new_str_val))
     validation.check_wx_correlation_settings()
-    state.PARAMS_CHANGED()
+    state.PARAMS_CHANGED(debounce=True)
 
 
 def on_max_lag_change_update_filter(*args):
@@ -98,7 +99,7 @@ def on_max_lag_change_update_filter(*args):
     state.val_lag_filter_min_input.set(str(-new_max_lag))
     state.val_lag_filter_max_input.set(str(new_max_lag))
     validation.check_wx_correlation_settings()
-    state.PARAMS_CHANGED()
+    state.PARAMS_CHANGED(debounce=True)
 
 
 # ---------------------------------------------------------------------------
@@ -453,6 +454,7 @@ def _export_sxcorr_data(file_path):
 
 
 def export_data():
+    corr_plot.flush_update()  # results must match settings typed just before clicking
     selected_dir   = state.val_selected_dyad_dir.get()
     filename_init  = f"wx_data_{os.path.basename(selected_dir)}" if selected_dir else "wx_data"
     file_path = filedialog.asksaveasfilename(
@@ -470,6 +472,7 @@ def export_data():
 
 
 def export_plot():
+    corr_plot.flush_update()
     fig = state.dat_plot_data["fig"]
     if not fig:
         return

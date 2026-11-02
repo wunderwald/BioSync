@@ -59,7 +59,7 @@ gui_updates.setup_traces()
 # --------------------------------
 
 corr_plot.setup(widget_dict['group_plot'])
-state.val_UPDATE_COUNT.trace_add('write', corr_plot.UPDATE)
+state.val_UPDATE_COUNT.trace_add('write', corr_plot.schedule_update)
 corr_plot.UPDATE()
 
 # Two update() passes: the first resolves the basic pack layout; the second lets
