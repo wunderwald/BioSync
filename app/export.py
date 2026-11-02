@@ -114,8 +114,8 @@ def export_random_pair_data(file_path, params, input_dir, t_stat, p_value, avg_c
         'xcorr type': "(standard) cross-correlation",
         'Data type': 'fixed-rate' if params['checkbox_fr'] else 'event-based (resampled to 5hz)',
         'Standardised (z-score)': params['standardised_signals'],
-        'Max lag': params['max_lag'],
-        'Absolute correlation values': params['checkbox_absolute_corr'],
+        'Max lag': params['max_lag_sxc'],
+        'Absolute correlation values': params['checkbox_absolute_corr_sxc'],
     }
     metadata['Input dyad directory'] = f"{input_dir}"
 
