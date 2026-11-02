@@ -5,6 +5,7 @@ Batch processing and random pair analysis, using small synthetic dyads where eac
 """
 import os
 import subprocess
+import time
 import sys
 
 import matplotlib.pyplot as plt
@@ -249,6 +250,24 @@ def test_summary_reports_failed_and_incomplete_dyads(batch_dirs):
     assert "Processed 2 dyads, skipped 2." in callbacks._format_batch_summary(summary)
 
 
+class ImmediateTimer:
+    """Stands in for Tk's timer: runs the scheduled polls in the test."""
+    def __init__(self):
+        self.pending = []
+
+    def after(self, delay_ms, callback, *args):
+        self.pending.append((callback, args))
+
+    def run_until_idle(self, timeout_s=10):
+        deadline = time.monotonic() + timeout_s
+        while self.pending:
+            assert time.monotonic() < deadline, "job didn't finish"
+            pending, self.pending = self.pending, []
+            for callback, args in pending:
+                callback(*args)
+            time.sleep(0.001)
+
+
 @pytest.mark.parametrize("handler, runner, ready_var, input_var, output_var", [
     (callbacks.handle_run_batch_button, "run_batch_process", "val_batch_processing_is_ready",
      "val_batch_input_folder", "val_batch_output_folder"),
@@ -263,13 +282,16 @@ def test_button_is_enabled_again_and_error_shown_after_a_crash(
     getattr(fake_state, input_var).set("in")
     getattr(fake_state, output_var).set("out")
 
-    def crash():
+    def crash(*args):
         raise RuntimeError("disk full")
     monkeypatch.setattr(callbacks, runner, crash)
     errors = []
     monkeypatch.setattr(callbacks.messagebox, "showerror", lambda title, message: errors.append(message))
+    tabview = ImmediateTimer()
+    monkeypatch.setitem(callbacks._tabview, "tabview", tabview)
 
     handler()
+    tabview.run_until_idle()
 
     assert errors == ["disk full"]
     assert getattr(fake_state, ready_var).get() is True

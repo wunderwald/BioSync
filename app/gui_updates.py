@@ -95,6 +95,9 @@ def setup_traces():
     )
     state.val_random_pair_is_ready.trace_add('write', update_active_state_random_pair_button)
 
+    state.val_job_running.trace_add('write', update_job_progress_visibility)
+    state.val_job_progress.trace_add('write', update_job_progress_bar)
+
 
 # ---------------------------------------------------------------------------
 # UPDATE FUNCTIONS — input data section
@@ -273,6 +276,17 @@ def update_active_state_run_batch_button(*args):
     _w['button_batch'].configure(
         state="normal" if state.val_batch_processing_is_ready.get() else "disabled"
     )
+
+
+def update_job_progress_visibility(*args):
+    if state.val_job_running.get():
+        _w['subgroup_job_progress'].grid(row=3, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
+    else:
+        _w['subgroup_job_progress'].grid_forget()
+
+
+def update_job_progress_bar(*args):
+    _w['progress_bar_job'].set(state.val_job_progress.get())
 
 
 def update_active_state_random_pair_button(*args):

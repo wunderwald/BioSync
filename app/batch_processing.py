@@ -157,18 +157,22 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
         print(f"! {os.path.basename(file_path_a)}, {os.path.basename(file_path_b)}: {e}")
         raise(e)
 
+def _no_progress(done, total, text):
+    pass
+
 def _average_correlations(all_correlations):
     """One average per pair. A pair with only flat windows has no correlation to contribute."""
     averages = [mean_ignoring_flat_windows(c) for c in all_correlations]
     return [average for average in averages if not np.isnan(average)]
 
-def random_pair_analysis(params, input_dir, random_pair_count=100): 
+def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_progress):
     """
     Perform analysis on random pairs and real dyad correlations.
     Args:
         params (dict): A dictionary of parameters, see batch_process function for details.
         input_dir (str): Path to the input directory containing dyad folders with Excel files.
         random_pair_count (int, optional): Number of random pairs to generate. Defaults to 100.
+        progress (function, optional): Called with (done, total, text) before each pair or dyad.
     Returns:
         tuple: A tuple containing:
             - t_stat (float): The t-statistic from Welch's t-test.
@@ -198,7 +202,9 @@ def random_pair_analysis(params, input_dir, random_pair_count=100):
     failures = []
     all_correlations_rp = []
     all_wxcorr_rp = []
-    for pair in random_pairs:
+    total_steps = len(random_pairs) + len(dyad_folders)
+    for pair_index, pair in enumerate(random_pairs):
+        progress(pair_index, total_steps, "Random pairs")
         file_path_a, file_path_b = pair
         try:
             corr_data = _process_dyad(file_path_a, file_path_b, None, params, export=False)
@@ -220,7 +226,8 @@ def random_pair_analysis(params, input_dir, random_pair_count=100):
     # process all real dyads
     all_correlations_real = []
     all_wxcorr_real = []
-    for dyad_folder in dyad_folders:
+    for dyad_index, dyad_folder in enumerate(dyad_folders):
+        progress(len(random_pairs) + dyad_index, total_steps, dyad_folder)
         dyad_path = os.path.join(input_dir, dyad_folder)
         xlsx_files = utils.list_dyad_files(dyad_path)
         if len(xlsx_files) >= 2:
@@ -268,7 +275,7 @@ def random_pair_analysis(params, input_dir, random_pair_count=100):
     return t_stat, p_value, average_correlations_rp, average_correlations_real, avg_wxcorr_real, avg_wxcorr_rp, failures
 
 
-def batch_process(params):
+def batch_process(params, progress=_no_progress):
     """
     Processes a batch of dyad data files, performs cross-correlation analysis, and exports the results.
     Args:
@@ -294,6 +301,7 @@ def batch_process(params):
             - use_lag_filter (bool): Apply lag filter to limit lag range (wxcorr only).
             - lag_filter_min (int): Minimum lag for filter (inclusive) (wxcorr only).
             - lag_filter_max (int): Maximum lag for filter (inclusive) (wxcorr only).
+        progress (function, optional): Called with (done, total, text) before each step.
     Returns:
         dict: A summary of the run:
             - processed (list): Names of the dyad folders that were processed.
@@ -313,7 +321,8 @@ def batch_process(params):
     # process dyads in folder
     dyad_folders = sorted(f for f in os.listdir(batch_input_folder) if os.path.isdir(os.path.join(batch_input_folder, f)))
     all_wxcorr_results = []
-    for dyad_folder in dyad_folders:
+    for dyad_index, dyad_folder in enumerate(dyad_folders):
+        progress(dyad_index, len(dyad_folders), dyad_folder)
         dyad_path = os.path.join(batch_input_folder, dyad_folder)
         xlsx_files = utils.list_dyad_files(dyad_path)
         if len(xlsx_files) < 2:
@@ -334,6 +343,7 @@ def batch_process(params):
 
     # export group-average heatmap after all dyads are processed
     if params['checkbox_windowed_xcorr'] and all_wxcorr_results:
+        progress(len(dyad_folders), len(dyad_folders), "Group average")
         min_lag = (
             min(params['lag_filter_min'], params['lag_filter_max'])
             if params['use_lag_filter'] else -params['max_lag']

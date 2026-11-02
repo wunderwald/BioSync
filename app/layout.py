@@ -403,6 +403,15 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     )
     button_random_pair.grid(row=8, column=0, padx=10, pady=10, sticky='w')
 
+    # Progress of a running batch or random pair analysis (initially hidden)
+    subgroup_job_progress = tk.CTkFrame(tab_export_batch)
+
+    label_job_progress = tk.CTkLabel(subgroup_job_progress, textvariable=state.val_job_progress_text)
+    label_job_progress.grid(row=0, column=0, padx=10, pady=5, sticky='w')
+
+    progress_bar_job = tk.CTkProgressBar(subgroup_job_progress)
+    progress_bar_job.grid(row=1, column=0, padx=10, pady=5, sticky='w')
+
     # -----------------------------------------------------------------
     # Inject widget references that callbacks need for dropdown updates
     # -----------------------------------------------------------------
@@ -448,4 +457,6 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
         'label_random_pair_input_folder':      label_random_pair_input_folder,
         'label_random_pair_output_file':       label_random_pair_output_file,
         'button_random_pair':                  button_random_pair,
+        'subgroup_job_progress':               subgroup_job_progress,
+        'progress_bar_job':                    progress_bar_job,
     }

@@ -74,6 +74,8 @@ corr_plot.fit_canvas_to_container()
 # --------------------------------
 
 def on_window_closing():
+    if not callbacks.confirm_close():
+        return
     for widget_id in app.tk.call('after', 'info'):
         try:
             app.after_cancel(widget_id)

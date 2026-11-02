@@ -1,4 +1,6 @@
 import os
+import queue
+import threading
 from tkinter import filedialog, messagebox
 
 import xlsx
@@ -493,6 +495,72 @@ def export_plot():
 
 
 # ---------------------------------------------------------------------------
+# BACKGROUND JOBS
+# Tk only works on the main thread, so a job gets everything it needs up front
+# and reports through a queue, which the main thread reads.
+# ---------------------------------------------------------------------------
+
+JOB_POLL_MS = 100
+
+
+def _format_progress(done, total, text):
+    return f"{text} ({done + 1} of {total})" if done < total else text
+
+
+def _start_job(title, work, on_success):
+    """
+    Runs work(progress) on another thread, so that the window stays responsive.
+    work must not use state or any widget. on_success(result) runs on the main thread.
+    """
+    messages = queue.Queue()
+
+    def run():
+        try:
+            result = work(lambda done, total, text: messages.put(('progress', done, total, text)))
+        except Exception as e:
+            messages.put(('error', e))
+        else:
+            messages.put(('done', result))
+
+    state.val_job_progress.set(0)
+    state.val_job_progress_text.set(title)
+    state.val_job_running.set(True)
+    _batch_processing_is_ready()
+    _random_pair_is_ready()
+    threading.Thread(target=run, daemon=True).start()
+    _tabview['tabview'].after(JOB_POLL_MS, _poll_job, messages, title, on_success)
+
+
+def _poll_job(messages, title, on_success):
+    while True:
+        try:
+            message = messages.get_nowait()
+        except queue.Empty:
+            _tabview['tabview'].after(JOB_POLL_MS, _poll_job, messages, title, on_success)
+            return
+        if message[0] == 'progress':
+            _, done, total, text = message
+            state.val_job_progress.set(done / total if total else 0)
+            state.val_job_progress_text.set(_format_progress(done, total, text))
+            continue
+        state.val_job_running.set(False)
+        _batch_processing_is_ready()
+        _random_pair_is_ready()
+        if message[0] == 'error':
+            messagebox.showerror(f"{title} failed", str(message[1]))
+        else:
+            on_success(message[1])
+        return
+
+
+def confirm_close():
+    """Closing the window ends a running job, which leaves its output files incomplete."""
+    return not state.val_job_running.get() or messagebox.askokcancel(
+        "Still running", "A batch or random pair analysis is still running. Close and stop it?"
+    )
+
+
+# ---------------------------------------------------------------------------
 # BATCH PROCESSING
 # ---------------------------------------------------------------------------
 
@@ -543,7 +611,10 @@ def _format_batch_summary(summary):
 
 
 def _batch_processing_is_ready(*args):
-    data_is_valid = state.val_INPUT_DATA_VALID.get() and validation.check_active_settings_valid()
+    data_is_valid = (
+        state.val_INPUT_DATA_VALID.get() and validation.check_active_settings_valid() and
+        not state.val_job_running.get()
+    )
     io_is_ready = (
         state.val_batch_input_folder.get() != '' and
         state.val_batch_output_folder.get() != ''
@@ -551,20 +622,17 @@ def _batch_processing_is_ready(*args):
     state.val_batch_processing_is_ready.set(data_is_valid and io_is_ready)
 
 
-def run_batch_process():
-    return batch_process(_analysis_params())
+def run_batch_process(params, progress):
+    return batch_process(params, progress=progress)
 
 
 def handle_run_batch_button():
-    state.val_batch_processing_is_ready.set(False)
-    try:
-        summary = run_batch_process()
-    except Exception as e:
-        messagebox.showerror("Batch processing failed", str(e))
-    else:
-        messagebox.showinfo("Batch processing finished", _format_batch_summary(summary))
-    finally:
-        _batch_processing_is_ready()
+    params = _analysis_params()
+    _start_job(
+        "Batch processing",
+        lambda progress: run_batch_process(params, progress),
+        lambda summary: messagebox.showinfo("Batch processing finished", _format_batch_summary(summary)),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -572,7 +640,10 @@ def handle_run_batch_button():
 # ---------------------------------------------------------------------------
 
 def _random_pair_is_ready(*args):
-    data_is_valid = state.val_INPUT_DATA_VALID.get() and validation.check_active_settings_valid()
+    data_is_valid = (
+        state.val_INPUT_DATA_VALID.get() and validation.check_active_settings_valid() and
+        not state.val_job_running.get()
+    )
     io_is_ready = (
         state.val_random_pair_input_folder.get() != '' and
         state.val_random_pair_output_file.get() != ''
@@ -580,17 +651,17 @@ def _random_pair_is_ready(*args):
     state.val_random_pair_is_ready.set(data_is_valid and io_is_ready)
 
 
-def run_random_pair():
-    params = _analysis_params()
+def run_random_pair(params, random_pair_count, input_dir, output_file, progress):
     t_stat, p_value, avg_corr_rp, avg_corr_real, avg_wxcorr_real, avg_wxcorr_rp, failures = random_pair_analysis(
         params=params,
-        random_pair_count=state.val_rp_n.get(),
-        input_dir=state.val_random_pair_input_folder.get(),
+        random_pair_count=random_pair_count,
+        input_dir=input_dir,
+        progress=progress,
     )
     export_random_pair_data(
-        file_path=state.val_random_pair_output_file.get(),
+        file_path=output_file,
         params=params,
-        input_dir=state.val_random_pair_input_folder.get(),
+        input_dir=input_dir,
         t_stat=t_stat,
         p_value=p_value,
         avg_corr_rp=avg_corr_rp,
@@ -601,16 +672,20 @@ def run_random_pair():
     return failures
 
 
+def _show_random_pair_summary(failures):
+    lines = [f"Finished, {len(failures)} pairs or dyads skipped."]
+    if failures:
+        lines += ["", "Skipped:"] + _format_failures(failures)
+    messagebox.showinfo("Random pair analysis finished", "\n".join(lines))
+
+
 def handle_run_random_pair_button():
-    state.val_random_pair_is_ready.set(False)
-    try:
-        failures = run_random_pair()
-    except Exception as e:
-        messagebox.showerror("Random pair analysis failed", str(e))
-    else:
-        lines = [f"Finished, {len(failures)} pairs or dyads skipped."]
-        if failures:
-            lines += ["", "Skipped:"] + _format_failures(failures)
-        messagebox.showinfo("Random pair analysis finished", "\n".join(lines))
-    finally:
-        _random_pair_is_ready()
+    params = _analysis_params()
+    random_pair_count = state.val_rp_n.get()
+    input_dir = state.val_random_pair_input_folder.get()
+    output_file = state.val_random_pair_output_file.get()
+    _start_job(
+        "Random pair analysis",
+        lambda progress: run_random_pair(params, random_pair_count, input_dir, output_file, progress),
+        _show_random_pair_summary,
+    )
