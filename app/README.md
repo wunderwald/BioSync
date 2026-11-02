@@ -70,6 +70,14 @@ Earlier versions took the files in a dyad folder in the order the file system li
 - **The sign of τ can flip.** The first file is person A and the second is person B, so a dyad whose order changed now has A and B swapped.
 - **Folders with more than two files can pair differently.** The first two files are used, and the app warns about the others. For example, `simulated_data/dyad_recording` now uses `HRV_a` + `HRV_b`, where it previously used `HRV_a` + `HRV_other`.
 
+Earlier versions also ignored the time from the start of the recording to each person's first beat, which is the first value of an event-based column. Both people are now resampled onto one time grid that uses it, assuming they started recording at the same moment:
+
+- **τ can shift by a few samples** (200 ms each) for event-based data, by the difference between the two first values.
+
+Correlations of ±1 or beyond used to count as a z-value of 0. They are now limited to ±0.999 (z of about ±3.8) before the Fisher z-transform:
+
+- **`avg_z_transformed_corr` and `var_z_transformed_corr` can change** for windows that contain such values. This is rare at the default settings.
+
 ---
 
 ## Developer reference
