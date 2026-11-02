@@ -55,3 +55,58 @@ def test_time_after_the_last_beat_is_not_part_of_the_signal(ibi):
 def test_recordings_that_do_not_overlap_are_rejected(ibi):
     with pytest.raises(ValueError, match="do not overlap"):
         _preprocess([0, *ibi[:5], 300], [100000, *ibi[:5], 300])
+
+
+def _preprocess_removing_invalid(signal_a, signal_b, signal_type="event-based"):
+    return preprocess_dyad(signal_a, signal_b, signal_type=signal_type, remove_invalid_samples=True)[:2]
+
+
+def test_low_first_beat_offset_is_not_removed_as_an_invalid_interval(ibi):
+    signal_a, signal_b = _preprocess_removing_invalid([50, *ibi, 300], [450, *ibi, 300])
+    assert _peak_lag(signal_a, signal_b) == 2
+
+
+def test_low_rest_value_does_not_change_the_result(ibi):
+    short_rest = _preprocess_removing_invalid([500, *ibi, 46], [500, *ibi, 46])
+    long_rest = _preprocess_removing_invalid([500, *ibi, 900], [500, *ibi, 900])
+    assert np.array_equal(short_rest[0], long_rest[0])
+
+
+def test_removing_a_missed_beat_keeps_later_beats_in_place(ibi):
+    # a missed beat merges two intervals into one invalid interval, without changing when later beats happen
+    missed_beat = [*ibi[:100], ibi[100] + ibi[101], *ibi[102:]]
+    assert missed_beat[100] >= 1000
+
+    signal_a, signal_b = _preprocess_removing_invalid([500, *missed_beat, 300], [500, *ibi, 300])
+
+    assert _peak_lag(signal_a, signal_b) == 0
+    after_the_gap = int((500 + sum(ibi[:103])) / 200)
+    assert signal_a[after_the_gap:] == pytest.approx(signal_b[after_the_gap:], abs=1)   # the spline settles gradually
+
+
+def test_invalid_values_are_ignored_only_when_asked(ibi):
+    with_artefact = [*ibi[:100], 5000, *ibi[101:]]
+    kept = _preprocess([500, *with_artefact, 300], [500, *ibi, 300])[0]
+    removed = _preprocess_removing_invalid([500, *with_artefact, 300], [500, *ibi, 300])[0]
+    assert kept.max() > 1000
+    assert removed.max() < 1000
+
+
+def test_too_few_valid_intervals_are_rejected(ibi):
+    with pytest.raises(ValueError, match="fewer than two valid"):
+        _preprocess_removing_invalid([500, 5000, 5000, 5000, 300], [500, *ibi, 300])
+
+
+def test_negative_fixed_rate_samples_are_bridged_without_moving_later_samples():
+    signal = np.sin(np.arange(200) / 5) + 2
+    damaged = signal.copy()
+    damaged[50] = -1
+    signal_a, signal_b = _preprocess_removing_invalid(damaged, signal, signal_type="fixed-rate")
+    assert len(signal_a) == len(signal)
+    assert signal_a[50] == pytest.approx((signal[49] + signal[51]) / 2)
+    assert np.array_equal(signal_a[51:], signal[51:])
+
+
+def test_fixed_rate_signal_without_valid_samples_is_rejected():
+    with pytest.raises(ValueError, match="no valid samples"):
+        _preprocess_removing_invalid(np.full(50, -1.0), np.ones(50), signal_type="fixed-rate")

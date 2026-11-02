@@ -2,12 +2,17 @@ import numpy as np
 from scipy.interpolate import CubicSpline
 from scipy.stats import zscore
 
-def _remove_invalid_IBI(ibi_ms):
-    return [sample for sample in ibi_ms if sample >= 100 and sample < 1000]
-
-def _remove_invalid_EDA(eda):
+def _replace_invalid_EDA(eda):
+    '''
+    Interpolates across negative samples. Deleting them would shift all later samples in time.
+    '''
     print("!! EDA filter not implemented yet.") # TODO: Implement EDA filter
-    return [sample for sample in eda if sample >= 0]
+    eda = np.array(eda, dtype=float)
+    valid = eda >= 0
+    if not valid.any():
+        raise ValueError("The signal has no valid samples.")
+    indices = np.arange(len(eda))
+    return np.interp(indices, indices[valid], eda[valid])
 
 def standardize(signal):
     '''
@@ -22,7 +27,21 @@ def _beat_times_ms(ibi_ms, t_offset_ms=0):
     '''
     return np.cumsum(np.insert(ibi_ms, 0, 0)[:-1]) + t_offset_ms
 
-def resample_ibi(ibi_ms, t_offset_ms=0, target_sampling_rate_hz=5, scale_output=False, t_start_ms=None, t_end_ms=None):
+def _ibi_time_series(ibi_ms, t_offset_ms=0, remove_invalid_samples=False):
+    '''
+    Beat times and interval values. Beat times are computed before invalid intervals are removed, because the
+    time an invalid interval took still passed: removing it must not move the beats after it.
+    '''
+    t_ms_ts = _beat_times_ms(ibi_ms, t_offset_ms)
+    ibi_ms_ts = np.array(ibi_ms)
+    if remove_invalid_samples:
+        valid = (ibi_ms_ts >= 100) & (ibi_ms_ts < 1000)
+        if valid.sum() < 2:
+            raise ValueError("The signal has fewer than two valid intervals.")
+        t_ms_ts, ibi_ms_ts = t_ms_ts[valid], ibi_ms_ts[valid]
+    return t_ms_ts, ibi_ms_ts
+
+def resample_ibi(ibi_ms, t_offset_ms=0, target_sampling_rate_hz=5, scale_output=False, t_start_ms=None, t_end_ms=None, remove_invalid_samples=False):
     """
     Resample inter-beat intervals (IBI) to a target sampling rate using cubic spline interpolation.
     Parameters:
@@ -37,14 +56,15 @@ def resample_ibi(ibi_ms, t_offset_ms=0, target_sampling_rate_hz=5, scale_output=
         If True, scales the output IBI to maintain the same total sum as the original IBI. Default is False.
     t_start_ms, t_end_ms : float, optional
         Time span of the output grid, including the offset. Default is from the first to the last beat.
+    remove_invalid_samples : bool, optional
+        If True, intervals outside 100-1000 ms are left out of the interpolation. Default is False.
     Returns:
     --------
     ibi_ms_interpl_out : numpy.ndarray
         The resampled IBI values.
     """
     # convert ibi to time series (t, ibi), with offset on the time axis
-    t_ms_ts = _beat_times_ms(ibi_ms, t_offset_ms)
-    ibi_ms_ts = np.array(ibi_ms)
+    t_ms_ts, ibi_ms_ts = _ibi_time_series(ibi_ms, t_offset_ms, remove_invalid_samples)
 
     # Create a cubic spline interpolation
     cs = CubicSpline(t_ms_ts, ibi_ms_ts)
@@ -78,7 +98,7 @@ def preprocess_dyad(signal_a, signal_b, signal_type, remove_invalid_samples=Fals
         signal_a (list or array-like): The first signal to preprocess.
         signal_b (list or array-like): The second signal to preprocess.
         signal_type (str): The type of the signals, must be either 'event-based' or 'fixed-rate'.
-        remove_invalid_samples (bool, optional): If True, invalid samples will be removed from the signals. Defaults to False.
+        remove_invalid_samples (bool, optional): If True, invalid samples are bridged by interpolation, keeping later samples at their original time. Defaults to False.
     Returns:
         tuple: A tuple containing the preprocessed signal_a and signal_b.
     Raises:
@@ -87,10 +107,10 @@ def preprocess_dyad(signal_a, signal_b, signal_type, remove_invalid_samples=Fals
     if signal_type not in ['event-based', 'fixed-rate']:
         raise Exception("Invalid signal type. Must be 'event-based' or 'fixed-rate'.")
 
-    # optionally remove invalid values
-    if remove_invalid_samples:
-        signal_a = _remove_invalid_IBI(signal_a) if signal_type == 'event-based' else _remove_invalid_EDA(signal_a)
-        signal_b = _remove_invalid_IBI(signal_b) if signal_type == 'event-based' else _remove_invalid_EDA(signal_b)
+    # optionally replace invalid values (event-based signals handle this during resampling)
+    if remove_invalid_samples and signal_type == 'fixed-rate':
+        signal_a = _replace_invalid_EDA(signal_a)
+        signal_b = _replace_invalid_EDA(signal_b)
 
     # resample IBI (exclude first and last sample, shift by first sample)
     if signal_type == 'event-based':
@@ -98,14 +118,14 @@ def preprocess_dyad(signal_a, signal_b, signal_type, remove_invalid_samples=Fals
         t_offset_ms_b = signal_b[0]
         ibi_a = signal_a[1:-1]
         ibi_b = signal_b[1:-1]
-        beats_a = _beat_times_ms(ibi_a, t_offset_ms_a)
-        beats_b = _beat_times_ms(ibi_b, t_offset_ms_b)
+        beats_a, _ = _ibi_time_series(ibi_a, t_offset_ms_a, remove_invalid_samples)
+        beats_b, _ = _ibi_time_series(ibi_b, t_offset_ms_b, remove_invalid_samples)
         t_start_ms = max(beats_a[0], beats_b[0])
         t_end_ms = min(beats_a[-1], beats_b[-1])
         if t_end_ms <= t_start_ms:
             raise ValueError("The two recordings do not overlap in time.")
-        signal_a = resample_ibi(ibi_a, t_offset_ms=t_offset_ms_a, target_sampling_rate_hz=5, t_start_ms=t_start_ms, t_end_ms=t_end_ms)
-        signal_b = resample_ibi(ibi_b, t_offset_ms=t_offset_ms_b, target_sampling_rate_hz=5, t_start_ms=t_start_ms, t_end_ms=t_end_ms)
+        signal_a = resample_ibi(ibi_a, t_offset_ms=t_offset_ms_a, target_sampling_rate_hz=5, t_start_ms=t_start_ms, t_end_ms=t_end_ms, remove_invalid_samples=remove_invalid_samples)
+        signal_b = resample_ibi(ibi_b, t_offset_ms=t_offset_ms_b, target_sampling_rate_hz=5, t_start_ms=t_start_ms, t_end_ms=t_end_ms, remove_invalid_samples=remove_invalid_samples)
 
     # fix lengths
     min_length = min(len(signal_a), len(signal_b))
