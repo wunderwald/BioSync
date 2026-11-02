@@ -77,11 +77,6 @@ def on_window_closing():
             app.after_cancel(widget_id)
         except Exception:
             pass
-    try:
-        import matplotlib.pyplot as plt
-        plt.close('all')
-    except Exception:
-        pass
     app.destroy()
 
 app.protocol("WM_DELETE_WINDOW", on_window_closing)

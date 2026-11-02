@@ -1,4 +1,5 @@
-import matplotlib.pyplot as plt
+import matplotlib
+from matplotlib.figure import Figure
 import matplotlib.gridspec as gridspec
 import matplotlib.colors as mcolors
 import numpy as np
@@ -18,10 +19,12 @@ SCALING_PARAMS = {
     'DPI': 100,
 }
 
+# Figures are created without pyplot: it keeps every figure open until closed, and on the macOS
+# backend closing one crashes the Tk event loop.
 def plot_init(is_retina):
     # rcParams — font/line sizes depend on display type, not on window size
     if is_retina:
-        plt.rcParams.update({
+        matplotlib.rcParams.update({
             'font.size': 6,
             'axes.titlesize': 4,
             'axes.labelsize': 4,
@@ -30,7 +33,7 @@ def plot_init(is_retina):
             'lines.linewidth': 1,
         })
     else:
-        plt.rcParams.update({
+        matplotlib.rcParams.update({
             'font.size': 12,
             'axes.titlesize': 8,
             'axes.labelsize': 8,
@@ -39,7 +42,7 @@ def plot_init(is_retina):
             'lines.linewidth': 2,
         })
     # Default figsize — the canvas resize handler will set the real size at draw time
-    fig = plt.figure(figsize=SCALING_PARAMS['FIGSIZE'], dpi=SCALING_PARAMS['DPI'])
+    fig = Figure(figsize=SCALING_PARAMS['FIGSIZE'], dpi=SCALING_PARAMS['DPI'])
     return fig
 
 def plot_windowed_cross_correlation(wxc_data, window_size, max_lag, step_size, signal_a, signal_b, show_sigmoid_correlations=False, use_lag_filter=False, lag_filter_min=None, lag_filter_max=None):
@@ -63,7 +66,7 @@ def plot_windowed_cross_correlation(wxc_data, window_size, max_lag, step_size, s
     correlation_values = [res['correlations_sigmoid' if show_sigmoid_correlations else 'correlations'] for res in wxc_data]
 
     # Initialize plot layout
-    fig = plt.figure(figsize=SCALING_PARAMS['FIGSIZE'], dpi=SCALING_PARAMS['DPI'], layout='constrained')
+    fig = Figure(figsize=SCALING_PARAMS['FIGSIZE'], dpi=SCALING_PARAMS['DPI'], layout='constrained')
     gs = gridspec.GridSpec(3, 1, height_ratios=[3, 1, 1], figure=fig)
 
     # get lag range (filtered or unfiltered) for y-axis
@@ -134,7 +137,7 @@ def plot_standard_cross_correlation(sxc_data, signal_a, signal_b):
     lags = sxc_data['lags']
 
     # Initialize plot layout
-    fig = plt.figure(figsize=SCALING_PARAMS['FIGSIZE'], dpi=SCALING_PARAMS['DPI'], layout='constrained')
+    fig = Figure(figsize=SCALING_PARAMS['FIGSIZE'], dpi=SCALING_PARAMS['DPI'], layout='constrained')
     gs = gridspec.GridSpec(3, 1, height_ratios=[3, 1, 1], figure=fig)
 
     # Plot cross-correlation
@@ -193,7 +196,7 @@ def plot_preprocessed_signals(signal_a, signal_b, plot_titles):
         matplotlib.figure.Figure: The figure containing the plot.
     """
     # Initialize plot layout
-    fig = plt.figure(figsize=SCALING_PARAMS['FIGSIZE'], dpi=SCALING_PARAMS['DPI'], layout='constrained')
+    fig = Figure(figsize=SCALING_PARAMS['FIGSIZE'], dpi=SCALING_PARAMS['DPI'], layout='constrained')
     gs = gridspec.GridSpec(2, 1, figure=fig)
     
     # Plot signal_a
@@ -296,11 +299,10 @@ def update_preproc_plots(params):
 
 def save_figure_to_png(fig, filepath):
     """
-    Save a matplotlib figure to a PNG file and close it, so batch runs don't accumulate open figures.
+    Save a matplotlib figure to a PNG file.
 
     Args:
         fig (matplotlib.figure.Figure): The figure object to save.
         filepath (str): The full path where the PNG file should be saved.
     """
     fig.savefig(filepath, dpi=300, bbox_inches='tight')
-    plt.close(fig)
