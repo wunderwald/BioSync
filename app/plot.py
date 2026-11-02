@@ -296,11 +296,11 @@ def update_preproc_plots(params):
 
 def save_figure_to_png(fig, filepath):
     """
-    Save a matplotlib figure to a PNG file.
-    
+    Save a matplotlib figure to a PNG file and close it, so batch runs don't accumulate open figures.
+
     Args:
         fig (matplotlib.figure.Figure): The figure object to save.
         filepath (str): The full path where the PNG file should be saved.
     """
     fig.savefig(filepath, dpi=300, bbox_inches='tight')
-    #plt.close(fig)
+    plt.close(fig)
