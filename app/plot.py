@@ -55,6 +55,15 @@ def plot_message(text):
     fig.text(0.5, 0.5, text, ha='center', va='center', wrap=True, color='#777777')
     return fig
 
+def _hist_range(values, low, high):
+    """
+    A fixed range for a histogram, widened to include every value. Without it, values that differ only by
+    rounding make bins narrower than numbers can be, and the histogram fails.
+    """
+    if len(values) == 0:
+        return (low, high)
+    return (min(low, float(np.min(values))), max(high, float(np.max(values))))
+
 def plot_windowed_cross_correlation(wxc_data, window_size, max_lag, step_size, signal_a, signal_b, show_sigmoid_correlations=False, use_lag_filter=False, lag_filter_min=None, lag_filter_max=None):
     """
     Create and return a figure plotting the wxc_data of the windowed cross-correlation.
@@ -111,9 +120,10 @@ def plot_windowed_cross_correlation(wxc_data, window_size, max_lag, step_size, s
     ax1.set_ylabel('r_max')
     ax1.set_title('Peak correlation per window')
     ax1.grid()
+    r_max_hist_values = _without_flat_windows(r_max_values)
     num_bins_r_max = max(1, min(len(r_max_values)//3, 40))
     ax1_hist = fig.add_subplot(ax1_gs_inner[1])
-    ax1_hist.hist(_without_flat_windows(r_max_values), bins=num_bins_r_max, orientation='vertical', color='black', alpha=1)
+    ax1_hist.hist(r_max_hist_values, bins=num_bins_r_max, range=_hist_range(r_max_hist_values, -1, 1), orientation='vertical', color='black', alpha=1)
     ax1_hist.set_xlim(-1, 1)
 
     # Plot corresponding lags over time
@@ -123,9 +133,10 @@ def plot_windowed_cross_correlation(wxc_data, window_size, max_lag, step_size, s
     ax2.set_ylabel('tau_max')
     ax2.set_title('Lag of peak correlation per window')
     ax2.grid()
+    tau_max_hist_values = _without_flat_windows(tau_max_values)
     num_bins_tau_max = max(1, min(len(tau_max_values)//4, max_lag))
     ax2_hist = fig.add_subplot(ax2_gs_inner[1])
-    ax2_hist.hist(_without_flat_windows(tau_max_values), bins=num_bins_tau_max, orientation='vertical', color='black', alpha=1)
+    ax2_hist.hist(tau_max_hist_values, bins=num_bins_tau_max, range=_hist_range(tau_max_hist_values, _min_lag, _max_lag), orientation='vertical', color='black', alpha=1)
     ax2_hist.set_xlim(-max_lag, max_lag)
 
     # Return the figure

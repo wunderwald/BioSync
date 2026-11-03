@@ -180,3 +180,16 @@ def test_dfa_text_doesnt_show_results_for_invalid_settings(plotting, monkeypatch
     corr_plot.update_dfa_text()
     assert "0.70" not in plotting.val_dfa_text.get()
     assert "Check the correlation settings." in plotting.val_dfa_text.get()
+
+
+@pytest.mark.parametrize("r_max, tau_max", [(0.5, 3), (1.0000000000000002, 0), (-1.2, -30)])
+def test_plot_handles_windows_with_almost_equal_values(r_max, tau_max):
+    import io
+    import plot
+    windows = [
+        {'start_idx': index * 75, 'center_idx': index * 75 + 75, 'correlations': [r_max + index * 1e-17] * 61,
+         'correlations_sigmoid': [0.1] * 61, 'r_max': r_max + index * 1e-17, 'tau_max': tau_max,
+         'r_max_sigmoid': 0.1, 'tau_max_sigmoid': tau_max}
+        for index in range(30)
+    ]
+    plot.plot_windowed_cross_correlation(windows, 150, 30, 75, [0.0] * 2400, [0.0] * 2400).savefig(io.BytesIO())
