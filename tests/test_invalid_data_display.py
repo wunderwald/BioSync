@@ -201,3 +201,16 @@ def test_histograms_have_narrow_bars_however_few_values_differ(tau_values):
     assert max(bar.get_width() for bar in r_max_bars) == pytest.approx(plot.R_MAX_BIN_WIDTH)
     assert max(bar.get_width() for bar in tau_bars) == pytest.approx(1)
     assert sorted(bar.get_x() + 0.5 for bar in tau_bars) == sorted(set(tau_values))     # each lag has its own bar
+
+
+def test_histograms_count_every_window_also_beyond_the_axis_range():
+    import plot
+    values = [(-1.2, -30), (1.0000000000000002, 0), (0.5, 3), (1.05, 2)]     # r beyond 1 can come from the estimator
+    windows = [
+        {'start_idx': index * 75, 'center_idx': index * 75 + 75, 'correlations': [r] * 61, 'correlations_sigmoid': [0.1] * 61,
+         'r_max': r, 'tau_max': tau, 'r_max_sigmoid': 0.1, 'tau_max_sigmoid': tau}
+        for index, (r, tau) in enumerate(values)
+    ]
+    fig = plot.plot_windowed_cross_correlation(windows, 150, 30, 75, [0.0] * 600, [0.0] * 600)
+    for bars in _histogram_bars(fig):
+        assert sum(bar.get_height() for bar in bars) == len(values)
