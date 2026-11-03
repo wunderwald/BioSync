@@ -115,7 +115,9 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     )
     dropdown_select_column.grid(row=7, column=0, sticky="w", padx=10, pady=5)
 
-    error_label_input_data = tk.CTkLabel(subgroup_input_data, text='Data is invalid.', text_color='red')
+    error_label_input_data = tk.CTkLabel(
+        subgroup_input_data, text='Data is invalid.', text_color='red', justify='left', wraplength=TAB_WIDTH - 20
+    )
     # initially hidden — shown reactively via gui_updates
 
     # Pre-process subgroup
@@ -455,6 +457,8 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
         'group_plot':                          group_plot,
         'label_dir_picker':                    label_dir_picker,
         'error_label_input_data':              error_label_input_data,
+        'dropdown_select_sheet':               dropdown_select_sheet,
+        'dropdown_select_column':              dropdown_select_column,
         'label_window_size_seconds':           label_window_size_seconds,
         'label_step_size_seconds':             label_step_size_seconds,
         'label_max_lag_seconds':               label_max_lag_seconds,

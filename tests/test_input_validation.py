@@ -100,7 +100,7 @@ def test_data_that_fails_preprocessing_is_marked_invalid(loaded_columns, monkeyp
 
     assert not loaded_columns.val_INPUT_DATA_VALID.get()
     assert state.dat_physiological_data["signal_a"] == []
-    assert state.dat_plot_data["fig"] is not None
+    assert "do not overlap" in loaded_columns.val_input_error.get()
 
 
 def test_lag_filter_checkbox_recomputes(settings):

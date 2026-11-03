@@ -26,8 +26,7 @@ def setup_traces():
     state.val_selected_file_a.trace_add('write', update_dir_picker_label)
     state.val_selected_file_b.trace_add('write', update_dir_picker_label)
 
-    state.val_selected_sheet.trace_add('write', update_input_data_validation_error)
-    state.val_INPUT_DATA_VALID.trace_add('write', update_input_data_validation_error)
+    state.val_input_error.trace_add('write', update_input_data_validation_error)
 
     state.val_WINDOW_SIZE_VALID.trace_add('write', update_window_size_entry_on_validation)
     state.val_MAX_LAG_VALID.trace_add('write', update_max_lag_entry_on_validation)
@@ -108,15 +107,26 @@ def update_dir_picker_label(*args):
     )
 
 
+INVALID_DROPDOWN_COLORS = {'fg_color': '#b03a2e', 'button_color': '#922b21', 'button_hover_color': '#7b241c'}
+_normal_dropdown_colors = {}
+
+
+def _set_dropdowns_invalid(invalid):
+    for key in ('dropdown_select_sheet', 'dropdown_select_column'):
+        dropdown = _w[key]
+        if key not in _normal_dropdown_colors:
+            _normal_dropdown_colors[key] = {name: dropdown.cget(name) for name in INVALID_DROPDOWN_COLORS}
+        dropdown.configure(**(INVALID_DROPDOWN_COLORS if invalid else _normal_dropdown_colors[key]))
+
+
 def update_input_data_validation_error(*args):
-    input_data_is_valid = (
-        state.val_selected_sheet.get() == '- None -' or
-        state.val_INPUT_DATA_VALID.get()
-    )
-    if input_data_is_valid:
-        _w['error_label_input_data'].grid_forget()
-    else:
+    reason = state.val_input_error.get()
+    _set_dropdowns_invalid(bool(reason))
+    if reason:
+        _w['error_label_input_data'].configure(text=f"Data is invalid: {reason}")
         _w['error_label_input_data'].grid(row=10, column=0, columnspan=2, sticky="w", padx=10, pady=0)
+    else:
+        _w['error_label_input_data'].grid_forget()
 
 
 # ---------------------------------------------------------------------------

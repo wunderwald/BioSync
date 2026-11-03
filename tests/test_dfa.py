@@ -182,6 +182,7 @@ def test_text_without_data_and_in_standard_mode():
 @pytest.mark.parametrize("windowed, expected_second_line", [(True, "No valid results yet."), (False, None)])
 def test_window_text_follows_the_correlation_type(fake_state, monkeypatch, windowed, expected_second_line):
     fake_state.val_checkbox_windowed_xcorr.set(windowed)
+    fake_state.val_CORRELATION_SETTINGS_VALID.set(True)
     monkeypatch.setitem(state.dat_correlation_data, "dfa_signals", SIGNALS)
     monkeypatch.setitem(state.dat_correlation_data, "dfa_windows", None)
     corr_plot.update_dfa_text()

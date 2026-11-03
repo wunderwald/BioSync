@@ -10,7 +10,6 @@ from analysis import preprocess_signals, signal_dfa
 from signal_processing import guess_is_event_based
 from batch_processing import batch_process, find_result_files, random_pair_analysis, remove_result_files
 from export import export_sxcorr_data, export_wxcorr_data, export_random_pair_data
-from plot import plot_init
 
 import corr_plot
 import state
@@ -257,13 +256,10 @@ def read_xlsx_files():
 def update_sheet_names():
     wb_a = state.dat_workbook_data["workbook_a"]
     wb_b = state.dat_workbook_data["workbook_b"]
-    if not wb_a or not wb_b:
-        return
-    names_a = xlsx.get_sheet_names(wb_a)
-    names_b = xlsx.get_sheet_names(wb_b)
-    state.dat_workbook_data["sheet_names"] = [name for name in names_a if name in names_b]
-    if not state.dat_workbook_data["sheet_names"]:
-        messagebox.showwarning("No common sheet", "The two files have no sheet with the same name.")
+    state.dat_workbook_data["sheet_names"] = []
+    if wb_a and wb_b:
+        names_b = xlsx.get_sheet_names(wb_b)
+        state.dat_workbook_data["sheet_names"] = [name for name in xlsx.get_sheet_names(wb_a) if name in names_b]
     update_dropdown_options(
         _dropdowns['sheet'],
         state.val_selected_sheet,
@@ -286,8 +282,6 @@ def update_column_names():
         state.dat_workbook_data["column_names"] = [
             name for name in state.dat_workbook_data["columns_a"] if name in state.dat_workbook_data["columns_b"]
         ]
-        if not state.dat_workbook_data["column_names"]:
-            messagebox.showwarning("No common column", f"The two files have no column with the same name in sheet '{sheet}'.")
 
     update_dropdown_options(_dropdowns['column'], state.val_selected_column, state.dat_workbook_data["column_names"])
 
@@ -296,47 +290,58 @@ def update_column_names():
 # DATA PRE-PROCESSING
 # ---------------------------------------------------------------------------
 
+def set_invalid_data(reason):
+    """
+    Clears the signals and all results computed from them, so that nothing out of date can be shown or exported.
+    reason says why the data can't be used, and is shown under the dropdowns. It is empty when nothing is loaded.
+    """
+    d = state.dat_physiological_data
+    for key in ("signal_a", "signal_b", "signal_a_std", "signal_b_std", "raw_signal_a", "raw_signal_b"):
+        d[key] = []
+    state.dat_correlation_data['dfa_signals'] = None
+    clear_correlation_data()
+    state.val_input_error.set(reason)
+    state.val_INPUT_DATA_VALID.set(False)
+
+
 def preprocess_data():
     d = state.dat_physiological_data
+    files_loaded = bool(state.dat_workbook_data.get("workbook_a") and state.dat_workbook_data.get("workbook_b"))
+    sheet = state.val_selected_sheet.get()
+    column = state.val_selected_column.get()
 
-    if not state.val_selected_sheet.get() or state.val_selected_sheet.get() == '- None -':
-        state.val_INPUT_DATA_VALID.set(False)
+    if not sheet or sheet == '- None -':
+        set_invalid_data("The two files have no sheet with the same name." if files_loaded else "")
         return
-    if not state.val_selected_column.get() or state.val_selected_column.get() == '- None -':
-        state.val_INPUT_DATA_VALID.set(False)
+    if not column or column == '- None -':
+        set_invalid_data(f"The two files have no column with the same name in sheet '{sheet}'.")
         return
 
-    d["raw_signal_a"] = state.dat_workbook_data["columns_a"][state.val_selected_column.get()]
-    d["raw_signal_b"] = state.dat_workbook_data["columns_b"][state.val_selected_column.get()]
-
-    if not (utils.is_numeric_array(d["raw_signal_a"]) and utils.is_numeric_array(d["raw_signal_b"])):
-        state.val_INPUT_DATA_VALID.set(False)
+    raw_signal_a = state.dat_workbook_data["columns_a"][column]
+    raw_signal_b = state.dat_workbook_data["columns_b"][column]
+    if not (utils.is_numeric_array(raw_signal_a) and utils.is_numeric_array(raw_signal_b)):
+        set_invalid_data(f"Column '{column}' contains values that aren't numbers, or empty cells.")
         return
 
     try:
         signal_a, signal_b, signal_a_std, signal_b_std = preprocess_signals(
-            d["raw_signal_a"], d["raw_signal_b"], state.analysis_config()
+            raw_signal_a, raw_signal_b, state.analysis_config()
         )
-        d["signal_a"]     = signal_a
-        d["signal_b"]     = signal_b
-        d["signal_a_std"] = signal_a_std
-        d["signal_b_std"] = signal_b_std
-        state.dat_correlation_data['dfa_signals'] = signal_dfa(d["raw_signal_a"], d["raw_signal_b"], state.analysis_config())
-        state.val_data_length.set(len(signal_a))
-        state.val_INPUT_DATA_VALID.set(True)
-        validation.check_all_settings()
-
     except Exception as e:
-        print(f"Data is invalid [{e}]")
-        state.dat_correlation_data['dfa_signals'] = None
-        d["signal_a"]     = []
-        d["signal_b"]     = []
-        d["signal_a_std"] = []
-        d["signal_b_std"] = []
-        d["raw_signal_a"] = []
-        d["raw_signal_b"] = []
-        state.dat_plot_data['fig'] = plot_init(is_retina=state.RETINA)
-        state.val_INPUT_DATA_VALID.set(False)
+        set_invalid_data(str(e))
+        return
+
+    d["raw_signal_a"] = raw_signal_a
+    d["raw_signal_b"] = raw_signal_b
+    d["signal_a"]     = signal_a
+    d["signal_b"]     = signal_b
+    d["signal_a_std"] = signal_a_std
+    d["signal_b_std"] = signal_b_std
+    state.dat_correlation_data['dfa_signals'] = signal_dfa(raw_signal_a, raw_signal_b, state.analysis_config())
+    state.val_data_length.set(len(signal_a))
+    state.val_input_error.set("")
+    state.val_INPUT_DATA_VALID.set(True)
+    validation.check_all_settings()
 
 
 def clear_correlation_data():
@@ -396,13 +401,14 @@ def open_dir_picker():
         )
         return
     file_a, file_b, sheets_match = xlsx.choose_dyad_files(dir_path, xlsx_files)
-    workbooks = {}
+    workbooks = {"workbook_a": None, "workbook_b": None}
+    read_error = None
     for key, file_name in (("workbook_a", file_a), ("workbook_b", file_b)):
         try:
             workbooks[key] = xlsx.read_xlsx(os.path.join(dir_path, file_name))
         except Exception as e:
-            messagebox.showerror("Can't read file", f"{file_name} can't be read as an xlsx file ({e}).")
-            return
+            read_error = f"{file_name} can't be read as an xlsx file ({e})."
+            break
     if len(xlsx_files) > 2:
         reason = "the first two with the same sheets" if sheets_match else "the first two, because no two have the same sheets"
         messagebox.showwarning(
@@ -414,6 +420,8 @@ def open_dir_picker():
     state.val_selected_file_b.set(os.path.join(dir_path, file_b))
     state.dat_workbook_data.update(workbooks)
     show_loaded_workbooks()
+    if read_error:
+        set_invalid_data(read_error)
     state.PARAMS_CHANGED()
 
 

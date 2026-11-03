@@ -1,0 +1,182 @@
+"""
+When data can't be used, the window must say why, and must not show or keep anything computed from older data.
+"""
+import numpy as np
+import pytest
+
+import callbacks
+import corr_plot
+import gui_updates
+import state
+
+
+@pytest.fixture
+def data(fake_state, monkeypatch):
+    """A loaded dyad with an IBI, a text and a too-short column, with results from an earlier load."""
+    ibi = [500, *(800 + 50 * np.random.default_rng(0).normal(size=400)), 300]
+    columns = {"IBI": ibi, "Text": ["a"] * 10, "Gap": [800, None, 800], "Short": [0, 800, 800, 300]}
+    columns_b = {**columns, "Short": [100000, 800, 800, 300]}
+    monkeypatch.setitem(state.dat_workbook_data, "workbook_a", {"S": []})
+    monkeypatch.setitem(state.dat_workbook_data, "workbook_b", {"S": []})
+    monkeypatch.setitem(state.dat_workbook_data, "columns_a", columns)
+    monkeypatch.setitem(state.dat_workbook_data, "columns_b", columns_b)
+    for key in ("raw_signal_a", "raw_signal_b", "signal_a", "signal_b", "signal_a_std", "signal_b_std"):
+        monkeypatch.setitem(state.dat_physiological_data, key, [1.0, 2.0])
+    for key, value in (("wxcorr", [{}]), ("sxcorr", {"corr": []}), ("dfa_signals", {"alpha_a": 1}), ("dfa_windows", {"x": 1})):
+        monkeypatch.setitem(state.dat_correlation_data, key, value)
+    monkeypatch.setattr(callbacks.validation, "check_all_settings", lambda: None)
+    fake_state.val_selected_sheet.set("S")
+    fake_state.val_checkbox_eb.set(True)
+    fake_state.val_INPUT_DATA_VALID.set(True)
+    fake_state.val_input_error.set("")
+    return fake_state
+
+
+def _assert_cleared():
+    assert all(state.dat_physiological_data[key] == [] for key in ("signal_a", "signal_b", "raw_signal_a"))
+    assert state.dat_correlation_data["wxcorr"] == [] and state.dat_correlation_data["sxcorr"] == []
+    assert state.dat_correlation_data["dfa_signals"] is None and state.dat_correlation_data["dfa_windows"] is None
+
+
+@pytest.mark.parametrize("sheet, column, reason", [
+    ("S", "Text", "contains values that aren't numbers"),
+    ("S", "Gap", "contains values that aren't numbers, or empty cells"),
+    ("S", "Short", "do not overlap"),
+    ("S", "- None -", "no column with the same name in sheet 'S'"),
+    ("- None -", "IBI", "no sheet with the same name"),
+])
+def test_invalid_data_is_cleared_and_says_why(data, sheet, column, reason):
+    data.val_selected_sheet.set(sheet)
+    data.val_selected_column.set(column)
+    callbacks.preprocess_data()
+    assert data.val_INPUT_DATA_VALID.get() is False
+    assert reason in data.val_input_error.get()
+    _assert_cleared()
+
+
+def test_nothing_loaded_has_no_reason(data, monkeypatch):
+    monkeypatch.setitem(state.dat_workbook_data, "workbook_a", None)
+    data.val_selected_sheet.set("- None -")
+    callbacks.preprocess_data()
+    assert data.val_input_error.get() == ""
+    _assert_cleared()
+
+
+def test_valid_data_clears_the_reason(data):
+    data.val_input_error.set("old reason")
+    data.val_selected_column.set("IBI")
+    callbacks.preprocess_data()
+    assert data.val_INPUT_DATA_VALID.get() is True and data.val_input_error.get() == ""
+    assert len(state.dat_physiological_data["signal_a"]) > 100
+
+
+class FakeDropdown:
+    def __init__(self):
+        self.colors = {'fg_color': 'grey', 'button_color': 'darkgrey', 'button_hover_color': 'black'}
+
+    def cget(self, name):
+        return self.colors[name]
+
+    def configure(self, **colors):
+        self.colors.update(colors)
+
+
+class FakeLabel:
+    def __init__(self):
+        self.text, self.visible = None, False
+
+    def configure(self, text):
+        self.text = text
+
+    def grid(self, **kwargs):
+        self.visible = True
+
+    def grid_forget(self):
+        self.visible = False
+
+
+@pytest.fixture
+def widgets(fake_state, monkeypatch):
+    widgets = {'dropdown_select_sheet': FakeDropdown(), 'dropdown_select_column': FakeDropdown(), 'error_label_input_data': FakeLabel()}
+    monkeypatch.setattr(gui_updates, "_w", widgets)
+    monkeypatch.setattr(gui_updates, "_normal_dropdown_colors", {})
+    return widgets
+
+
+def test_reason_turns_the_dropdowns_red_and_shows_it(fake_state, widgets):
+    fake_state.val_input_error.set("Column 'Text' contains values that aren't numbers.")
+    gui_updates.update_input_data_validation_error()
+    assert widgets['dropdown_select_sheet'].colors == gui_updates.INVALID_DROPDOWN_COLORS
+    assert widgets['dropdown_select_column'].colors == gui_updates.INVALID_DROPDOWN_COLORS
+    assert widgets['error_label_input_data'].visible
+    assert widgets['error_label_input_data'].text == "Data is invalid: Column 'Text' contains values that aren't numbers."
+
+
+def test_valid_data_restores_the_normal_colors(fake_state, widgets):
+    fake_state.val_input_error.set("reason")
+    gui_updates.update_input_data_validation_error()
+    fake_state.val_input_error.set("")
+    gui_updates.update_input_data_validation_error()
+    assert widgets['dropdown_select_column'].colors == {'fg_color': 'grey', 'button_color': 'darkgrey', 'button_hover_color': 'black'}
+    assert not widgets['error_label_input_data'].visible
+
+
+def _figure_text(fig):
+    return " ".join(text.get_text() for text in fig.texts)
+
+
+@pytest.fixture
+def plotting(fake_state, monkeypatch):
+    monkeypatch.setitem(state.dat_plot_data, "fig", "old figure")
+    monkeypatch.setattr(state, "RETINA", True)
+    fake_state.val_CORRELATION_SETTINGS_VALID.set(True)
+    fake_state.val_CORRELATION_SETTINGS_VALID_SXC.set(True)
+    monkeypatch.setitem(state.dat_correlation_data, "wxcorr", [])
+    monkeypatch.setitem(state.dat_correlation_data, "sxcorr", [])
+    return fake_state
+
+
+@pytest.mark.parametrize("windowed", [True, False])
+def test_invalid_data_replaces_the_correlation_plot_with_the_reason(plotting, windowed):
+    plotting.val_CURRENT_TAB.set("Correlation")
+    plotting.val_checkbox_windowed_xcorr.set(windowed)
+    plotting.val_INPUT_DATA_VALID.set(False)
+    plotting.val_input_error.set("The two recordings do not overlap in time.")
+    corr_plot.update_plot()
+    assert _figure_text(state.dat_plot_data["fig"]) == "No results: The two recordings do not overlap in time."
+
+
+@pytest.mark.parametrize("windowed, var", [(True, "val_CORRELATION_SETTINGS_VALID"), (False, "val_CORRELATION_SETTINGS_VALID_SXC")])
+def test_invalid_settings_replace_the_plot_instead_of_keeping_another(plotting, windowed, var):
+    plotting.val_CURRENT_TAB.set("Correlation")
+    plotting.val_checkbox_windowed_xcorr.set(windowed)
+    plotting.val_INPUT_DATA_VALID.set(True)
+    getattr(plotting, var).set(False)
+    corr_plot.update_plot()
+    assert "check the correlation settings" in _figure_text(state.dat_plot_data["fig"])
+
+
+def test_invalid_data_shows_its_reason_on_the_input_tab(plotting):
+    plotting.val_CURRENT_TAB.set("Input Data")
+    plotting.val_INPUT_DATA_VALID.set(False)
+    plotting.val_input_error.set("Column 'Text' contains values that aren't numbers.")
+    corr_plot.update_plot()
+    assert _figure_text(state.dat_plot_data["fig"]) == "Column 'Text' contains values that aren't numbers."
+
+
+def test_nothing_loaded_shows_an_empty_input_plot(plotting):
+    plotting.val_CURRENT_TAB.set("Input Data")
+    plotting.val_INPUT_DATA_VALID.set(False)
+    plotting.val_input_error.set("")
+    corr_plot.update_plot()
+    assert _figure_text(state.dat_plot_data["fig"]) == ""
+
+
+def test_dfa_text_doesnt_show_results_for_invalid_settings(plotting, monkeypatch):
+    plotting.val_checkbox_windowed_xcorr.set(True)
+    plotting.val_CORRELATION_SETTINGS_VALID.set(False)
+    monkeypatch.setitem(state.dat_correlation_data, "dfa_signals", {'alpha_a': 1.0, 'alpha_b': 1.0, 'note': None})
+    monkeypatch.setitem(state.dat_correlation_data, "dfa_windows", {'alpha_window_averages': 0.7, 'alpha_per_lag': [], 'note': None})
+    corr_plot.update_dfa_text()
+    assert "0.70" not in plotting.val_dfa_text.get()
+    assert "Check the correlation settings." in plotting.val_dfa_text.get()

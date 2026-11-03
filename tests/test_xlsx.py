@@ -123,10 +123,10 @@ def test_default_sheet_is_the_first_one_both_files_share(gui_files, monkeypatch)
     assert gui_files.warnings == []
 
 
-def test_files_without_a_common_sheet_give_a_warning_instead_of_a_crash(gui_files, monkeypatch):
+def test_files_without_a_common_sheet_leave_nothing_selected_instead_of_crashing(gui_files, monkeypatch):
     _load_sheets(monkeypatch, ["A"], ["B"])
     assert gui_files.val_selected_sheet.get() == "- None -"
-    assert gui_files.warnings == ["No common sheet"]
+    assert gui_files.warnings == []     # the reason is shown under the dropdowns instead
 
 
 def _load_columns(gui_files, monkeypatch, rows_a, rows_b, headers=True):
@@ -148,11 +148,11 @@ def test_dropdown_lists_the_columns_both_files_have_in_file_order(gui_files, mon
     assert gui_files.warnings == []
 
 
-def test_files_without_a_common_column_give_a_warning_and_no_selection(gui_files, monkeypatch):
+def test_files_without_a_common_column_leave_nothing_selected(gui_files, monkeypatch):
     _load_columns(gui_files, monkeypatch, [["a"], [1]], [["b"], [2]])
     assert callbacks._dropdowns["column"].values == []
     assert gui_files.val_selected_column.get() == "- None -"
-    assert gui_files.warnings == ["No common column"]
+    assert gui_files.warnings == []     # the reason is shown under the dropdowns instead
 
 
 def test_column_with_only_a_header_in_one_file_is_not_common(gui_files, monkeypatch):

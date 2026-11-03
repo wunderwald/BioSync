@@ -1,6 +1,6 @@
 import os
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from plot import plot_init, update_sxcorr_plots, update_wxcorr_plots, update_preproc_plots
+from plot import plot_init, plot_message, update_sxcorr_plots, update_wxcorr_plots, update_preproc_plots
 from analysis import correlate_signals, format_dfa, windowed_dfa
 
 import state
@@ -100,9 +100,19 @@ def update_plot(*args):
         _update_sxcorr_plot()
 
 
+def _no_results_message(settings_valid):
+    """Why there is no result to plot, or None if there is one."""
+    if not state.val_INPUT_DATA_VALID.get():
+        return "No results: " + (state.val_input_error.get() or "no data loaded.")
+    if not settings_valid:
+        return "No results: check the correlation settings."
+    return None
+
+
 def _update_preprocess_plot():
     if not state.val_INPUT_DATA_VALID.get():
-        state.dat_plot_data["fig"] = plot_init(is_retina=state.RETINA)
+        reason = state.val_input_error.get()
+        state.dat_plot_data["fig"] = plot_message(reason) if reason else plot_init(is_retina=state.RETINA)
         return
 
     use_std  = state.val_checkbox_standardise.get()
@@ -123,7 +133,9 @@ def _update_preprocess_plot():
 
 
 def _update_wxcorr_plot():
-    if not state.val_CORRELATION_SETTINGS_VALID.get() or not state.dat_correlation_data['wxcorr']:
+    message = _no_results_message(state.val_CORRELATION_SETTINGS_VALID.get())
+    if message or not state.dat_correlation_data['wxcorr']:
+        state.dat_plot_data["fig"] = plot_message(message or "No results.")
         return
 
     use_std  = state.val_checkbox_standardise.get()
@@ -145,7 +157,9 @@ def _update_wxcorr_plot():
 
 
 def _update_sxcorr_plot():
-    if not state.val_CORRELATION_SETTINGS_VALID_SXC.get() or not state.dat_correlation_data['sxcorr']:
+    message = _no_results_message(state.val_CORRELATION_SETTINGS_VALID_SXC.get())
+    if message or not state.dat_correlation_data['sxcorr']:
+        state.dat_plot_data["fig"] = plot_message(message or "No results.")
         return
 
     use_std  = state.val_checkbox_standardise.get()
@@ -182,10 +196,10 @@ def update_canvas():
 
 def update_dfa_text():
     windowed = state.val_checkbox_windowed_xcorr.get()
-    state.val_dfa_text.set(format_dfa(
-        state.dat_correlation_data.get('dfa_signals'),
-        state.dat_correlation_data.get('dfa_windows') or NO_WINDOWED_DFA if windowed else None,
-    ))
+    dfa_windows = state.dat_correlation_data.get('dfa_windows') or NO_WINDOWED_DFA
+    if not state.val_CORRELATION_SETTINGS_VALID.get():
+        dfa_windows = {**NO_WINDOWED_DFA, 'note': 'Check the correlation settings.'}
+    state.val_dfa_text.set(format_dfa(state.dat_correlation_data.get('dfa_signals'), dfa_windows if windowed else None))
 
 
 def UPDATE(*args):

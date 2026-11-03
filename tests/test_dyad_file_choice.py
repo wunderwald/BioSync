@@ -191,15 +191,19 @@ def test_folder_with_too_few_files_keeps_the_loaded_dyad_and_says_so(picker, tmp
 
 
 @pytest.mark.parametrize("broken", ["a.xlsx", "b.xlsx"])
-def test_unreadable_file_keeps_the_loaded_dyad_and_says_so(picker, tmp_path, broken):
+def test_unreadable_file_clears_the_data_and_gives_the_reason(picker, tmp_path, monkeypatch, broken):
     folder = tmp_path / "new"
     folder.mkdir()
     for name in ("a.xlsx", "b.xlsx"):
         _write_sheets(folder / name, ["S"])
     (folder / broken).write_text("not a spreadsheet")
+    cleared = []
+    monkeypatch.setattr(callbacks, "set_invalid_data", lambda reason: cleared.append(reason))
     picker.choose(folder)
-    _assert_old_dyad_is_kept(picker)
-    assert picker.messages[-1][0] == "showerror" and broken in picker.messages[-1][1]
+    assert picker.val_selected_dyad_dir.get() == str(folder)     # nothing of the old dyad stays
+    assert callbacks.state.dat_workbook_data["workbook_a"] is None or callbacks.state.dat_workbook_data["workbook_b"] is None
+    assert len(cleared) == 1 and broken in cleared[0] and "can't be read" in cleared[0]
+    assert picker.messages == []
 
 
 def test_good_folder_replaces_the_loaded_dyad(picker, tmp_path):

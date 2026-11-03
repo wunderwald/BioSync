@@ -49,6 +49,12 @@ def _without_flat_windows(values):
     values = np.asarray(values, dtype=float)
     return values[~np.isnan(values)]
 
+def plot_message(text):
+    """An empty figure with a message, shown instead of a plot that would be out of date."""
+    fig = Figure(figsize=SCALING_PARAMS['FIGSIZE'], dpi=SCALING_PARAMS['DPI'])
+    fig.text(0.5, 0.5, text, ha='center', va='center', wrap=True, color='#777777')
+    return fig
+
 def plot_windowed_cross_correlation(wxc_data, window_size, max_lag, step_size, signal_a, signal_b, show_sigmoid_correlations=False, use_lag_filter=False, lag_filter_min=None, lag_filter_max=None):
     """
     Create and return a figure plotting the wxc_data of the windowed cross-correlation.
