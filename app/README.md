@@ -1,4 +1,4 @@
-# BioSync — App
+# BioSync: App
 by [Moritz Wunderwald](mailto:code@moritzwunderwald.de), 2025-2026
 
 Interactive visual toolbox for windowed cross-correlation analysis, optimized for IBI and EDA biosignal data. Load dyad recordings, tune parameters, inspect results, and export or batch-process datasets.
