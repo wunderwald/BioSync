@@ -7,10 +7,35 @@ import callbacks as cb
 
 DROPDOWN_WIDTH = 240
 TAB_WIDTH = 410
-TABVIEW_WIDTH = 422
+SCROLLBAR_SPACE = 20    # room for a tab's scrollbar, which appears when its settings don't fit the window
+TABVIEW_WIDTH = 422 + SCROLLBAR_SPACE
 PATH_LABEL_WRAP = 220  # long folder names wrap instead of running out of the fixed-size tabview
 PARAMETER_ENTRY_WIDTH = 80
 PARAMETER_SECONDS_WIDTH = 60  # room for values like -19.8 s, so that the panel keeps its width
+
+
+def needs_scrollbar(content_height, visible_height):
+    return content_height > visible_height
+
+
+def _scrollable(tab):
+    """
+    Returns a frame inside the tab that scrolls when its content doesn't fit, for example on a 1280x800 screen.
+    The window can't be resized, so without it the lower settings and the Cancel button would be out of reach.
+    The scrollbar is only shown when it is needed.
+    """
+    content = tk.CTkScrollableFrame(tab, fg_color='transparent', width=TAB_WIDTH, corner_radius=0)
+    content.pack(fill='both', expand=True)
+
+    def show_scrollbar_if_needed(event=None):
+        if needs_scrollbar(content.winfo_reqheight(), content._parent_canvas.winfo_height()):
+            content._scrollbar.grid()
+        else:
+            content._scrollbar.grid_remove()
+
+    content.bind('<Configure>', show_scrollbar_if_needed, add='+')
+    content._parent_canvas.bind('<Configure>', show_scrollbar_if_needed, add='+')
+    return content
 
 
 def _parameter_row(parent, row, name, variable, validator):
@@ -66,9 +91,9 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     # GUI PARAMETER GROUP
     # -------------------
 
-    tab_input_data   = group_params_tabview.add("Input Data")
-    tab_correlation  = group_params_tabview.add("Correlation")
-    tab_export_batch = group_params_tabview.add("Export & Batch")
+    tab_input_data   = _scrollable(group_params_tabview.add("Input Data"))
+    tab_correlation  = _scrollable(group_params_tabview.add("Correlation"))
+    tab_export_batch = _scrollable(group_params_tabview.add("Export & Batch"))
     group_params_tabview.configure(command=cb.on_tab_change)
     for tab in (tab_input_data, tab_correlation, tab_export_batch):
         tab.grid_columnconfigure(0, minsize=TAB_WIDTH)

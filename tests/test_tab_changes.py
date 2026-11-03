@@ -60,6 +60,12 @@ def test_tabview_has_a_fixed_size():
     assert "tab.grid_columnconfigure(0, minsize=TAB_WIDTH)" in source
 
 
+
+@pytest.mark.parametrize("content, visible, expected", [(700, 652, True), (652, 652, False), (500, 815, False)])
+def test_scrollbar_only_when_the_settings_dont_fit(content, visible, expected):
+    assert layout.needs_scrollbar(content, visible) == expected
+
+
 @pytest.mark.parametrize("platform, version, affected", [
     ("darwin", "8.6.12", True), ("darwin", "8.6.13", False), ("darwin", "8.6.15", False), ("darwin", "9.0.1", False),
     ("darwin", "8.5.9", True), ("win32", "8.6.12", False), ("linux", "8.6.12", False),
