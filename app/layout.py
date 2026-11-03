@@ -124,12 +124,6 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     )
     dropdown_select_sheet.grid(row=4, column=0, sticky="w", padx=10, pady=5)
 
-    checkbox_data_has_headers = tk.CTkCheckBox(
-        subgroup_input_data, text='columns have headers',
-        variable=state.val_checkbox_data_has_headers
-    )
-    checkbox_data_has_headers.grid(row=8, column=0, sticky="w", padx=10, pady=5)
-
     label_select_column = tk.CTkLabel(subgroup_input_data, text="Select Column", font=("Arial", 14, "bold"))
     label_select_column.grid(row=6, column=0, sticky="w", padx=10, pady=5)
 
@@ -139,6 +133,12 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
         variable=state.val_selected_column, width=DROPDOWN_WIDTH, dynamic_resizing=False
     )
     dropdown_select_column.grid(row=7, column=0, sticky="w", padx=10, pady=5)
+
+    checkbox_data_has_headers = tk.CTkCheckBox(
+        subgroup_input_data, text='columns have headers',
+        variable=state.val_checkbox_data_has_headers
+    )
+    checkbox_data_has_headers.grid(row=8, column=0, sticky="w", padx=10, pady=5)
 
     error_label_input_data = tk.CTkLabel(
         subgroup_input_data, text='Data is invalid.', text_color='red', justify='left', wraplength=TAB_WIDTH - 20
