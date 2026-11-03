@@ -7,27 +7,35 @@ Interactive visual toolbox for windowed cross-correlation analysis, optimized fo
 
 ## Requirements
 
-- Python 3.11. Newer versions may work, but haven't been tested.
-- On macOS: Tk 8.6.13 or newer, which python.org installers include from Python 3.11.7. With Tk 8.6.12, the window can ignore clicks until its title bar is clicked ([python/cpython#110218](https://github.com/python/cpython/issues/110218)). To check your version:
+- **Python 3.11.9 from python.org** ([macOS](https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg), [Windows](https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe)). On Windows, tick **Add python.exe to PATH** in the installer.
+  - On macOS, Python before 3.11.7 includes Tk 8.6.12, which makes the window ignore clicks until its title bar is clicked ([python/cpython#110218](https://github.com/python/cpython/issues/110218)).
+  - Newer Python versions haven't been tested, and Python from Homebrew or the Microsoft Store doesn't work reliably.
+- Optional, for an easy start: [GitHub Desktop](https://desktop.github.com/download/) to download and update the code, and [VS Code](https://code.visualstudio.com/Download) to run it.
 
-  ```bash
-  python -c "import tkinter; print(tkinter.Tcl().eval('info patchlevel'))"
-  ```
+The commands below use `python3.11` on macOS. On Windows, use `py -3.11` instead.
+
+---
+
+## Getting the code
+
+Clone `https://github.com/wunderwald/BioSync`, for example in GitHub Desktop with **Add → Clone Repository…**, then open the folder in VS Code.
 
 ---
 
 ## Installation
 
+In a terminal (in VS Code: **Terminal → New Terminal**):
+
 ```bash
 cd app
-pip install -r requirements.txt
+python3.11 -m pip install -r requirements.txt
 ```
 
 Using a virtual environment is optional but recommended to keep dependencies isolated:
 
 ```bash
 cd app
-python -m venv .venv
+python3.11 -m venv .venv
 
 # activate (macOS / Linux)
 source .venv/bin/activate
@@ -35,7 +43,7 @@ source .venv/bin/activate
 # activate (Windows)
 .venv\Scripts\activate
 
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 The environment only needs to be created once. On subsequent sessions, just re-run the `activate` line before launching the app.
@@ -44,22 +52,37 @@ The environment only needs to be created once. On subsequent sessions, just re-r
 
 ## Running
 
+Open `app/app.py` in VS Code and click the play button, or from inside `app/`:
+
 ```bash
-python app.py
+python3.11 app.py
 ```
+
+If VS Code reports a missing module, check the Python version shown at the bottom right when `app.py` is open, and choose Python 3.11.
 
 ---
 
-## Building a standalone executable
+## Building a standalone app
 
 BioSync ships a `build.py` script that runs PyInstaller with `BioSync.spec`. From inside the `app/` directory:
 
 ```bash
-pip install -r requirements-build.txt
-python build.py
+python3.11 -m pip install -r requirements-build.txt
+python3.11 build.py
 ```
 
-The finished app is placed in `dist/`. A Windows build has to be made on Windows. Files the app loads at runtime, such as the theme, are listed in `datas` in `BioSync.spec`.
+The build doesn't ask anything. The result is in `app/dist/`:
+
+- **macOS:** `BioSync.app`. The first time it is opened, macOS may say it can't check the developer: right-click the app, choose **Open**, then **Open** again.
+- **Windows:** the folder `BioSync`, with `BioSync.exe` inside. Keep the whole folder together.
+
+A Windows app has to be built on Windows, and a macOS app on a Mac. If the build warns about Tk, the Python used is too old, and the app would ignore clicks. Files the app loads at runtime, such as the theme, are listed in `datas` in `BioSync.spec`.
+
+---
+
+## Updating
+
+Pull the newest version, for example with **Fetch origin** and **Pull origin** in GitHub Desktop. Then run the installation command again, because the required packages may have changed, and rebuild a built app.
 
 ---
 
