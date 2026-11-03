@@ -12,7 +12,7 @@ INIT_STEP_SIZE   = 75    # 75 := 15s
 INIT_MAX_LAG_SXC = 150
 
 # ---------------------
-# SCREEN METRICS
+# DISPLAY
 # (populated by init_state before any tk.Vars are used)
 # ---------------------
 RETINA        = None

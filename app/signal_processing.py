@@ -81,7 +81,7 @@ def resample_ibi(ibi_ms, t_offset_ms=0, target_sampling_rate_hz=5, t_start_ms=No
         If True, intervals outside 100-1000 ms are left out of the interpolation. Default is False.
     Returns:
     --------
-    ibi_ms_interpl_out : numpy.ndarray
+    ibi_ms_interpl : numpy.ndarray
         The resampled IBI values.
     """
     # convert ibi to time series (t, ibi), with offset on the time axis
