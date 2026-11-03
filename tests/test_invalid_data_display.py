@@ -179,3 +179,25 @@ def test_plot_handles_windows_with_almost_equal_values(r_max, tau_max):
         for index in range(30)
     ]
     plot.plot_windowed_cross_correlation(windows, 150, 30, 75, [0.0] * 2400, [0.0] * 2400).savefig(io.BytesIO())
+
+
+def _histogram_bars(fig):
+    """The bars of the r_max and tau_max histograms: the axes with bars and no lines."""
+    import matplotlib.patches as mpatches
+    bars = [[p for p in ax.patches if isinstance(p, mpatches.Rectangle) and p.get_height() > 0] for ax in fig.axes]
+    return [axis_bars for ax, axis_bars in zip(fig.axes, bars) if axis_bars and not ax.lines]
+
+
+@pytest.mark.parametrize("tau_values", [[0] * 7, [3] * 7, [-30, 30] * 4])
+def test_histograms_have_narrow_bars_however_few_values_differ(tau_values):
+    import plot
+    windows = [
+        {'start_idx': index * 75, 'center_idx': index * 75 + 75, 'correlations': [0.97] * 61, 'correlations_sigmoid': [0.9] * 61,
+         'r_max': 0.95 + index * 0.005, 'tau_max': tau, 'r_max_sigmoid': 0.9, 'tau_max_sigmoid': tau}
+        for index, tau in enumerate(tau_values)
+    ]
+    fig = plot.plot_windowed_cross_correlation(windows, 150, 30, 75, [0.0] * 800, [0.0] * 800)
+    r_max_bars, tau_bars = _histogram_bars(fig)
+    assert max(bar.get_width() for bar in r_max_bars) == pytest.approx(plot.R_MAX_BIN_WIDTH)
+    assert max(bar.get_width() for bar in tau_bars) == pytest.approx(1)
+    assert sorted(bar.get_x() + 0.5 for bar in tau_bars) == sorted(set(tau_values))     # each lag has its own bar

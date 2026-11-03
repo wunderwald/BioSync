@@ -261,7 +261,7 @@ def _with_ends(values):
     (800 + 50 * RNG.normal(size=500), True),                       # IBI in ms
     (400 + 20 * RNG.normal(size=500), True),                       # fast heart rate
     (1500 + 50 * RNG.normal(size=500), True),                      # slow heart rate
-    (0.8 + 0.05 * RNG.normal(size=500), True),                     # IBI in seconds: unclear, so the default
+    (0.8 + 0.05 * RNG.normal(size=500), False),                    # EDA around 1 microsiemens, or intervals in seconds, which the app can't use as event-based
     (3000 + 100 * RNG.normal(size=500), True),                     # long but possible: unclear, so the default
     (5 + 3 * np.abs(RNG.normal(size=3000)), False),                # EDA in microsiemens
     (33 + 0.1 * RNG.normal(size=3000), False),                     # skin temperature
@@ -269,7 +269,8 @@ def _with_ends(values):
     (30000 + 100 * RNG.normal(size=3000), False),                  # raw device counts
 ])
 def test_guess(values, event_based):
-    assert guess_is_event_based(_with_ends(values), _with_ends(values)) == event_based
+    # Tk's checkbox variables only accept a plain bool, not numpy's
+    assert guess_is_event_based(_with_ends(values), _with_ends(values)) is event_based
 
 
 def test_first_and_last_value_are_not_used_for_the_guess():

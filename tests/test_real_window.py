@@ -41,3 +41,11 @@ def test_tab_changes_keep_the_panel_and_the_plot_the_same_size(report):
 def test_only_tabs_that_dont_fit_get_a_scrollbar(report):
     assert report['tabs']['Input Data']['scrollbar_shown'] is False
     assert report['tabs']['Export & Batch']['scrollbar_shown'] is True
+
+
+def test_eda_folder_loads_as_fixed_rate(report):
+    assert report['eda'] == {'fixed_rate': True, 'valid': True, 'reason': ''}
+
+
+def test_no_errors_in_callbacks(report):
+    assert report['callback_errors'] == []

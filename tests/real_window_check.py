@@ -34,6 +34,8 @@ corr_plot.setup(widgets['group_plot'])
 corr_plot.UPDATE()
 app.attributes('-alpha', 0.0)
 app.deiconify()
+errors = []
+app.report_callback_exception = lambda kind, error, trace: errors.append(f"{kind.__name__}: {error}")
 
 
 def settle():
@@ -55,6 +57,26 @@ for key in ('dropdown_select_sheet', 'dropdown_select_column'):
         'opens_from_arrow': bool(dropdown._canvas.bind('<Button-1>')),
     }
 
+# load EDA-like data: a real Tk variable rejects values the stand-ins in the other tests accept
+import tempfile
+import numpy as np
+from openpyxl import Workbook
+eda_folder = tempfile.mkdtemp()
+for name in ("A.xlsx", "B.xlsx"):
+    workbook = Workbook()
+    workbook.active.title = "EDA"
+    workbook.active.append(["EDA"])
+    for value in 1 + 0.3 * np.sin(np.arange(3000) / 50):
+        workbook.active.append([float(value)])
+    workbook.save(os.path.join(eda_folder, name))
+callbacks.filedialog.askdirectory = lambda **kwargs: eda_folder
+callbacks.open_dir_picker()
+corr_plot.flush_update()
+settle()
+report['eda'] = {
+    'fixed_rate': state.val_checkbox_fr.get(), 'valid': state.val_INPUT_DATA_VALID.get(), 'reason': state.val_input_error.get(),
+}
+
 state.val_checkbox_lag_filter.set(True)       # the tallest content: lag filter rows and the job panel
 state.val_job_running.set(True)
 settle()
@@ -72,5 +94,6 @@ for name in ("Input Data", "Correlation", "Export & Batch", "Input Data"):
     }
 
 report['plot_resizes_during_tab_changes'] = len(plot_resizes)
+report['callback_errors'] = errors
 print(json.dumps(report), flush=True)
 os._exit(0)     # skips Tk's slow and noisy shutdown
