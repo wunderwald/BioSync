@@ -199,8 +199,20 @@ def test_histograms_have_narrow_bars_however_few_values_differ(tau_values):
     fig = plot.plot_windowed_cross_correlation(windows, 150, 30, 75, [0.0] * 800, [0.0] * 800)
     r_max_bars, tau_bars = _histogram_bars(fig)
     assert max(bar.get_width() for bar in r_max_bars) == pytest.approx(plot.R_MAX_BIN_WIDTH)
-    assert max(bar.get_width() for bar in tau_bars) == pytest.approx(1)
-    assert sorted(bar.get_x() + 0.5 for bar in tau_bars) == sorted(set(tau_values))     # each lag has its own bar
+    assert max(bar.get_width() for bar in tau_bars) == pytest.approx(3)       # lags -30 to 30 in bins of 3
+    centres = {round(bar.get_x() + bar.get_width() / 2) for bar in tau_bars}
+    assert centres == {3 * round(tau / 3) for tau in tau_values}             # bins are centred on lags, 0 included
+
+
+@pytest.mark.parametrize("min_lag, max_lag, width", [(-30, 30, 3), (-5, 10, 1), (-100, 100, 11), (0, 40, 3)])
+def test_lag_bins_are_an_odd_number_of_lags_wide(min_lag, max_lag, width):
+    import plot
+    assert plot._lag_bin_width(min_lag, max_lag) == width
+    edges = plot._hist_bins([], min_lag, max_lag, width, centred=True)
+    assert edges[0] <= min_lag and edges[-1] >= max_lag     # every lag in the range has a bin
+    assert np.allclose(np.diff(edges), width)
+    if min_lag <= 0 <= max_lag:
+        assert any(np.isclose(edges, -width / 2))          # a bin from -width/2 to width/2, centred on 0
 
 
 def test_histograms_count_every_window_also_beyond_the_axis_range():

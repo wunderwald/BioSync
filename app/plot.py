@@ -14,7 +14,8 @@ _cmap_wxc = mcolors.LinearSegmentedColormap.from_list(
     ]
 )
 
-R_MAX_BIN_WIDTH = 0.05   # 40 bins from -1 to 1
+R_MAX_BIN_WIDTH = 0.1    # 20 bins from -1 to 1
+TAU_MAX_BINS = 20        # about this many, each a whole number of lags wide
 
 SCALING_PARAMS = {
     'FIGSIZE': (10, 8),
@@ -62,13 +63,19 @@ def _hist_bins(values, low, high, width, centred=False):
     Bin edges of a fixed width from low to high, widened to include every value. With a fixed width, a few
     windows with the same value give one narrow bar instead of one bar across the whole axis, and values that
     differ only by rounding can't make bins narrower than numbers can be.
-    centred puts each whole number in the middle of its own bin, for lags.
+    centred puts the bins' middles on multiples of the width, so that a bin of lags is centred on 0.
     """
     if len(values):
         low, high = min(low, float(np.min(values))), max(high, float(np.max(values)))
     if centred:
-        return np.arange(np.floor(low) - 0.5, np.ceil(high) + 1.5, width)
+        return np.arange((np.floor(low / width + 0.5) - 0.5) * width, high + width, width)
     return np.arange(np.floor(low / width) * width, high + width, width)
+
+
+def _lag_bin_width(min_lag, max_lag):
+    """An odd number of lags per bin, so that each bin is centred on a lag, giving about TAU_MAX_BINS bins."""
+    width = max(1, round((max_lag - min_lag + 1) / TAU_MAX_BINS))
+    return width if width % 2 else width + 1
 
 def plot_windowed_cross_correlation(wxc_data, window_size, max_lag, step_size, signal_a, signal_b, show_sigmoid_correlations=False, use_lag_filter=False, lag_filter_min=None, lag_filter_max=None):
     """
@@ -140,7 +147,7 @@ def plot_windowed_cross_correlation(wxc_data, window_size, max_lag, step_size, s
     ax2.grid()
     tau_max_hist_values = _without_flat_windows(tau_max_values)
     ax2_hist = fig.add_subplot(ax2_gs_inner[1])
-    ax2_hist.hist(tau_max_hist_values, bins=_hist_bins(tau_max_hist_values, _min_lag, _max_lag, 1, centred=True), orientation='vertical', color='black', alpha=1)
+    ax2_hist.hist(tau_max_hist_values, bins=_hist_bins(tau_max_hist_values, _min_lag, _max_lag, _lag_bin_width(_min_lag, _max_lag), centred=True), orientation='vertical', color='black', alpha=1)
     ax2_hist.set_xlim(-max_lag, max_lag)
 
     # Return the figure

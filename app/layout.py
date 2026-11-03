@@ -128,7 +128,7 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
         subgroup_input_data, text='columns have headers',
         variable=state.val_checkbox_data_has_headers
     )
-    checkbox_data_has_headers.grid(row=5, column=0, sticky="w", padx=10, pady=5)
+    checkbox_data_has_headers.grid(row=8, column=0, sticky="w", padx=10, pady=5)
 
     label_select_column = tk.CTkLabel(subgroup_input_data, text="Select Column", font=("Arial", 14, "bold"))
     label_select_column.grid(row=6, column=0, sticky="w", padx=10, pady=5)
