@@ -15,9 +15,6 @@ INIT_MAX_LAG_SXC = 150
 # SCREEN METRICS
 # (populated by init_state before any tk.Vars are used)
 # ---------------------
-screen_dpi    = None
-screen_width  = None
-screen_height = None
 RETINA        = None
 
 # ---------------------
@@ -120,12 +117,12 @@ def analysis_config():
     )
 
 
-def init_state(dpi, sw, sh, retina):
+def init_state(retina):
     """
     Must be called once after tk.CTk() is created but before any widgets are built.
     Initialises all module-level tk.Vars and data containers.
     """
-    global screen_dpi, screen_width, screen_height, RETINA
+    global RETINA
     global val_CORRELATION_SETTINGS_VALID, val_CORRELATION_SETTINGS_VALID_SXC
     global val_WINDOW_SIZE_VALID, val_STEP_SIZE_VALID, val_MAX_LAG_VALID
     global val_MAX_LAG_VALID_SXC, val_INPUT_DATA_VALID, val_LAG_FILTER_VALID
@@ -147,9 +144,6 @@ def init_state(dpi, sw, sh, retina):
     global val_dfa_text, val_input_error, val_exporting
     global dat_plot_data, dat_workbook_data, dat_physiological_data, dat_correlation_data
 
-    screen_dpi    = dpi
-    screen_width  = sw
-    screen_height = sh
     RETINA        = retina
 
     # validation trackers

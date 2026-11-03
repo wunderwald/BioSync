@@ -7,9 +7,9 @@ EVENT_BASED_SAMPLING_RATE_HZ = 5
 
 def _replace_invalid_EDA(eda):
     '''
-    Interpolates across negative samples. Deleting them would shift all later samples in time.
+    Interpolates across negative samples, the only values that count as invalid for now.
+    Deleting them would shift all later samples in time.
     '''
-    print("!! EDA filter not implemented yet.") # TODO: Implement EDA filter
     eda = np.array(eda, dtype=float)
     valid = eda >= 0
     if not valid.any():
@@ -64,7 +64,7 @@ def _ibi_time_series(ibi_ms, t_offset_ms=0, remove_invalid_samples=False):
         t_ms_ts, ibi_ms_ts = t_ms_ts[valid], ibi_ms_ts[valid]
     return t_ms_ts, ibi_ms_ts
 
-def resample_ibi(ibi_ms, t_offset_ms=0, target_sampling_rate_hz=5, scale_output=False, t_start_ms=None, t_end_ms=None, remove_invalid_samples=False):
+def resample_ibi(ibi_ms, t_offset_ms=0, target_sampling_rate_hz=5, t_start_ms=None, t_end_ms=None, remove_invalid_samples=False):
     """
     Resample inter-beat intervals (IBI) to a target sampling rate using cubic spline interpolation.
     Parameters:
@@ -75,8 +75,6 @@ def resample_ibi(ibi_ms, t_offset_ms=0, target_sampling_rate_hz=5, scale_output=
         The time offset in milliseconds. Default is 0.
     target_sampling_rate_hz : int, optional
         The target sampling rate in Hertz (Hz). Default is 5 Hz.
-    scale_output : bool, optional
-        If True, scales the output IBI to maintain the same total sum as the original IBI. Default is False.
     t_start_ms, t_end_ms : float, optional
         Time span of the output grid, including the offset. Default is from the first to the last beat.
     remove_invalid_samples : bool, optional
@@ -101,13 +99,7 @@ def resample_ibi(ibi_ms, t_offset_ms=0, target_sampling_rate_hz=5, scale_output=
     # Get sample values at new grid
     ibi_ms_interpl = cs(t_ms_interpl)
 
-    # optionally scale interpolated ibi
-    sum_ibi_original = sum(ibi_ms)
-    sum_ibi_interpl = sum(ibi_ms_interpl)
-    scl = sum_ibi_original / sum_ibi_interpl
-    ibi_ms_interpl_out = ibi_ms_interpl * (scl if scale_output else 1)
-
-    return ibi_ms_interpl_out
+    return ibi_ms_interpl
 
 
 

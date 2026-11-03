@@ -7,7 +7,7 @@ Interactive visual toolbox for windowed cross-correlation analysis, optimized fo
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.11. Newer versions may work, but haven't been tested.
 - On macOS: Tk 8.6.13 or newer, which python.org installers include from Python 3.11.7. With Tk 8.6.12, the window can ignore clicks until its title bar is clicked ([python/cpython#110218](https://github.com/python/cpython/issues/110218)). To check your version:
 
   ```bash
@@ -140,7 +140,7 @@ pytest
 
 | Module | Responsibility |
 |---|---|
-| `state.py` | All `tk.Var` declarations and data containers (`dat_workbook_data`, `dat_physiological_data`, `dat_correlation_data`, `dat_plot_data`). Also holds screen metrics and the `PARAMS_CHANGED()` trigger. Initialised via `init_state()` after the CTk window exists. |
+| `state.py` | All `tk.Var` declarations and data containers (`dat_workbook_data`, `dat_physiological_data`, `dat_correlation_data`, `dat_plot_data`). Also holds the `PARAMS_CHANGED()` trigger and `analysis_config()`. Initialised via `init_state()` after the CTk window exists. |
 | `validation.py` | Pure input-validation logic — `check_window_size`, `check_max_lag`, `check_lag_filter`, etc. No widget references; reads/writes only from `state`. |
 | `callbacks.py` | All user-event handlers: entry/checkbox/dropdown `on_*` callbacks, file pickers, XLSX data loading, signal pre-processing, export handlers, batch processing, and random-pair analysis. Widget references needed for dropdown updates are injected via `register_dropdowns()` / `register_tabview()` after the layout is built. |
 | `layout.py` | Builds every widget across the three tabs (Input Data, Correlation, Export & Batch) inside a single `build_layout()` call. Returns a dict of widget references consumed by `gui_updates` and `corr_plot`. |
@@ -168,6 +168,7 @@ tk theme (no window needed)
   └─ app = tk.CTk()
        └─ state.init_state()          # tk.Vars require a live window
             └─ validation.make_validator(app)
+            └─ validation.make_signed_validator(app)
             └─ callbacks.setup_traces()
                  └─ layout.build_layout()   # creates all widgets; injects refs into callbacks
                       └─ gui_updates.register_widgets() + setup_traces()

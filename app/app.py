@@ -32,7 +32,7 @@ app.tk.call('tk', 'scaling', 1 if RETINA else 1.5)
 # STATE — all tk.Vars & containers
 # --------------------------------
 
-state.init_state(screen_dpi, screen_width, screen_height, RETINA)
+state.init_state(RETINA)
 
 # --------------------------------
 # VALIDATION & CALLBACKS
