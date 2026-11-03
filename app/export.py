@@ -92,8 +92,24 @@ def export_wxcorr_data(file_path, params):
     xlsx.write_xlsx(vectors=vectors, single_values=metadata, output_path=file_path,
                     matrix=_correlation_matrix(params['wxcorr'], min_lag))
 
-def export_avg_wxcorr_data(file_path, avg_wxcorr, n_dyads, params):
-    """Export an averaged wxcorr result (from average_wxcorr_matrices) to XLSX."""
+def _window_count_metadata(n_windows_averaged, window_counts):
+    """Rows for the end of the metadata that say how much of each dyad the average covers."""
+    if not window_counts:
+        return {}
+    return {
+        'Windows averaged': n_windows_averaged,
+        'Windows per dyad': f"{min(window_counts)} to {max(window_counts)}",
+        'Window note': (
+            "Windows are averaged by position, up to the number of windows of the shortest dyad. "
+            "Later windows of longer dyads are not part of the average."
+        ),
+    }
+
+def export_avg_wxcorr_data(file_path, avg_wxcorr, n_dyads, params, window_counts=None):
+    """
+    Export an averaged wxcorr result (from average_wxcorr_matrices) to XLSX.
+    window_counts are the numbers of windows of the averaged dyads, which the export reports.
+    """
     metadata = {
         'xcorr type':                   'windowed cross-correlation (group average)',
         'Number of dyads averaged':     n_dyads,
@@ -116,6 +132,7 @@ def export_avg_wxcorr_data(file_path, avg_wxcorr, n_dyads, params):
         'var_z_transformed_corr':           [o['var_z_transformed_corr']  for o in avg_wxcorr],
     }
     _add_per_window_columns(vectors, metadata, avg_wxcorr)
+    metadata.update(_window_count_metadata(len(avg_wxcorr), window_counts))
     min_lag = (
         min(params['lag_filter_min'], params['lag_filter_max'])
         if params.get('use_lag_filter') else -params['max_lag']
@@ -146,7 +163,8 @@ def export_sxcorr_data(file_path, params):
     xlsx.write_xlsx(vectors=vectors, single_values=metadata, output_path=file_path)
 
 def export_random_pair_data(file_path, params, input_dir, t_stat, p_value, avg_corr_rp, avg_corr_real,
-                            avg_wxcorr_real=None, avg_wxcorr_rp=None, seed='-', n_eligible_pairs='-'):
+                            avg_wxcorr_real=None, avg_wxcorr_rp=None, seed='-', n_eligible_pairs='-',
+                            n_random_pairs_requested='-', window_counts_real=None, window_counts_rp=None):
     # collect metadata
     is_windowed_xcorr = params['checkbox_windowed_xcorr']
     metadata = {
@@ -176,6 +194,9 @@ def export_random_pair_data(file_path, params, input_dir, t_stat, p_value, avg_c
         **metadata,
         'Random seed': seed,
         'Different random pairs possible': n_eligible_pairs,
+        'Random pairs requested': n_random_pairs_requested,
+        'Random pairs used': len(avg_corr_rp),
+        'Real dyads used': len(avg_corr_real),
     }
 
     # collect vector data
@@ -192,7 +213,7 @@ def export_random_pair_data(file_path, params, input_dir, t_stat, p_value, avg_c
         base = os.path.splitext(file_path)[0]
 
         if avg_wxcorr_real:
-            export_avg_wxcorr_data(f"{base}_avg_real_pairs.xlsx", avg_wxcorr_real, len(avg_corr_real), params)
+            export_avg_wxcorr_data(f"{base}_avg_real_pairs.xlsx", avg_wxcorr_real, len(avg_corr_real), params, window_counts_real)
             fig_real = plot_windowed_cross_correlation(
                 wxc_data=avg_wxcorr_real,
                 signal_a=[], signal_b=[],
@@ -207,7 +228,7 @@ def export_random_pair_data(file_path, params, input_dir, t_stat, p_value, avg_c
             save_figure_to_png(fig_real, f"{base}_avg_real_pairs.png")
 
         if avg_wxcorr_rp:
-            export_avg_wxcorr_data(f"{base}_avg_random_pairs.xlsx", avg_wxcorr_rp, len(avg_corr_rp), params)
+            export_avg_wxcorr_data(f"{base}_avg_random_pairs.xlsx", avg_wxcorr_rp, len(avg_corr_rp), params, window_counts_rp)
             fig_rp = plot_windowed_cross_correlation(
                 wxc_data=avg_wxcorr_rp,
                 signal_a=[], signal_b=[],

@@ -126,7 +126,7 @@ def test_folder_picker_loads_the_chosen_pair_and_says_why(fake_state, tmp_path, 
     warnings = []
     monkeypatch.setattr(callbacks.filedialog, "askdirectory", lambda **kwargs: str(tmp_path))
     monkeypatch.setattr(callbacks.messagebox, "showwarning", lambda title, text: warnings.append(text))
-    monkeypatch.setattr(callbacks, "load_xlsx_data", lambda: None)
+    monkeypatch.setattr(callbacks, "show_loaded_workbooks", lambda: None)
     monkeypatch.setattr(callbacks.state, "PARAMS_CHANGED", lambda: None)
 
     callbacks.open_dir_picker()
@@ -134,3 +134,80 @@ def test_folder_picker_loads_the_chosen_pair_and_says_why(fake_state, tmp_path, 
     assert os.path.basename(fake_state.val_selected_file_a.get()) == expected_files[0]
     assert os.path.basename(fake_state.val_selected_file_b.get()) == expected_files[1]
     assert expected_reason in warnings[0]
+
+
+def test_uppercase_extension_is_found(tmp_path):
+    for name in ("P1.XLSX", "p2.Xlsx", "notes.txt", "~$P1.XLSX", "._P1.XLSX"):
+        (tmp_path / name).write_text("x")
+    assert utils.list_dyad_files(str(tmp_path)) == ["P1.XLSX", "p2.Xlsx"]
+
+
+def test_uppercase_files_can_be_read(tmp_path):
+    _write_sheets(tmp_path / "A.XLSX", ["S"])
+    assert xlsx.get_sheet_names(xlsx.read_xlsx(str(tmp_path / "A.XLSX"))) == ["S"]
+
+
+@pytest.fixture
+def picker(fake_state, tmp_path, monkeypatch):
+    """A loaded dyad, and a folder picker that returns the folder a test chooses."""
+    loaded = tmp_path / "loaded"
+    loaded.mkdir()
+    fake_state.val_selected_dyad_dir.set(str(loaded))
+    fake_state.val_selected_file_a.set(str(loaded / "A.xlsx"))
+    fake_state.val_selected_file_b.set(str(loaded / "B.xlsx"))
+    monkeypatch.setitem(callbacks.state.dat_workbook_data, "workbook_a", "loaded workbook A")
+    monkeypatch.setitem(callbacks.state.dat_workbook_data, "workbook_b", "loaded workbook B")
+    fake_state.messages = []
+    for kind in ("showwarning", "showerror"):
+        monkeypatch.setattr(callbacks.messagebox, kind, lambda title, text, kind=kind: fake_state.messages.append((kind, text)))
+    fake_state.shown = []
+    monkeypatch.setattr(callbacks, "show_loaded_workbooks", lambda: fake_state.shown.append(True))
+    monkeypatch.setattr(callbacks.state, "PARAMS_CHANGED", lambda: None)
+
+    def choose(folder):
+        monkeypatch.setattr(callbacks.filedialog, "askdirectory", lambda **kwargs: str(folder))
+        callbacks.open_dir_picker()
+    fake_state.choose = choose
+    fake_state.loaded = loaded
+    return fake_state
+
+
+def _assert_old_dyad_is_kept(picker):
+    assert picker.val_selected_dyad_dir.get() == str(picker.loaded)
+    assert picker.val_selected_file_a.get() == str(picker.loaded / "A.xlsx")
+    assert callbacks.state.dat_workbook_data["workbook_a"] == "loaded workbook A"
+    assert picker.shown == []
+
+
+@pytest.mark.parametrize("n_files", [0, 1])
+def test_folder_with_too_few_files_keeps_the_loaded_dyad_and_says_so(picker, tmp_path, n_files):
+    folder = tmp_path / "new"
+    folder.mkdir()
+    for index in range(n_files):
+        _write_sheets(folder / f"{index}.xlsx", ["S"])
+    picker.choose(folder)
+    _assert_old_dyad_is_kept(picker)
+    assert picker.messages[0][0] == "showwarning" and f"Found {n_files} xlsx" in picker.messages[0][1]
+
+
+@pytest.mark.parametrize("broken", ["a.xlsx", "b.xlsx"])
+def test_unreadable_file_keeps_the_loaded_dyad_and_says_so(picker, tmp_path, broken):
+    folder = tmp_path / "new"
+    folder.mkdir()
+    for name in ("a.xlsx", "b.xlsx"):
+        _write_sheets(folder / name, ["S"])
+    (folder / broken).write_text("not a spreadsheet")
+    picker.choose(folder)
+    _assert_old_dyad_is_kept(picker)
+    assert picker.messages[-1][0] == "showerror" and broken in picker.messages[-1][1]
+
+
+def test_good_folder_replaces_the_loaded_dyad(picker, tmp_path):
+    folder = tmp_path / "new"
+    folder.mkdir()
+    for name in ("a.xlsx", "b.xlsx"):
+        _write_sheets(folder / name, ["S"])
+    picker.choose(folder)
+    assert picker.val_selected_dyad_dir.get() == str(folder)
+    assert xlsx.get_sheet_names(callbacks.state.dat_workbook_data["workbook_b"]) == ["S"]
+    assert picker.shown == [True] and picker.messages == []

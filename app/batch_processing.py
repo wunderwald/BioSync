@@ -206,6 +206,8 @@ def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_
             - avg_wxcorr_rp (list): Group-average wxcorr of random pairs (None for standard xcorr).
             - failures (list): (name, error message) for each pair or dyad that could not be processed.
             - n_eligible_pairs (int): Number of different pairs the random pairs were drawn from.
+            - window_counts_real (list): Number of windows of each real dyad (empty for standard xcorr).
+            - window_counts_rp (list): Number of windows of each random pair (empty for standard xcorr).
     """
 
     # get input data
@@ -291,11 +293,14 @@ def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_
             if params['use_lag_filter'] else -params['max_lag']
         )
         if all_wxcorr_real:
-            avg_wxcorr_real = average_wxcorr_matrices(all_wxcorr_real, min_lag)
+            avg_wxcorr_real = average_wxcorr_matrices(all_wxcorr_real, min_lag, params['checkbox_average_windows'])
         if all_wxcorr_rp:
-            avg_wxcorr_rp = average_wxcorr_matrices(all_wxcorr_rp, min_lag)
+            avg_wxcorr_rp = average_wxcorr_matrices(all_wxcorr_rp, min_lag, params['checkbox_average_windows'])
 
-    return t_stat, p_value, average_correlations_rp, average_correlations_real, avg_wxcorr_real, avg_wxcorr_rp, failures, len(eligible_pairs)
+    return (
+        t_stat, p_value, average_correlations_rp, average_correlations_real, avg_wxcorr_real, avg_wxcorr_rp, failures,
+        len(eligible_pairs), [len(wxcorr) for wxcorr in all_wxcorr_real], [len(wxcorr) for wxcorr in all_wxcorr_rp],
+    )
 
 
 def batch_process(params, progress=_no_progress):
@@ -373,11 +378,12 @@ def batch_process(params, progress=_no_progress):
             min(params['lag_filter_min'], params['lag_filter_max'])
             if params['use_lag_filter'] else -params['max_lag']
         )
-        avg_wxcorr = average_wxcorr_matrices(all_wxcorr_results, min_lag)
+        avg_wxcorr = average_wxcorr_matrices(all_wxcorr_results, min_lag, params['checkbox_average_windows'])
         if avg_wxcorr:
             export_avg_wxcorr_data(
                 os.path.join(output_dir, 'grand_avg_wxcorr.xlsx'),
-                avg_wxcorr, len(all_wxcorr_results), params
+                avg_wxcorr, len(all_wxcorr_results), params,
+                window_counts=[len(wxcorr) for wxcorr in all_wxcorr_results],
             )
             fig = plot_windowed_cross_correlation(
                 wxc_data=avg_wxcorr,

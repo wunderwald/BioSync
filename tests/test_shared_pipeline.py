@@ -352,3 +352,39 @@ def test_batch_figure_has_room_for_its_text(retina, tmp_path, recwarn):
     fig = plot.plot_windowed_cross_correlation(windows, 150, 30, 75, signal, signal)
     plot.save_figure_to_png(fig, tmp_path / "f.png")
     assert not [w for w in recwarn.list if "constrained_layout" in str(w.message)]
+
+
+def _metadata(path):
+    return {row[0]: row[1] for row in openpyxl.load_workbook(path).worksheets[0].iter_rows(max_col=2, values_only=True) if row[0]}
+
+
+def test_group_average_says_how_many_windows_it_covers(tmp_path):
+    averaged = [{**window, 'start_idx': index} for index, window in enumerate(_windows(20))]
+    export.export_avg_wxcorr_data(str(tmp_path / "f.xlsx"), averaged, 3, {'max_lag': 1}, window_counts=[105, 20, 98])
+    metadata = _metadata(tmp_path / "f.xlsx")
+    assert metadata['Windows averaged'] == 20
+    assert metadata['Windows per dyad'] == "20 to 105"
+    assert "shortest dyad" in metadata['Window note']
+    assert list(metadata)[-3:] == ['Windows averaged', 'Windows per dyad', 'Window note']
+
+
+def test_batch_group_average_reports_the_window_counts(tmp_path):
+    import batch_processing
+    from test_batch import _params, _write_person
+    rng = np.random.default_rng(0)
+    for name, n_beats in (("long", 1000), ("short", 400)):
+        (tmp_path / "in" / name).mkdir(parents=True)
+        ibi = 800 + 50 * np.convolve(rng.normal(size=n_beats), np.ones(4) / 2, mode="same")
+        for person in ("P1", "P2"):
+            _write_person(tmp_path / "in" / name / f"{person}.xlsx", {"Coupled": ibi + rng.normal(0, 5, n_beats)})
+    (tmp_path / "out").mkdir()
+    batch_processing.batch_process(_params(tmp_path / "in", tmp_path / "out"))
+
+    def windows(name):
+        return openpyxl.load_workbook(tmp_path / "out" / name)["correlations"].max_row - 1
+
+    short, long = windows("wx_short_wxcorr.xlsx"), windows("wx_long_wxcorr.xlsx")
+    metadata = _metadata(tmp_path / "out" / "grand_avg_wxcorr.xlsx")
+    assert short < long
+    assert metadata['Windows averaged'] == windows("grand_avg_wxcorr.xlsx") == short
+    assert metadata['Windows per dyad'] == f"{short} to {long}"

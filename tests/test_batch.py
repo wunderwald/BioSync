@@ -279,6 +279,7 @@ def test_button_is_enabled_again_and_error_shown_after_a_crash(
         getattr(fake_state, name).set(True)
     getattr(fake_state, input_var).set("in")
     getattr(fake_state, output_var).set("out")
+    fake_state.val_rp_n.set(5)
 
     def crash(*args):
         raise RuntimeError("disk full")
@@ -293,3 +294,11 @@ def test_button_is_enabled_again_and_error_shown_after_a_crash(
 
     assert errors == ["disk full"]
     assert getattr(fake_state, ready_var).get() is True
+
+
+def test_group_average_of_averaged_windows_has_no_lag(batch_dirs):
+    input_dir, output_dir = batch_dirs
+    batch_processing.batch_process(_params(input_dir, output_dir, checkbox_average_windows=True))
+    for name in ("wx_dyad0_wxcorr.xlsx", "grand_avg_wxcorr.xlsx"):
+        _, columns = _read_export(output_dir / name)
+        assert set(columns['lag of peak correlation (tau_max)']) == {0}

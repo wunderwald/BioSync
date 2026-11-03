@@ -347,6 +347,11 @@ def clear_correlation_data():
 
 def load_xlsx_data():
     read_xlsx_files()
+    show_loaded_workbooks()
+
+
+def show_loaded_workbooks():
+    """Fills the dropdowns and signals from the workbooks in state.dat_workbook_data."""
     update_sheet_names()
     update_column_names()
     preprocess_data()
@@ -358,23 +363,37 @@ def load_xlsx_data():
 # ---------------------------------------------------------------------------
 
 def open_dir_picker():
+    """Loads a dyad folder. If it can't be used, the data loaded before stays, together with its folder name."""
     dir_path = filedialog.askdirectory(title="Select a directory")
     if not dir_path:
         return
-    state.val_selected_dyad_dir.set(dir_path)
     xlsx_files = utils.list_dyad_files(dir_path)
     if len(xlsx_files) < 2:
+        messagebox.showwarning(
+            "Not a dyad folder",
+            f"Found {len(xlsx_files)} xlsx file{'' if len(xlsx_files) == 1 else 's'} in {os.path.basename(dir_path)}. "
+            "A dyad folder needs two."
+        )
         return
     file_a, file_b, sheets_match = xlsx.choose_dyad_files(dir_path, xlsx_files)
+    workbooks = {}
+    for key, file_name in (("workbook_a", file_a), ("workbook_b", file_b)):
+        try:
+            workbooks[key] = xlsx.read_xlsx(os.path.join(dir_path, file_name))
+        except Exception as e:
+            messagebox.showerror("Can't read file", f"{file_name} can't be read as an xlsx file ({e}).")
+            return
     if len(xlsx_files) > 2:
         reason = "the first two with the same sheets" if sheets_match else "the first two, because no two have the same sheets"
         messagebox.showwarning(
             "More than two files",
             f"Found {len(xlsx_files)} xlsx files, using {file_a} and {file_b} ({reason})."
         )
+    state.val_selected_dyad_dir.set(dir_path)
     state.val_selected_file_a.set(os.path.join(dir_path, file_a))
     state.val_selected_file_b.set(os.path.join(dir_path, file_b))
-    load_xlsx_data()
+    state.dat_workbook_data.update(workbooks)
+    show_loaded_workbooks()
     state.PARAMS_CHANGED()
 
 
@@ -686,7 +705,8 @@ def _random_pair_is_ready(*args):
 
 
 def run_random_pair(params, random_pair_count, input_dir, output_file, seed, progress):
-    t_stat, p_value, avg_corr_rp, avg_corr_real, avg_wxcorr_real, avg_wxcorr_rp, failures, n_eligible_pairs = random_pair_analysis(
+    (t_stat, p_value, avg_corr_rp, avg_corr_real, avg_wxcorr_real, avg_wxcorr_rp, failures, n_eligible_pairs,
+     window_counts_real, window_counts_rp) = random_pair_analysis(
         params=params,
         random_pair_count=random_pair_count,
         input_dir=input_dir,
@@ -706,20 +726,58 @@ def run_random_pair(params, random_pair_count, input_dir, output_file, seed, pro
         avg_wxcorr_rp=avg_wxcorr_rp,
         seed=seed,
         n_eligible_pairs=n_eligible_pairs,
+        n_random_pairs_requested=random_pair_count,
+        window_counts_real=window_counts_real,
+        window_counts_rp=window_counts_rp,
     )
-    return failures
+    return {
+        'failures': failures,
+        'p_value': p_value,
+        'random_pairs_requested': random_pair_count,
+        'random_pairs_used': len(avg_corr_rp),
+        'real_dyads_used': len(avg_corr_real),
+    }
 
 
-def _show_random_pair_summary(failures):
+MIN_GROUP_SIZE = 2  # the t-test needs at least two values per group
+
+
+def _random_pair_problems(summary):
+    """Reasons not to trust the result, as sentences. Empty if there are none."""
+    problems = []
+    if summary['random_pairs_used'] < MIN_GROUP_SIZE or summary['real_dyads_used'] < MIN_GROUP_SIZE:
+        problems.append(
+            f"The t-test needs at least {MIN_GROUP_SIZE} random pairs and {MIN_GROUP_SIZE} real dyads, "
+            f"and got {summary['random_pairs_used']} and {summary['real_dyads_used']}."
+        )
+    elif summary['p_value'] != summary['p_value']:   # NaN
+        problems.append("The t-test gave no p-value, for example because all values were the same.")
+    skipped = summary['random_pairs_requested'] - summary['random_pairs_used']
+    if skipped:
+        problems.append(f"{skipped} of {summary['random_pairs_requested']} random pairs were skipped, so the result rests on fewer.")
+    return problems
+
+
+def _show_random_pair_summary(summary):
+    failures = summary['failures']
+    problems = _random_pair_problems(summary)
     lines = [f"Finished, {len(failures)} pairs or dyads skipped."]
+    if problems:
+        lines += [""] + problems
     if failures:
         lines += ["", "Skipped:"] + _format_failures(failures)
-    messagebox.showinfo("Random pair analysis finished", "\n".join(lines))
+    if problems:
+        messagebox.showwarning("Random pair analysis finished with problems", "\n".join(lines))
+    else:
+        messagebox.showinfo("Random pair analysis finished", "\n".join(lines))
 
 
 def handle_run_random_pair_button():
     params = _analysis_params()
     random_pair_count = state.val_rp_n.get()
+    if random_pair_count < MIN_GROUP_SIZE:
+        messagebox.showwarning("Too few random pairs", f"N must be at least {MIN_GROUP_SIZE} for the t-test.")
+        return
     input_dir = state.val_random_pair_input_folder.get()
     output_file = state.val_random_pair_output_file.get()
     seed_input = state.val_rp_seed_input.get()

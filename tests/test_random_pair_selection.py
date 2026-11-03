@@ -191,7 +191,10 @@ def test_new_rows_come_after_the_existing_ones(app):
     sheet = openpyxl.load_workbook(app.output).worksheets[0]
     names = [row[0] for row in sheet.iter_rows(max_col=1, values_only=True) if row[0]]
     assert names[:2] == ['t-statistic', 'p-value']
-    assert names[-3:] == ['Input dyad directory', 'Random seed', 'Different random pairs possible']
+    assert names[-6:] == [
+        'Input dyad directory', 'Random seed', 'Different random pairs possible',
+        'Random pairs requested', 'Random pairs used', 'Real dyads used',
+    ]
 
 
 def test_seed_is_read_before_the_job_starts(app):
@@ -215,3 +218,59 @@ def test_group_to_dyads_copies_end_to_end(tmp_path, monkeypatch):
     hashes = [(batch_processing._file_hash(a), batch_processing._file_hash(b)) for a, b in pairs]
     assert all(a != b for a, b in hashes)
     assert all(os.path.dirname(a) != os.path.dirname(b) for a, b in pairs)
+
+
+def _summary(**overrides):
+    return {**dict(failures=[], p_value=0.3, random_pairs_requested=20, random_pairs_used=20, real_dyads_used=5), **overrides}
+
+
+@pytest.mark.parametrize("overrides, expected", [
+    ({}, []),
+    ({'random_pairs_used': 1}, ["at least 2 random pairs and 2 real dyads, and got 1 and 5", "19 of 20 random pairs were skipped"]),
+    ({'real_dyads_used': 1, 'p_value': float('nan')}, ["at least 2 random pairs and 2 real dyads, and got 20 and 1"]),
+    ({'p_value': float('nan')}, ["no p-value"]),
+    ({'random_pairs_used': 10}, ["10 of 20 random pairs were skipped"]),
+])
+def test_unreliable_results_are_named(overrides, expected):
+    problems = callbacks._random_pair_problems(_summary(**overrides))
+    assert len(problems) == len(expected)
+    assert all(part in problem for part, problem in zip(expected, problems))
+
+
+@pytest.mark.parametrize("overrides, kind", [({}, "showinfo"), ({'random_pairs_used': 10}, "showwarning")])
+def test_problems_turn_the_message_into_a_warning(monkeypatch, overrides, kind):
+    shown = []
+    for name in ("showinfo", "showwarning"):
+        monkeypatch.setattr(callbacks.messagebox, name, lambda title, text, name=name: shown.append((name, text)))
+    callbacks._show_random_pair_summary(_summary(**overrides))
+    assert shown[0][0] == kind
+
+
+@pytest.mark.parametrize("n", [0, 1])
+def test_too_small_n_does_not_start(app, n, monkeypatch):
+    app.val_rp_n.set(n)
+    warnings = []
+    monkeypatch.setattr(callbacks.messagebox, "showwarning", lambda title, text: warnings.append(text))
+    callbacks.handle_run_random_pair_button()
+    assert app.val_job_running.get() is False
+    assert "at least 2" in warnings[0]
+    assert not app.output.exists()
+
+
+def test_failed_pairs_give_a_warning_and_are_recorded(app, dyads, monkeypatch):
+    from openpyxl import Workbook
+    workbook = Workbook()
+    workbook.active.title = "Sheet"
+    workbook.active.append(["Other"])
+    workbook.save(dyads / "dyad0" / "P1.xlsx")
+    warnings = []
+    monkeypatch.setattr(callbacks.messagebox, "showwarning", lambda title, text: warnings.append(text))
+    app.val_rp_n.set(20)
+    app.val_rp_seed_input.set("1")
+    callbacks.handle_run_random_pair_button()
+    app.timer.run_until_idle(60)
+    metadata = {row[0]: row[1] for row in openpyxl.load_workbook(app.output).worksheets[0].iter_rows(max_col=2, values_only=True) if row[0]}
+    assert metadata['Random pairs requested'] == 20
+    assert metadata['Random pairs used'] < 20
+    assert metadata['Real dyads used'] == 2
+    assert warnings and "random pairs were skipped" in warnings[0]

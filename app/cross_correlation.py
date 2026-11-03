@@ -185,14 +185,15 @@ def mean_ignoring_flat_windows(values, axis=None):
         return np.nanmean(values, axis=axis)
 
 
-def _peak_of_average(avg_corr, min_lag):
+def _peak_of_average(avg_corr, min_lag, average_windows):
     if np.all(np.isnan(avg_corr)):
         return np.nan, np.nan
     abs_idx = int(np.nanargmax(np.abs(avg_corr)))
-    return float(avg_corr[abs_idx]), int(abs_idx + min_lag)
+    # averaged windows have the same value at every lag, so there is no lag of a peak, as in windowed_cross_correlation
+    return float(avg_corr[abs_idx]), 0 if average_windows else int(abs_idx + min_lag)
 
 
-def average_wxcorr_matrices(list_of_wxcorr, min_lag):
+def average_wxcorr_matrices(list_of_wxcorr, min_lag, average_windows=False):
     """
     Average multiple wxcorr result lists element-wise, truncating to the shortest.
 
@@ -200,6 +201,7 @@ def average_wxcorr_matrices(list_of_wxcorr, min_lag):
       - no lag filter: -max_lag
       - lag filter active: min(lag_filter_min, lag_filter_max)
     Never infer min_lag from array length — asymmetric filters break that assumption.
+    average_windows must match the setting the results were computed with.
     A dyad's flat window is left out of the average for that window.
 
     Returns a list of window dicts with the same keys as windowed_cross_correlation output,
@@ -218,8 +220,8 @@ def average_wxcorr_matrices(list_of_wxcorr, min_lag):
         avg_corr         = mean_ignoring_flat_windows(all_corrs, axis=0)
         avg_corr_sigmoid = mean_ignoring_flat_windows(all_corrs_sigmoid, axis=0)
 
-        r_max, tau_max                 = _peak_of_average(avg_corr, min_lag)
-        r_max_sigmoid, tau_max_sigmoid = _peak_of_average(avg_corr_sigmoid, min_lag)
+        r_max, tau_max                 = _peak_of_average(avg_corr, min_lag, average_windows)
+        r_max_sigmoid, tau_max_sigmoid = _peak_of_average(avg_corr_sigmoid, min_lag, average_windows)
 
         avg.append({
             'start_idx':             list_of_wxcorr[0][i]['start_idx'],

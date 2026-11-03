@@ -100,6 +100,8 @@ Random pairs are now drawn differently, so their t-statistic and p-value can cha
 - **Real pairs and self-pairs are left out.** Recordings are told apart by their file content, so copies from `preprocessing/group_to_dyads.py` count as one recording. Any two recordings that share a dyad folder are a real pair. Folders from one `group_to_dyads` group have only real pairs, so they can't be used alone.
 - **Every run uses a seed**, which the export records with the number of different pairs possible. Entering the seed again repeats the run for the same files.
 
+Group averages report τ = 0 with "Average Values in Windows", as single dyads do. They used to report the lowest lag. They also say how many windows they cover, and that longer dyads are cut to the shortest.
+
 Spreadsheets are now read differently:
 
 - **Repeated column names can select a different column.** A name used twice used to mean the last column with that name. It now means the first, and the others are listed as `name (2)` and so on.

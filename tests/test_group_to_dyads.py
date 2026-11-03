@@ -136,3 +136,35 @@ def test_hidden_system_file_does_not_block_a_rerun(dirs):
     assert group_to_dyads.main(input_dir, output_dir, _no_questions) is True
     assert not (output_dir / ".DS_Store").exists()
     assert len(list(output_dir.iterdir())) == 6
+
+
+def test_macos_and_excel_temporary_files_are_ignored(dirs):
+    input_dir, output_dir = dirs
+    for subject in ("s1", "s2", "s3"):
+        (input_dir / subject / f"._HRV_g1_{subject}_rest.xlsx").write_bytes(b"\x00\x05\x16\x07")
+        (input_dir / subject / f"~$HRV_g1_{subject}_extra.xlsx").write_bytes(b"x")
+    (input_dir / ".hidden_subject").mkdir()
+    group_to_dyads.main(input_dir, output_dir, _no_questions)
+    folders = sorted(path.name for path in output_dir.iterdir())
+    assert not any("extra" in name for name in folders) and len(folders) == 6
+    for folder in output_dir.iterdir():
+        files = sorted(path.name for path in folder.iterdir())
+        assert len(files) == 2 and not any(name.startswith(("._", "~$")) for name in files)
+
+
+def test_folder_names_do_not_depend_on_listing_order(dirs, monkeypatch):
+    input_dir, output_dir = dirs
+    real_listdir = group_to_dyads.os.listdir
+    monkeypatch.setattr(group_to_dyads.os, "listdir", lambda path: sorted(real_listdir(path), reverse=True))
+    group_to_dyads.main(input_dir, output_dir, _no_questions)
+    assert sorted(path.name for path in output_dir.iterdir()) == [
+        "dyad_s1_s2_rest", "dyad_s1_s2_task", "dyad_s1_s3_rest", "dyad_s1_s3_task", "dyad_s2_s3_rest", "dyad_s2_s3_task",
+    ]
+
+
+def test_uppercase_extension_is_a_recording(dirs):
+    input_dir, output_dir = dirs
+    for subject in ("s1", "s2", "s3"):
+        (input_dir / subject / f"HRV_g1_{subject}_rest.xlsx").rename(input_dir / subject / f"HRV_g1_{subject}_rest.XLSX")
+    group_to_dyads.main(input_dir, output_dir, _no_questions)
+    assert len(list((output_dir / "dyad_s1_s2_rest").iterdir())) == 2

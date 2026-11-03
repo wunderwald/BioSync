@@ -109,3 +109,18 @@ def test_signal_with_the_same_value_throughout_is_rejected(signal_type, constant
     pair[flat_person] = constant
     with pytest.raises(ValueError, match="same value throughout"):
         preprocess_dyad(pair[0], pair[1], signal_type=signal_type)
+
+
+def test_group_average_of_averaged_windows_has_no_lag(signal):
+    windows = [_wxcorr(signal, np.roll(signal, shift), average_windows=True) for shift in (2, 5)]
+    assert {window['tau_max'] for dyad in windows for window in dyad} == {0}
+    average = average_wxcorr_matrices(windows, -MAX_LAG, average_windows=True)
+    assert {window['tau_max'] for window in average} == {0}
+    assert {window['tau_max_sigmoid'] for window in average} == {0}
+    assert average[0]['r_max'] == pytest.approx(np.mean([dyad[0]['correlations'][0] for dyad in windows]))
+
+
+def test_group_average_without_averaged_windows_keeps_its_lags(signal):
+    windows = [_wxcorr(signal, np.roll(signal, 3)) for _ in range(2)]
+    average = average_wxcorr_matrices(windows, -MAX_LAG)
+    assert [window['tau_max'] for window in average] == [window['tau_max'] for window in windows[0]]
