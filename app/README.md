@@ -86,57 +86,6 @@ Pull the newest version, for example with **Fetch origin** and **Pull origin** i
 
 ---
 
-## Comparing with results from older versions
-
-Earlier versions took the files in a dyad folder in the order the file system listed them. They are now sorted alphabetically (ignoring case), and Excel lock files and hidden files are ignored. This can change results from the same data:
-
-- **The sign of τ can flip.** The first file is person A and the second is person B, so a dyad whose order changed now has A and B swapped.
-- **Folders with more than two files can pair differently.** The first two files with the same sheets are used, or the first two files if no two match, and the app warns about the others. For example, `simulated_data/dyad_recording` now uses `HRV_a` + `HRV_b`, where it previously used `HRV_a` + `HRV_other`.
-
-Earlier versions also ignored the time from the start of the recording to each person's first beat, which is the first value of an event-based column. Both people are now resampled onto one time grid that uses it, assuming they started recording at the same moment:
-
-- **τ can shift by a few samples** (200 ms each) for event-based data, by the difference between the two first values.
-
-Correlations of ±1 or beyond used to count as a z-value of 0. All correlations beyond ±0.999 are now limited to that value (z of about ±3.8) before the Fisher z-transform:
-
-- **`avg_z_transformed_corr` and `var_z_transformed_corr` can change** for windows that contain such values. This is rare at the default settings.
-
-Windows where a signal doesn't change have no correlation. They used to report τ at the lowest lag and a z-value of 0, and one such window made its group-average window and its random-pair average `nan`:
-
-- **Flat windows are now `nan` in every column**, including τ and the z-values.
-- **Averages leave them out**, so group averages and random-pair averages can change for data that contains them.
-- **A signal with the same value throughout is now rejected** as invalid data. In a batch, that dyad is skipped and listed in the summary.
-
-Exports now store numbers as numbers instead of text, in the same cells. The values don't change, but a script that handles them as text, for example with string functions, needs adjusting. Booleans, labels, `-` and `nan` are still text.
-
-The app now has one column selector, listing the columns both files have in the selected sheet. Person A and B are always analysed in the same column, so a dyad whose files name that column differently can't be loaded until the names match. Older runs could use two different columns.
-
-DFA now describes each person's signal, and the correlation over time where that can be trusted:
-
-- **The `Alpha (DFA scaling exponent)` row of standard exports is now `-`.** It was computed across lags, not over time, and didn't change with coupling.
-- **New rows at the end of the metadata** give `DFA alpha, signal A` and `signal B`, the value over time for windowed exports, and a `DFA note` with the reason when a value is missing. Event-based signals use the original intervals, because resampling raises alpha.
-- **`dfa_lags` and `dfa_alpha` can now contain numbers**, for windows that don't overlap with at least 200 windows. They used to always be `-`.
-- **Series with fewer than 200 values are refused.**
-
-Random pairs are now drawn differently, so their t-statistic and p-value can change for the same data:
-
-- **Real pairs and self-pairs are left out.** Recordings are told apart by their file content, so copies from `preprocessing/group_to_dyads.py` count as one recording. Any two recordings that share a dyad folder are a real pair. Folders from one `group_to_dyads` group have only real pairs, so they can't be used alone.
-- **Every run uses a seed**, which the export records with the number of different pairs possible. Entering the seed again repeats the run for the same files.
-
-Group averages report τ = 0 with "Average Values in Windows", as single dyads do. They used to report the lowest lag. They also say how many windows they cover, and that longer dyads are cut to the shortest.
-
-Batch checks every dyad against the settings, not only the one loaded in the app. A dyad that doesn't fit, for example because it is shorter than the window size, is skipped and listed with the reason, and no files are written for it. It used to fail with an unclear error, or, in standard mode, be exported with `nan` values. A batch also skips its own output folder when that is inside the input folder, and asks before deleting results of an earlier run in the output folder.
-
-The data type is now guessed when data is loaded: values that clearly aren't heartbeat intervals in ms, such as EDA in microsiemens, select fixed-rate. Anything unclear stays event-based, as before.
-
-Spreadsheets are now read differently:
-
-- **Repeated column names can select a different column.** A name used twice used to mean the last column with that name. It now means the first, and the others are listed as `name (2)` and so on.
-- **Cells with formulas now give their calculated value.** They used to count as text, which made the column invalid.
-- **The first sheet in the dropdown is now the first sheet both files share.** It used to vary between runs. Results only change if you relied on the default sheet.
-
----
-
 ## Developer reference
 
 ### Export format
