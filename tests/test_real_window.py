@@ -35,6 +35,7 @@ def test_tab_changes_keep_the_panel_and_the_plot_the_same_size(report):
     tabs = report['tabs'].values()
     assert len({tab['tabview_width'] for tab in tabs}) == 1
     assert len({tab['plot_width'] for tab in tabs}) == 1
+    assert report['plot_resizes_during_tab_changes'] == 0     # not even for a moment during a change
 
 
 def test_only_tabs_that_dont_fit_get_a_scrollbar(report):

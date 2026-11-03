@@ -57,6 +57,9 @@ for key in ('dropdown_select_sheet', 'dropdown_select_column'):
 
 state.val_checkbox_lag_filter.set(True)       # the tallest content: lag filter rows and the job panel
 state.val_job_running.set(True)
+settle()
+plot_resizes = []
+plot.bind('<Configure>', lambda event: plot_resizes.append((event.width, event.height)), add='+')
 for name in ("Input Data", "Correlation", "Export & Batch", "Input Data"):
     tabview._segmented_button_callback(name)
     settle()
@@ -68,5 +71,6 @@ for name in ("Input Data", "Correlation", "Export & Batch", "Input Data"):
         'scrollbar_shown': bool(scrollbar.winfo_ismapped()),
     }
 
+report['plot_resizes_during_tab_changes'] = len(plot_resizes)
 print(json.dumps(report), flush=True)
 os._exit(0)     # skips Tk's slow and noisy shutdown
