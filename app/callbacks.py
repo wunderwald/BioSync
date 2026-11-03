@@ -596,7 +596,10 @@ def export_plot():
     )
     if not file_path:
         return
-    _while_exporting("plot", lambda: fig.savefig(file_path, dpi=300, format='png'))
+    try:
+        _while_exporting("plot", lambda: fig.savefig(file_path, dpi=300, format='png'))
+    except Exception as e:
+        messagebox.showerror("Export failed", str(e))
 
 
 # ---------------------------------------------------------------------------

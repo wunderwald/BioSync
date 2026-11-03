@@ -192,3 +192,18 @@ def test_failed_export_also_ends_the_busy_state(export_buttons):
     with pytest.raises(OSError):
         callbacks._while_exporting("data", write)
     assert export_buttons.window.cursor == "" and export_buttons.buttons['button_export_data'].cget('text') == 'Export XLSX'
+
+
+def test_failed_plot_export_shows_an_error(fake_state, monkeypatch):
+    class BrokenFigure:
+        def savefig(self, *args, **kwargs):
+            raise OSError("disk full")
+
+    monkeypatch.setattr(callbacks.corr_plot, "flush_update", lambda: None)
+    monkeypatch.setitem(callbacks.state.dat_plot_data, "fig", BrokenFigure())
+    monkeypatch.setattr(callbacks.filedialog, "asksaveasfilename", lambda **kwargs: "/x/plot.png")
+    monkeypatch.setattr(callbacks, "_while_exporting", lambda kind, write: write())
+    errors = []
+    monkeypatch.setattr(callbacks.messagebox, "showerror", lambda title, text: errors.append(text))
+    callbacks.export_plot()
+    assert errors == ["disk full"]
