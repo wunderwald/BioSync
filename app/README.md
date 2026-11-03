@@ -88,12 +88,6 @@ Pull the newest version, for example with **Fetch origin** and **Pull origin** i
 
 ## Developer reference
 
-### Export format
-
-Existing analysis pipelines read these files, so **the first sheet's layout must not change**: not its columns, their order, or its text. Numbers are stored as numbers; booleans, labels, `-` and `nan` are text. Add new data on another sheet.
-
-Windowed exports have a second sheet, `correlations`: one row per window (labelled with its start index) and one column per lag (labelled with the lag in samples). Flat windows contain the text `nan`. If a recording has too many windows for the first sheet (about 8,000), the `w_*` columns are left out, and the metadata says so.
-
 ### Tests
 
 From the repository root, with the virtual environment active:
