@@ -34,6 +34,14 @@ SETTINGS = [
     {"checkbox_windowed_xcorr": False, "standardised_signals": True},
     {"checkbox_eb": False, "checkbox_fr": True},
 ]
+# Writing files is slow, so file comparisons use the settings that change what an export contains
+FILE_SETTINGS = [
+    {},
+    {"use_lag_filter": True, "lag_filter_min": -5, "lag_filter_max": 10, "standardised_signals": True, "checkbox_absolute_corr": True},
+    {"checkbox_average_windows": True, "checkbox_eb": False, "checkbox_fr": True},
+    {"checkbox_windowed_xcorr": False, "checkbox_absolute_corr_sxc": True, "max_lag_sxc": 40},
+    {"checkbox_windowed_xcorr": False, "checkbox_eb": False, "checkbox_fr": True, "standardised_signals": True},
+]
 VAR_FOR_PARAM = {
     "checkbox_windowed_xcorr": "val_checkbox_windowed_xcorr", "window_size": "val_window_size",
     "step_size": "val_step_size", "max_lag": "val_max_lag", "max_lag_sxc": "val_max_lag_sxc",
@@ -134,7 +142,7 @@ def test_gui_and_batch_give_identical_results(gui, dyad_files, settings):
         assert np.array_equal(batch["lags"], state.dat_correlation_data["sxcorr"]["lags"])
 
 
-@pytest.mark.parametrize("settings", SETTINGS)
+@pytest.mark.parametrize("settings", FILE_SETTINGS)
 def test_gui_and_batch_write_identical_files(gui, dyad_files, tmp_path, settings):
     gui(settings)
     windowed = state.val_checkbox_windowed_xcorr.get()

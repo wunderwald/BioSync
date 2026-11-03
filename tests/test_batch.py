@@ -296,7 +296,7 @@ def test_button_is_enabled_again_and_error_shown_after_a_crash(
     assert getattr(fake_state, ready_var).get() is True
 
 
-def test_group_average_of_averaged_windows_has_no_lag(batch_dirs):
+def test_batch_group_average_of_averaged_windows_has_no_lag(batch_dirs):
     input_dir, output_dir = batch_dirs
     batch_processing.batch_process(_params(input_dir, output_dir, checkbox_average_windows=True))
     for name in ("wx_dyad0_wxcorr.xlsx", "grand_avg_wxcorr.xlsx"):

@@ -2,7 +2,6 @@
 Batch checks every dyad against the settings, never mixes its results with an earlier run's, and doesn't
 read its own output as a dyad. The data type is guessed when new data is chosen.
 """
-import itertools
 import os
 
 import numpy as np
@@ -22,27 +21,50 @@ from test_batch import ImmediateTimer, _params, _write_dyad, _write_person
 # THE SAME RULES AS THE APP
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("window, step, max_lag, use_filter, low, high, length", list(itertools.product(
-    (0, 1, 50, 150, 400), (0, 1, 75, 150, 151), (0, 1, 25, 75, 76), (False, True), (-30, -5, 10), (-10, 5, 30), (300,),
-)))
-def test_batch_uses_the_rules_of_the_windowed_settings_fields(fake_state, window, step, max_lag, use_filter, low, high, length):
+VALID = dict(length=300, window=150, step=75, max_lag=30, use_filter=True, low=-5, high=10)
+
+# Each case changes one setting of VALID to a value at or just beyond one of its limits.
+WINDOWED_CASES = [
+    ({}, None),
+    ({'window': 300}, None), ({'window': 301}, "window size"), ({'window': 1, 'step': 1, 'max_lag': 1, 'use_filter': False}, "max lag"),
+    ({'window': 0}, "window size"),
+    ({'step': 150}, None), ({'step': 151}, "step size"), ({'step': 1}, None), ({'step': 0}, "step size"),
+    ({'max_lag': 75}, None), ({'max_lag': 76}, "max lag"), ({'max_lag': 1, 'use_filter': False}, None),
+    ({'max_lag': 0, 'use_filter': False}, "max lag"),
+    ({'low': -30}, None), ({'low': -31}, "lag filter"), ({'high': 30}, None), ({'high': 31}, "lag filter"),
+    ({'low': 10, 'high': 10}, "lag filter"), ({'low': 10, 'high': 9}, "lag filter"),
+    ({'low': -31, 'high': 31, 'use_filter': False}, None),
+    ({'window': 400, 'step': 500}, "window size"),     # an invalid window size comes first, as in the app
+]
+
+
+def _windowed_config(case):
+    v = {**VALID, **case}
+    config = analysis.AnalysisConfig(
+        signal_type='event-based', windowed=True, standardised=False, window_size=v['window'], step_size=v['step'],
+        max_lag=v['max_lag'], absolute=False, average_windows=False, use_lag_filter=v['use_filter'],
+        lag_filter_min=v['low'], lag_filter_max=v['high'], max_lag_sxc=10, absolute_sxc=False,
+    )
+    return config, v
+
+
+@pytest.mark.parametrize("case, failing_setting", WINDOWED_CASES)
+def test_batch_uses_the_rules_of_the_windowed_settings_fields(fake_state, case, failing_setting):
+    config, v = _windowed_config(case)
     for name, value in {
-        "val_data_length": length, "val_window_size": window, "val_step_size": step, "val_max_lag": max_lag,
-        "val_checkbox_lag_filter": use_filter, "val_lag_filter_min": low, "val_lag_filter_max": high,
-        "val_lag_filter_min_input": str(low), "val_lag_filter_max_input": str(high),
+        "val_data_length": v['length'], "val_window_size": v['window'], "val_step_size": v['step'],
+        "val_max_lag": v['max_lag'], "val_checkbox_lag_filter": v['use_filter'], "val_lag_filter_min": v['low'],
+        "val_lag_filter_max": v['high'], "val_lag_filter_min_input": str(v['low']), "val_lag_filter_max_input": str(v['high']),
     }.items():
         getattr(fake_state, name).set(value)
-    app_says_valid = validation.check_wx_correlation_settings()
-    config = analysis.AnalysisConfig(
-        signal_type='event-based', windowed=True, standardised=False, window_size=window, step_size=step,
-        max_lag=max_lag, absolute=False, average_windows=False, use_lag_filter=use_filter, lag_filter_min=low,
-        lag_filter_max=high, max_lag_sxc=10, absolute_sxc=False,
-    )
-    assert (analysis.settings_problem(config, length) is None) == app_says_valid
+    problem = analysis.settings_problem(config, v['length'])
+    assert (problem is None) == validation.check_wx_correlation_settings() == (failing_setting is None)
+    if failing_setting:
+        assert problem.startswith(failing_setting)
 
 
-@pytest.mark.parametrize("max_lag, length", [(0, 10), (9, 10), (10, 10), (11, 10), (-1, 10)])
-def test_batch_uses_the_rules_of_the_standard_settings_field(fake_state, max_lag, length):
+@pytest.mark.parametrize("max_lag, length, valid", [(0, 10, True), (9, 10, True), (10, 10, False), (-1, 10, False)])
+def test_batch_uses_the_rules_of_the_standard_settings_field(fake_state, max_lag, length, valid):
     fake_state.val_data_length.set(length)
     fake_state.val_max_lag_sxc.set(max_lag)
     config = analysis.AnalysisConfig(
@@ -50,7 +72,10 @@ def test_batch_uses_the_rules_of_the_standard_settings_field(fake_state, max_lag
         absolute=False, average_windows=False, use_lag_filter=False, lag_filter_min=0, lag_filter_max=0,
         max_lag_sxc=max_lag, absolute_sxc=False,
     )
-    assert (analysis.settings_problem(config, length) is None) == validation.check_sx_correlation_settings()
+    problem = analysis.settings_problem(config, length)
+    assert (problem is None) == validation.check_sx_correlation_settings() == valid
+    if not valid:
+        assert problem.startswith("max lag")
 
 
 # ---------------------------------------------------------------------------
