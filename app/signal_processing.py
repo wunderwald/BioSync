@@ -17,6 +17,26 @@ def _replace_invalid_EDA(eda):
     indices = np.arange(len(eda))
     return np.interp(indices, indices[valid], eda[valid])
 
+# Heartbeat intervals in ms: 2000 ms is 30 bpm, 250 ms is 240 bpm
+TYPICAL_IBI_MS = (250, 2000)
+
+def guess_is_event_based(signal_a, signal_b):
+    """
+    Guesses whether two signals are heartbeat intervals in ms (event-based) rather than samples (fixed-rate).
+    Only values that clearly can't be intervals in ms count as fixed-rate, such as EDA in microsiemens.
+    Everything else stays event-based, the default. Intervals in seconds (about 0.25 to 2) are unclear, as
+    they overlap with typical EDA values, so they stay event-based too.
+    """
+    values = np.concatenate([np.asarray(signal_a[1:-1], dtype=float), np.asarray(signal_b[1:-1], dtype=float)])
+    if len(values) == 0:
+        return True
+    if (values < 0).any():
+        return False
+    median = np.median(values)
+    looks_like_seconds = TYPICAL_IBI_MS[0] / 1000 <= median <= TYPICAL_IBI_MS[1] / 1000
+    clearly_not_ms = median < TYPICAL_IBI_MS[0] / 2 or median > TYPICAL_IBI_MS[1] * 5
+    return looks_like_seconds or not clearly_not_ms
+
 def standardize(signal):
     '''
     Apply z-score standardisation to signal: zero mean, unit variance.

@@ -1,6 +1,7 @@
 import hashlib
 import itertools
 import os
+import re
 import xlsx
 import utils
 from analysis import AnalysisConfig, analyze_dyad, signal_dfa, windowed_dfa
@@ -92,18 +93,18 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
                 'dfa_windows': windowed_dfa(corr_data, config) if export else None,
             }
             
-            # export data and plot
+            # export data and plot, making the plot first so that a failure leaves no files
             if export:
-                output_file_name = f"wx_{os.path.basename(dyad_dir) if dyad_dir else datetime.now().strftime('%Y%m%d%H%M%S')}_wxcorr.xlsx"
-                output_file_path = os.path.join(output_dir, output_file_name)
-                export_wxcorr_data(output_file_path, export_params)
-                
                 fig = plot_windowed_cross_correlation(
-                    wxc_data=corr_data, signal_a=signal_a, signal_b=signal_b, 
+                    wxc_data=corr_data, signal_a=signal_a, signal_b=signal_b,
                     show_sigmoid_correlations=params['sigmoid_correlations'],
                     use_lag_filter=params['use_lag_filter'], lag_filter_min=params['lag_filter_min'], lag_filter_max=params['lag_filter_max'],
                     window_size=params['window_size'], max_lag=params['max_lag'], step_size=params['step_size']
                 )
+                output_file_name = f"wx_{os.path.basename(dyad_dir) if dyad_dir else datetime.now().strftime('%Y%m%d%H%M%S')}_wxcorr.xlsx"
+                output_file_path = os.path.join(output_dir, output_file_name)
+                export_wxcorr_data(output_file_path, export_params)
+
                 plot_file_name = f"wx_{os.path.basename(dyad_dir) if dyad_dir else datetime.now().strftime('%Y%m%d%H%M%S')}_wxcorr.png"
                 plot_file_path = os.path.join(output_dir, plot_file_name)
                 save_figure_to_png(fig=fig, filepath=plot_file_path)
@@ -131,15 +132,15 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
                 'dfa_signals': signal_dfa(raw_signal_a, raw_signal_b, config) if export else None,
             }
             
-            # export data and plot
+            # export data and plot, making the plot first so that a failure leaves no files
             if export:
+                fig = plot_standard_cross_correlation(sxc_data=corr_data, signal_a=signal_a, signal_b=signal_b)
                 output_file_name = f"{os.path.basename(dyad_dir) if dyad_dir else datetime.now().strftime('%Y%m%d%H%M%S')}_sxcorr.xlsx"
                 output_file_path = os.path.join(output_dir, output_file_name)
                 export_sxcorr_data(output_file_path, export_params)
 
                 plot_file_name = f"{os.path.basename(dyad_dir) if dyad_dir else datetime.now().strftime('%Y%m%d%H%M%S')}_sxcorr.png"
                 plot_file_path = os.path.join(output_dir, plot_file_name)
-                fig = plot_standard_cross_correlation(sxc_data=corr_data, signal_a=signal_a, signal_b=signal_b)
                 save_figure_to_png(fig=fig, filepath=plot_file_path)
 
             return corr_data
@@ -303,6 +304,32 @@ def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_
     )
 
 
+def _same_folder(path_a, path_b):
+    return os.path.realpath(path_a) == os.path.realpath(path_b)
+
+# ---------------------------------------------------------------------------
+# RESULTS OF EARLIER RUNS
+# ---------------------------------------------------------------------------
+
+RESULT_FILE_PATTERNS = (
+    re.compile(r"^wx_.+_wxcorr\.(xlsx|png)$"),
+    re.compile(r"^.+_sxcorr\.(xlsx|png)$"),
+    re.compile(r"^grand_avg_wxcorr\.(xlsx|png)$"),
+)
+
+def find_result_files(output_dir):
+    """The files in output_dir that a batch run writes. Anything else is left out, so it is never deleted."""
+    if not output_dir or not os.path.isdir(output_dir):
+        return []
+    return sorted(
+        f for f in os.listdir(output_dir)
+        if os.path.isfile(os.path.join(output_dir, f)) and any(p.match(f) for p in RESULT_FILE_PATTERNS)
+    )
+
+def remove_result_files(output_dir, file_names):
+    for file_name in file_names:
+        os.remove(os.path.join(output_dir, file_name))
+
 def batch_process(params, progress=_no_progress):
     """
     Processes a batch of dyad data files, performs cross-correlation analysis, and exports the results.
@@ -346,8 +373,12 @@ def batch_process(params, progress=_no_progress):
     output_dir = params['output_dir']
     if not output_dir: return summary
 
-    # process dyads in folder
+    # process dyads in folder, except the output folder: after a run it holds result files that would look like a dyad
     dyad_folders = sorted(f for f in os.listdir(batch_input_folder) if os.path.isdir(os.path.join(batch_input_folder, f)))
+    output_folder = next((f for f in dyad_folders if _same_folder(os.path.join(batch_input_folder, f), output_dir)), None)
+    if output_folder:
+        dyad_folders.remove(output_folder)
+        summary['warnings'].append(f"{output_folder}: skipped, because it is the output folder")
     all_wxcorr_results = []
     for dyad_index, dyad_folder in enumerate(dyad_folders):
         progress(dyad_index, len(dyad_folders), dyad_folder)

@@ -102,6 +102,10 @@ Random pairs are now drawn differently, so their t-statistic and p-value can cha
 
 Group averages report τ = 0 with "Average Values in Windows", as single dyads do. They used to report the lowest lag. They also say how many windows they cover, and that longer dyads are cut to the shortest.
 
+Batch checks every dyad against the settings, not only the one loaded in the app. A dyad that doesn't fit, for example because it is shorter than the window size, is skipped and listed with the reason, and no files are written for it. It used to fail with an unclear error, or, in standard mode, be exported with `nan` values. A batch also skips its own output folder when that is inside the input folder, and asks before deleting results of an earlier run in the output folder.
+
+The data type is now guessed when data is loaded: values that clearly aren't heartbeat intervals in ms, such as EDA in microsiemens, select fixed-rate. Anything unclear stays event-based, as before.
+
 Spreadsheets are now read differently:
 
 - **Repeated column names can select a different column.** A name used twice used to mean the last column with that name. It now means the first, and the others are listed as `name (2)` and so on.

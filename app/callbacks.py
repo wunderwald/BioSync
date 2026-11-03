@@ -7,7 +7,8 @@ from tkinter import filedialog, messagebox
 import xlsx
 import utils
 from analysis import preprocess_signals, signal_dfa
-from batch_processing import batch_process, random_pair_analysis
+from signal_processing import guess_is_event_based
+from batch_processing import batch_process, find_result_files, random_pair_analysis, remove_result_files
 from export import export_sxcorr_data, export_wxcorr_data, export_random_pair_data
 from plot import plot_init
 
@@ -165,12 +166,14 @@ def on_lag_filter_checkbox_change():
 
 def on_dropdown_select_sheet_change(value):
     update_column_names()
+    guess_signal_type()
     preprocess_data()
     clear_correlation_data()
     state.PARAMS_CHANGED()
 
 
 def on_dropdown_select_column_change(value):
+    guess_signal_type()
     preprocess_data()
     clear_correlation_data()
     state.PARAMS_CHANGED()
@@ -179,6 +182,7 @@ def on_dropdown_select_column_change(value):
 def on_change_data_has_headers(*args):
     state.dat_workbook_data["has_headers"] = state.val_checkbox_data_has_headers.get()
     update_column_names()
+    guess_signal_type()
     preprocess_data()
     clear_correlation_data()
     state.PARAMS_CHANGED()
@@ -354,8 +358,24 @@ def show_loaded_workbooks():
     """Fills the dropdowns and signals from the workbooks in state.dat_workbook_data."""
     update_sheet_names()
     update_column_names()
+    guess_signal_type()
     preprocess_data()
     clear_correlation_data()
+
+
+def guess_signal_type():
+    """
+    Sets event-based or fixed-rate from the values of the selected column, when new data is chosen.
+    Ticking a data type by hand still works, until the data changes again.
+    """
+    column = state.val_selected_column.get()
+    raw_a = state.dat_workbook_data["columns_a"].get(column)
+    raw_b = state.dat_workbook_data["columns_b"].get(column)
+    if not (utils.is_numeric_array(raw_a) and utils.is_numeric_array(raw_b)):
+        return
+    is_event_based = guess_is_event_based(raw_a, raw_b)
+    state.val_checkbox_eb.set(is_event_based)
+    state.val_checkbox_fr.set(not is_event_based)
 
 
 # ---------------------------------------------------------------------------
@@ -676,8 +696,32 @@ def run_batch_process(params, progress):
     return batch_process(params, progress=progress)
 
 
+def _replace_earlier_results(output_dir):
+    """
+    Asks before a run whether to delete the results of an earlier run in the output folder, which would otherwise
+    stay next to the new ones. Returns False if the run shouldn't start.
+    """
+    earlier = find_result_files(output_dir)
+    if not earlier:
+        return True
+    if not messagebox.askyesno(
+        "Earlier results in the output folder",
+        f"{os.path.basename(output_dir)} contains {len(earlier)} files from an earlier run. "
+        "Delete them and start? Other files in the folder stay.",
+    ):
+        return False
+    try:
+        remove_result_files(output_dir, earlier)
+    except OSError as e:
+        messagebox.showerror("Can't delete earlier results", str(e))
+        return False
+    return True
+
+
 def handle_run_batch_button():
     params = _analysis_params()
+    if not _replace_earlier_results(params['output_dir']):
+        return
     _start_job(
         "Batch processing",
         lambda progress: run_batch_process(params, progress),

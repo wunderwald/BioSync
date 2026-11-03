@@ -141,7 +141,35 @@ def format_dfa(dfa_signals, dfa_windows):
     return "\n".join(lines)
 
 
+def settings_problem(config, data_length):
+    """
+    Why the settings don't fit data of this length, or None. These are the same rules the app's settings fields
+    check, so that a batch can check every dyad, not only the one loaded in the app.
+    """
+    if not config.windowed:
+        if not 0 <= config.max_lag_sxc < data_length:
+            return f"max lag {config.max_lag_sxc} needs more than {config.max_lag_sxc} samples"
+        return None
+    if not 1 <= config.window_size <= data_length:
+        return f"window size {config.window_size} needs at least {config.window_size} samples"
+    if not 1 <= config.step_size <= config.window_size:
+        return f"step size {config.step_size} must be between 1 and the window size"
+    if not 0 < config.max_lag <= config.window_size // 2:
+        return f"max lag {config.max_lag} must be between 1 and half the window size"
+    if config.use_lag_filter:
+        low, high = config.lag_filter_min, config.lag_filter_max
+        if not (high > low and -config.max_lag <= low and high <= config.max_lag):
+            return f"lag filter {low} to {high} must be sorted and within the max lag"
+    return None
+
+
 def analyze_dyad(raw_signal_a, raw_signal_b, config):
-    """Returns the preprocessed signals and their correlation result. Doesn't read or write anything else."""
+    """
+    Returns the preprocessed signals and their correlation result. Doesn't read or write anything else.
+    Raises ValueError if the settings don't fit this dyad, for example because it is too short.
+    """
     signals = preprocess_signals(raw_signal_a, raw_signal_b, config)
+    problem = settings_problem(config, len(signals[0]))
+    if problem:
+        raise ValueError(f"Doesn't fit the settings: {len(signals[0])} samples, {problem}.")
     return signals, correlate_signals(signals, config)
