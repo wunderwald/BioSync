@@ -117,3 +117,78 @@ def test_save_dialog_suggests_the_name(fake_state, monkeypatch, export, kind):
     monkeypatch.setattr(callbacks.filedialog, "asksaveasfilename", lambda **kwargs: suggested.append(kwargs["initialfile"]) or "")
     export()
     assert suggested == [f"biosync_xc_{kind}_ex1"]
+
+
+class FakeButton:
+    def __init__(self, text, top):
+        self.options = {'text': text, 'state': 'normal'}
+        self.top = top
+
+    def cget(self, name):
+        return self.options[name]
+
+    def configure(self, **options):
+        self.options.update(options)
+
+    def winfo_toplevel(self):
+        return self.top
+
+
+class FakeWindow:
+    def __init__(self):
+        self.cursor = ""
+
+    def configure(self, cursor):
+        self.cursor = cursor
+
+    def update_idletasks(self):
+        pass
+
+
+@pytest.fixture
+def export_buttons(fake_state, monkeypatch):
+    import gui_updates
+    window = FakeWindow()
+    buttons = {'button_export_data': FakeButton('Export XLSX', window), 'button_export_plot': FakeButton('Export Plots', window)}
+    monkeypatch.setattr(gui_updates, "_w", buttons)
+    monkeypatch.setattr(gui_updates, "_export_button_texts", {})
+    monkeypatch.setitem(callbacks._tabview, "tabview", window)
+    fake_state.val_exporting.set('')
+    fake_state.val_INPUT_DATA_VALID.set(True)
+    fake_state.val_checkbox_windowed_xcorr.set(True)
+    fake_state.val_CORRELATION_SETTINGS_VALID.set(True)
+    original_set = fake_state.val_exporting.set
+
+    def set_and_update(value):
+        original_set(value)
+        gui_updates.update_export_busy()
+    fake_state.val_exporting.set = set_and_update
+    fake_state.window, fake_state.buttons = window, buttons
+    return fake_state
+
+
+@pytest.mark.parametrize("kind, busy_button", [("data", "button_export_data"), ("plot", "button_export_plot")])
+def test_window_shows_it_is_busy_while_exporting(export_buttons, kind, busy_button):
+    seen = {}
+
+    def write():
+        seen['cursor'] = export_buttons.window.cursor
+        seen['states'] = {key: button.cget('state') for key, button in export_buttons.buttons.items()}
+        seen['text'] = export_buttons.buttons[busy_button].cget('text')
+
+    callbacks._while_exporting(kind, write)
+    assert seen == {'cursor': 'watch', 'states': {'button_export_data': 'disabled', 'button_export_plot': 'disabled'}, 'text': 'Exporting...'}
+    assert export_buttons.window.cursor == ""
+    assert {key: button.options for key, button in export_buttons.buttons.items()} == {
+        'button_export_data': {'text': 'Export XLSX', 'state': 'normal'},
+        'button_export_plot': {'text': 'Export Plots', 'state': 'normal'},
+    }
+
+
+def test_failed_export_also_ends_the_busy_state(export_buttons):
+    def write():
+        raise OSError("disk full")
+
+    with pytest.raises(OSError):
+        callbacks._while_exporting("data", write)
+    assert export_buttons.window.cursor == "" and export_buttons.buttons['button_export_data'].cget('text') == 'Export XLSX'

@@ -82,6 +82,7 @@ val_job_progress_text                = None
 val_job_cancel_requested             = None
 val_dfa_text                         = None
 val_input_error                      = None
+val_exporting                        = None
 
 # data containers
 dat_plot_data         = {}
@@ -143,7 +144,7 @@ def init_state(dpi, sw, sh, retina):
     global val_batch_processing_is_ready, val_rp_n_input, val_rp_n, val_rp_seed_input
     global val_random_pair_input_folder, val_random_pair_output_file, val_random_pair_is_ready
     global val_job_running, val_job_progress, val_job_progress_text, val_job_cancel_requested
-    global val_dfa_text, val_input_error
+    global val_dfa_text, val_input_error, val_exporting
     global dat_plot_data, dat_workbook_data, dat_physiological_data, dat_correlation_data
 
     screen_dpi    = dpi
@@ -209,6 +210,7 @@ def init_state(dpi, sw, sh, retina):
     val_job_cancel_requested               = tk.BooleanVar(value=False)
     val_dfa_text                           = tk.StringVar(value='DFA: no data')
     val_input_error                        = tk.StringVar(value='')  # why the loaded data can't be used, if it can't
+    val_exporting                          = tk.StringVar(value='')  # 'data' or 'plot' while an export runs
 
     # data containers
     dat_plot_data['fig'] = plot_init(is_retina=retina)

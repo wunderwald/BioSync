@@ -49,6 +49,7 @@ def setup_traces():
     state.val_CORRELATION_SETTINGS_VALID.trace_add('write', update_active_state_export_button)
     state.val_CORRELATION_SETTINGS_VALID_SXC.trace_add('write', update_active_state_export_button)
     state.val_checkbox_windowed_xcorr.trace_add('write', update_active_state_export_button)
+    state.val_exporting.trace_add('write', update_export_busy)
     update_active_state_export_button()
 
     state.val_checkbox_windowed_xcorr.trace_add('write', update_xcorr_parameter_groups)
@@ -233,6 +234,25 @@ def update_active_state_export_button(*args):
     state_str = "normal" if validation.check_export_ready() else "disabled"
     _w['button_export_data'].configure(state=state_str)
     _w['button_export_plot'].configure(state=state_str)
+
+
+_EXPORT_BUTTONS = {'data': 'button_export_data', 'plot': 'button_export_plot'}
+_export_button_texts = {}
+
+
+def update_export_busy(*args):
+    """While an export runs, the window shows a busy cursor, and the clicked button says so."""
+    kind = state.val_exporting.get()
+    for button_kind, key in _EXPORT_BUTTONS.items():
+        button = _w[key]
+        _export_button_texts.setdefault(key, button.cget('text'))
+        button.configure(text="Exporting..." if button_kind == kind else _export_button_texts[key])
+    _w['button_export_data'].winfo_toplevel().configure(cursor="watch" if kind else "")
+    if kind:
+        for key in _EXPORT_BUTTONS.values():
+            _w[key].configure(state="disabled")
+    else:
+        update_active_state_export_button()
 
 
 def update_xcorr_parameter_groups(*args):

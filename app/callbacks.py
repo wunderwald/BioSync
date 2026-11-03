@@ -551,6 +551,19 @@ def _export_file_name(kind):
     return f"{name}_{os.path.basename(selected_dir)}" if selected_dir else name
 
 
+def _while_exporting(kind, write):
+    """
+    Runs write on the main thread, which freezes the window for a few seconds with many windows.
+    Shows that the window is busy first, because it can't redraw until write is done.
+    """
+    state.val_exporting.set(kind)
+    _tabview['tabview'].update_idletasks()
+    try:
+        write()
+    finally:
+        state.val_exporting.set('')
+
+
 def export_data():
     corr_plot.flush_update()  # results must match settings typed just before clicking
     filename_init  = _export_file_name("data")
@@ -562,11 +575,9 @@ def export_data():
     )
     if not file_path:
         return
+    write = _export_wxcorr_data if state.val_checkbox_windowed_xcorr.get() else _export_sxcorr_data
     try:
-        if state.val_checkbox_windowed_xcorr.get():
-            _export_wxcorr_data(file_path)
-        else:
-            _export_sxcorr_data(file_path)
+        _while_exporting("data", lambda: write(file_path))
     except Exception as e:
         messagebox.showerror("Export failed", str(e))
 
@@ -585,7 +596,7 @@ def export_plot():
     )
     if not file_path:
         return
-    fig.savefig(file_path, dpi=300, format='png')
+    _while_exporting("plot", lambda: fig.savefig(file_path, dpi=300, format='png'))
 
 
 # ---------------------------------------------------------------------------
