@@ -226,3 +226,29 @@ def test_histograms_count_every_window_also_beyond_the_axis_range():
     fig = plot.plot_windowed_cross_correlation(windows, 150, 30, 75, [0.0] * 600, [0.0] * 600)
     for bars in _histogram_bars(fig):
         assert sum(bar.get_height() for bar in bars) == len(values)
+
+
+@pytest.mark.parametrize("n_windows", [1, 7, 28])
+def test_histogram_axes_mark_zero_and_the_tallest_bar(n_windows):
+    import plot
+    windows = [
+        {'start_idx': index * 75, 'center_idx': index * 75 + 75, 'correlations': [0.5] * 61, 'correlations_sigmoid': [0.4] * 61,
+         'r_max': 0.95, 'tau_max': 0, 'r_max_sigmoid': 0.4, 'tau_max_sigmoid': 0}
+        for index in range(n_windows)
+    ]
+    fig = plot.plot_windowed_cross_correlation(windows, 150, 30, 75, [0.0] * 600, [0.0] * 600)
+    for bars in _histogram_bars(fig):
+        ax = bars[0].axes
+        assert list(ax.get_yticks()) == [0, n_windows]
+        assert ax.get_ylim()[1] >= n_windows
+
+
+def test_histogram_axes_of_flat_windows_only_mark_zero():
+    import plot
+    windows = [
+        {'start_idx': 0, 'center_idx': 75, 'correlations': [float('nan')] * 61, 'correlations_sigmoid': [float('nan')] * 61,
+         'r_max': float('nan'), 'tau_max': float('nan'), 'r_max_sigmoid': float('nan'), 'tau_max_sigmoid': float('nan')}
+    ]
+    fig = plot.plot_windowed_cross_correlation(windows, 150, 30, 75, [0.0] * 600, [0.0] * 600)
+    histogram_axes = [ax for ax in fig.axes if not ax.lines and not ax.images and ax.get_label() != '<colorbar>']
+    assert histogram_axes and all(list(ax.get_yticks()) == [0] for ax in histogram_axes)

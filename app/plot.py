@@ -72,6 +72,13 @@ def _hist_bins(values, low, high, width, centred=False):
     return np.arange(np.floor(low / width) * width, high + width, width)
 
 
+def _count_ticks(ax, counts):
+    """A histogram counts windows, so its axis only marks 0 and the count of the tallest bar."""
+    highest = int(max(counts, default=0))
+    ax.set_yticks([0, highest] if highest else [0])
+    ax.set_ylim(0, max(highest, 1) * 1.05)
+
+
 def _lag_bin_width(min_lag, max_lag):
     """An odd number of lags per bin, so that each bin is centred on a lag, giving about TAU_MAX_BINS bins."""
     width = max(1, round((max_lag - min_lag + 1) / TAU_MAX_BINS))
@@ -135,8 +142,9 @@ def plot_windowed_cross_correlation(wxc_data, window_size, max_lag, step_size, s
     ax1.grid()
     r_max_hist_values = _without_flat_windows(r_max_values)
     ax1_hist = fig.add_subplot(ax1_gs_inner[1])
-    ax1_hist.hist(r_max_hist_values, bins=_hist_bins(r_max_hist_values, -1, 1, R_MAX_BIN_WIDTH), orientation='vertical', color='black', alpha=1)
+    counts, _, _ = ax1_hist.hist(r_max_hist_values, bins=_hist_bins(r_max_hist_values, -1, 1, R_MAX_BIN_WIDTH), orientation='vertical', color='black', alpha=1)
     ax1_hist.set_xlim(-1, 1)
+    _count_ticks(ax1_hist, counts)
 
     # Plot corresponding lags over time
     ax2_gs_inner = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=gs[2], width_ratios=[6, 1], wspace=.1)
@@ -147,8 +155,9 @@ def plot_windowed_cross_correlation(wxc_data, window_size, max_lag, step_size, s
     ax2.grid()
     tau_max_hist_values = _without_flat_windows(tau_max_values)
     ax2_hist = fig.add_subplot(ax2_gs_inner[1])
-    ax2_hist.hist(tau_max_hist_values, bins=_hist_bins(tau_max_hist_values, _min_lag, _max_lag, _lag_bin_width(_min_lag, _max_lag), centred=True), orientation='vertical', color='black', alpha=1)
+    counts, _, _ = ax2_hist.hist(tau_max_hist_values, bins=_hist_bins(tau_max_hist_values, _min_lag, _max_lag, _lag_bin_width(_min_lag, _max_lag), centred=True), orientation='vertical', color='black', alpha=1)
     ax2_hist.set_xlim(-max_lag, max_lag)
+    _count_ticks(ax2_hist, counts)
 
     # Return the figure
     return fig
