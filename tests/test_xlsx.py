@@ -8,6 +8,7 @@ from openpyxl import Workbook
 import callbacks
 import state
 import xlsx
+from helpers import FakeWidget
 
 
 def _write(path, sheets):
@@ -95,14 +96,9 @@ def test_file_is_closed_after_reading(tmp_path, opened_workbooks):
     assert xlsx.get_columns(workbook, "S") == {"a": [1]}
 
 
-class FakeDropdown:
-    def configure(self, values):
-        self.values = values
-
-
 @pytest.fixture
 def gui_files(fake_state, monkeypatch):
-    dropdowns = {key: FakeDropdown() for key in ("sheet", "column")}
+    dropdowns = {key: FakeWidget() for key in ("sheet", "column")}
     monkeypatch.setattr(callbacks, "_dropdowns", dropdowns)
     monkeypatch.setitem(state.dat_workbook_data, "sheet_names", [])
     fake_state.warnings = []

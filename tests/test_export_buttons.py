@@ -6,14 +6,7 @@ import pytest
 
 import gui_updates
 import validation
-
-
-class FakeButton:
-    def __init__(self):
-        self.state = None
-
-    def configure(self, state):
-        self.state = state
+from helpers import FakeWidget
 
 
 @pytest.mark.parametrize("windowed, input_valid, wx_valid, sx_valid, expected", [
@@ -41,7 +34,7 @@ def test_both_export_buttons_follow_export_ready(fake_state, monkeypatch, sx_val
     fake_state.val_checkbox_windowed_xcorr.set(False)
     fake_state.val_INPUT_DATA_VALID.set(True)
     fake_state.val_CORRELATION_SETTINGS_VALID_SXC.set(sx_valid)
-    buttons = {'button_export_data': FakeButton(), 'button_export_plot': FakeButton()}
+    buttons = {'button_export_data': FakeWidget(), 'button_export_plot': FakeWidget()}
     monkeypatch.setattr(gui_updates, "_w", buttons)
 
     gui_updates.update_active_state_export_button()

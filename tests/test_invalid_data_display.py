@@ -8,6 +8,7 @@ import callbacks
 import corr_plot
 import gui_updates
 import state
+from helpers import FakeWidget
 
 
 @pytest.fixture
@@ -70,34 +71,19 @@ def test_valid_data_clears_the_reason(data):
     assert len(state.dat_physiological_data["signal_a"]) > 100
 
 
-class FakeDropdown:
-    def __init__(self):
-        self.colors = {'fg_color': 'grey', 'button_color': 'darkgrey', 'button_hover_color': 'black'}
-
-    def cget(self, name):
-        return self.colors[name]
-
-    def configure(self, **colors):
-        self.colors.update(colors)
+NORMAL_COLORS = {'fg_color': 'grey', 'button_color': 'darkgrey', 'button_hover_color': 'black'}
 
 
-class FakeLabel:
-    def __init__(self):
-        self.text, self.visible = None, False
-
-    def configure(self, text):
-        self.text = text
-
-    def grid(self, **kwargs):
-        self.visible = True
-
-    def grid_forget(self):
-        self.visible = False
+def _colors(widget):
+    return {name: widget.cget(name) for name in NORMAL_COLORS}
 
 
 @pytest.fixture
 def widgets(fake_state, monkeypatch):
-    widgets = {'dropdown_select_sheet': FakeDropdown(), 'dropdown_select_column': FakeDropdown(), 'error_label_input_data': FakeLabel()}
+    widgets = {
+        'dropdown_select_sheet': FakeWidget(**NORMAL_COLORS), 'dropdown_select_column': FakeWidget(**NORMAL_COLORS),
+        'error_label_input_data': FakeWidget(),
+    }
     monkeypatch.setattr(gui_updates, "_w", widgets)
     monkeypatch.setattr(gui_updates, "_normal_dropdown_colors", {})
     return widgets
@@ -106,8 +92,8 @@ def widgets(fake_state, monkeypatch):
 def test_reason_turns_the_dropdowns_red_and_shows_it(fake_state, widgets):
     fake_state.val_input_error.set("Column 'Text' contains values that aren't numbers.")
     gui_updates.update_input_data_validation_error()
-    assert widgets['dropdown_select_sheet'].colors == gui_updates.INVALID_DROPDOWN_COLORS
-    assert widgets['dropdown_select_column'].colors == gui_updates.INVALID_DROPDOWN_COLORS
+    assert _colors(widgets['dropdown_select_sheet']) == gui_updates.INVALID_DROPDOWN_COLORS
+    assert _colors(widgets['dropdown_select_column']) == gui_updates.INVALID_DROPDOWN_COLORS
     assert widgets['error_label_input_data'].visible
     assert widgets['error_label_input_data'].text == "Data is invalid: Column 'Text' contains values that aren't numbers."
 
@@ -117,7 +103,7 @@ def test_valid_data_restores_the_normal_colors(fake_state, widgets):
     gui_updates.update_input_data_validation_error()
     fake_state.val_input_error.set("")
     gui_updates.update_input_data_validation_error()
-    assert widgets['dropdown_select_column'].colors == {'fg_color': 'grey', 'button_color': 'darkgrey', 'button_hover_color': 'black'}
+    assert _colors(widgets['dropdown_select_column']) == NORMAL_COLORS
     assert not widgets['error_label_input_data'].visible
 
 

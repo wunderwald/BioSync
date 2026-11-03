@@ -5,6 +5,7 @@ import pytest
 
 import callbacks
 import validation
+from helpers import FakeWidget
 
 
 @pytest.mark.parametrize("wanted, max_lag, expected", [
@@ -119,37 +120,14 @@ def test_save_dialog_suggests_the_name(fake_state, monkeypatch, export, kind):
     assert suggested == [f"biosync_xc_{kind}_ex1"]
 
 
-class FakeButton:
-    def __init__(self, text, top):
-        self.options = {'text': text, 'state': 'normal'}
-        self.top = top
-
-    def cget(self, name):
-        return self.options[name]
-
-    def configure(self, **options):
-        self.options.update(options)
-
-    def winfo_toplevel(self):
-        return self.top
-
-
-class FakeWindow:
-    def __init__(self):
-        self.cursor = ""
-
-    def configure(self, cursor):
-        self.cursor = cursor
-
-    def update_idletasks(self):
-        pass
-
-
 @pytest.fixture
 def export_buttons(fake_state, monkeypatch):
     import gui_updates
-    window = FakeWindow()
-    buttons = {'button_export_data': FakeButton('Export XLSX', window), 'button_export_plot': FakeButton('Export Plots', window)}
+    window = FakeWidget(cursor="")
+    buttons = {
+        'button_export_data': FakeWidget(toplevel=window, text='Export XLSX', state='normal'),
+        'button_export_plot': FakeWidget(toplevel=window, text='Export Plots', state='normal'),
+    }
     monkeypatch.setattr(gui_updates, "_w", buttons)
     monkeypatch.setattr(gui_updates, "_export_button_texts", {})
     monkeypatch.setitem(callbacks._tabview, "tabview", window)

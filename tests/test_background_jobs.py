@@ -11,7 +11,7 @@ import batch_processing
 import callbacks
 import gui_updates
 import state
-from test_batch import ImmediateTimer, _params, _write_dyad
+from helpers import FakeTimer, FakeWidget, batch_params, write_dyad
 
 
 @pytest.fixture
@@ -24,7 +24,7 @@ def app(fake_state, monkeypatch):
     fake_state.val_rp_n.set(3)
     for name in ("val_batch_input_folder", "val_batch_output_folder", "val_random_pair_input_folder", "val_random_pair_output_file"):
         getattr(fake_state, name).set("selected")
-    fake_state.timer = ImmediateTimer()
+    fake_state.timer = FakeTimer()
     monkeypatch.setitem(callbacks._tabview, "tabview", fake_state.timer)
     fake_state.dialogs = []
     for kind in ("showinfo", "showerror"):
@@ -138,11 +138,11 @@ def _guard_settings(monkeypatch, violations, params):
 
 
 def test_batch_does_not_touch_state_on_its_thread(app, tmp_path, monkeypatch):
-    _write_dyad(tmp_path / "in" / "dyad0")
+    write_dyad(tmp_path / "in" / "dyad0")
     (tmp_path / "out").mkdir()
     timer = app.timer
     violations = _guard_all_vars(monkeypatch)
-    _guard_settings(monkeypatch, violations, _params(tmp_path / "in", tmp_path / "out"))
+    _guard_settings(monkeypatch, violations, batch_params(tmp_path / "in", tmp_path / "out"))
 
     callbacks.handle_run_batch_button()
     timer.run_until_idle(60)
@@ -153,13 +153,13 @@ def test_batch_does_not_touch_state_on_its_thread(app, tmp_path, monkeypatch):
 
 
 def test_random_pairs_do_not_touch_state_on_their_thread(app, tmp_path, monkeypatch):
-    _write_dyad(tmp_path / "in" / "dyad0", seed=0)
-    _write_dyad(tmp_path / "in" / "dyad1", seed=1)
+    write_dyad(tmp_path / "in" / "dyad0", seed=0)
+    write_dyad(tmp_path / "in" / "dyad1", seed=1)
     timer = app.timer
     app.val_random_pair_input_folder.set(str(tmp_path / "in"))
     app.val_random_pair_output_file.set(str(tmp_path / "rp.xlsx"))
     violations = _guard_all_vars(monkeypatch)
-    _guard_settings(monkeypatch, violations, _params(tmp_path / "in", tmp_path))
+    _guard_settings(monkeypatch, violations, batch_params(tmp_path / "in", tmp_path))
 
     callbacks.handle_run_random_pair_button()
     timer.run_until_idle(60)
@@ -170,9 +170,9 @@ def test_random_pairs_do_not_touch_state_on_their_thread(app, tmp_path, monkeypa
 
 
 def test_settings_changed_during_a_run_do_not_affect_it(app, tmp_path, monkeypatch):
-    _write_dyad(tmp_path / "in" / "dyad0")
+    write_dyad(tmp_path / "in" / "dyad0")
     (tmp_path / "out").mkdir()
-    settings = _params(tmp_path / "in", tmp_path / "out", window_size=150)
+    settings = batch_params(tmp_path / "in", tmp_path / "out", window_size=150)
     used = []
     real = batch_processing.batch_process
 
@@ -193,19 +193,19 @@ def test_settings_changed_during_a_run_do_not_affect_it(app, tmp_path, monkeypat
 
 def test_batch_reports_each_dyad_and_the_group_average(tmp_path):
     for index in range(2):
-        _write_dyad(tmp_path / "in" / f"dyad{index}", seed=index)
+        write_dyad(tmp_path / "in" / f"dyad{index}", seed=index)
     (tmp_path / "out").mkdir()
     steps = []
-    batch_processing.batch_process(_params(tmp_path / "in", tmp_path / "out"), progress=lambda *step: steps.append(step))
+    batch_processing.batch_process(batch_params(tmp_path / "in", tmp_path / "out"), progress=lambda *step: steps.append(step))
     assert steps == [(0, 2, "dyad0"), (1, 2, "dyad1"), (2, 2, "Group average")]
 
 
 def test_random_pairs_report_every_step(tmp_path):
     for index in range(2):
-        _write_dyad(tmp_path / "in" / f"dyad{index}", seed=index)
+        write_dyad(tmp_path / "in" / f"dyad{index}", seed=index)
     steps = []
     batch_processing.random_pair_analysis(
-        _params(tmp_path / "in", tmp_path), str(tmp_path / "in"), random_pair_count=3,
+        batch_params(tmp_path / "in", tmp_path), str(tmp_path / "in"), random_pair_count=3,
         progress=lambda *step: steps.append(step),
     )
     assert [step[:2] for step in steps] == [(0, 5), (1, 5), (2, 5), (3, 5), (4, 5)]
@@ -222,19 +222,8 @@ def test_closing_only_asks_while_a_job_runs(app, monkeypatch):
     assert asked == ["Still running"]
 
 
-class FakeFrame:
-    def __init__(self):
-        self.visible = False
-
-    def grid(self, **kwargs):
-        self.visible = True
-
-    def grid_forget(self):
-        self.visible = False
-
-
 def test_progress_is_only_visible_while_a_job_runs(app, monkeypatch):
-    frame = FakeFrame()
+    frame = FakeWidget()
     monkeypatch.setattr(gui_updates, "_w", {'subgroup_job_progress': frame})
     app.val_job_running.set(True)
     gui_updates.update_job_progress_visibility()
@@ -328,9 +317,9 @@ def test_job_that_finishes_before_noticing_counts_as_finished(app):
 
 def test_cancelled_batch_keeps_finished_dyads_and_skips_the_group_average(app, tmp_path, monkeypatch):
     for index in range(3):
-        _write_dyad(tmp_path / "in" / f"dyad{index}", seed=index)
+        write_dyad(tmp_path / "in" / f"dyad{index}", seed=index)
     (tmp_path / "out").mkdir()
-    monkeypatch.setattr(callbacks, "_analysis_params", lambda: _params(tmp_path / "in", tmp_path / "out"))
+    monkeypatch.setattr(callbacks, "_analysis_params", lambda: batch_params(tmp_path / "in", tmp_path / "out"))
     real = batch_processing.batch_process
 
     def cancel_during_second_dyad(params, progress):
@@ -352,7 +341,7 @@ def test_cancelled_batch_keeps_finished_dyads_and_skips_the_group_average(app, t
 @pytest.mark.parametrize("cancel_at", ["Random pairs", "dyad1", "Writing results"])
 def test_cancelled_random_pairs_write_no_results(app, tmp_path, monkeypatch, cancel_at):
     for index in range(2):
-        _write_dyad(tmp_path / "in" / f"dyad{index}", seed=index)
+        write_dyad(tmp_path / "in" / f"dyad{index}", seed=index)
     output = tmp_path / "rp.xlsx"
     real = callbacks.run_random_pair
 
@@ -364,7 +353,7 @@ def test_cancelled_random_pairs_write_no_results(app, tmp_path, monkeypatch, can
         return real(params, count, input_dir, output_file, seed, reporting)
 
     monkeypatch.setattr(callbacks, "run_random_pair", cancelling)
-    monkeypatch.setattr(callbacks, "_analysis_params", lambda: _params(tmp_path / "in", tmp_path))
+    monkeypatch.setattr(callbacks, "_analysis_params", lambda: batch_params(tmp_path / "in", tmp_path))
     app.val_random_pair_input_folder.set(str(tmp_path / "in"))
     app.val_random_pair_output_file.set(str(output))
 
@@ -375,14 +364,9 @@ def test_cancelled_random_pairs_write_no_results(app, tmp_path, monkeypatch, can
     assert app.dialogs[0][1] == "Random pair analysis cancelled"
 
 
-class FakeButton:
-    def configure(self, state):
-        self.state = state
-
-
 @pytest.mark.parametrize("requested, expected", [(True, "disabled"), (False, "normal")])
 def test_cancel_button_can_only_be_clicked_once_per_run(app, monkeypatch, requested, expected):
-    button = FakeButton()
+    button = FakeWidget()
     monkeypatch.setattr(gui_updates, "_w", {'button_cancel_job': button})
     app.val_job_cancel_requested.set(requested)
     gui_updates.update_active_state_cancel_button()

@@ -8,34 +8,7 @@ import analysis
 import callbacks
 import corr_plot
 import state
-
-
-class FakeWidget:
-    """Stands in for Tk's timer: callbacks only run when the test says the time has passed."""
-    def __init__(self):
-        self.timers = {}
-        self.next_id = 0
-
-    def after(self, delay_ms, callback):
-        self.next_id += 1
-        self.timers[self.next_id] = (delay_ms, callback)
-        return self.next_id
-
-    def after_cancel(self, timer_id):
-        del self.timers[timer_id]
-
-    def run_timers(self):
-        timers, self.timers = self.timers, {}
-        for _, callback in timers.values():
-            callback()
-
-
-class FakeCanvas:
-    def __init__(self):
-        self.widget = FakeWidget()
-
-    def get_tk_widget(self):
-        return self.widget
+from helpers import FakeTimer
 
 
 @pytest.fixture
@@ -73,7 +46,7 @@ def app_state(fake_state, monkeypatch):
     monkeypatch.setattr(analysis, "standard_cross_correlation", counted("sx", real_sx))
     monkeypatch.setattr(corr_plot, "update_plot", count_plot)
     monkeypatch.setattr(corr_plot, "update_canvas", lambda: None)
-    monkeypatch.setattr(corr_plot, "canvas", FakeCanvas())
+    monkeypatch.setattr(corr_plot, "canvas", FakeTimer())
     monkeypatch.setattr(corr_plot, "_pending_update", None)
     monkeypatch.setattr(corr_plot, "_computed_wx_settings", None)
     monkeypatch.setattr(corr_plot, "_computed_sx_settings", None)
@@ -90,7 +63,7 @@ def _triggering_schedule(var):
 
 
 def _timers():
-    return corr_plot.canvas.widget.timers
+    return corr_plot.canvas.timers
 
 
 def _settle(app_state):
@@ -103,15 +76,15 @@ def test_repeated_changes_run_one_update(app_state):
     for _ in range(5):
         state.PARAMS_CHANGED()
     assert len(_timers()) == 1
-    corr_plot.canvas.widget.run_timers()
+    corr_plot.canvas.run_timers()
     assert app_state.counts["plot"] == 1
 
 
 def test_typing_waits_for_a_pause_and_other_changes_do_not(app_state):
     state.PARAMS_CHANGED(debounce=True)
-    assert [delay for delay, _ in _timers().values()] == [corr_plot.UPDATE_DEBOUNCE_MS]
+    assert corr_plot.canvas.delays() == [corr_plot.UPDATE_DEBOUNCE_MS]
     state.PARAMS_CHANGED()
-    assert [delay for delay, _ in _timers().values()] == [0]
+    assert corr_plot.canvas.delays() == [0]
 
 
 @pytest.mark.parametrize("handler, input_var, value", [
@@ -127,7 +100,7 @@ def test_typing_in_any_field_is_debounced(app_state, handler, input_var, value):
     app_state.val_lag_filter_max_input.set("30")
     getattr(app_state, input_var).set(value)
     handler(None, None, None)
-    assert [delay for delay, _ in _timers().values()] == [corr_plot.UPDATE_DEBOUNCE_MS]
+    assert corr_plot.canvas.delays() == [corr_plot.UPDATE_DEBOUNCE_MS]
 
 
 @pytest.mark.parametrize("change", [

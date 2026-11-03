@@ -20,6 +20,7 @@ import layout
 import plot
 import state
 import xlsx
+from helpers import FakeWidget
 
 SHEET = "Sheet"
 SETTINGS = [
@@ -267,11 +268,6 @@ def test_failed_export_shows_an_error(gui, monkeypatch):
     assert errors == ["Export failed"]
 
 
-class FakeWidget:
-    def configure(self, text):
-        self.text = text
-
-
 SECONDS_LABELS = (
     'label_window_size_seconds', 'label_step_size_seconds', 'label_max_lag_seconds', 'label_max_lag_sxc_seconds',
     'label_lag_filter_min_seconds', 'label_lag_filter_max_seconds',
@@ -300,24 +296,10 @@ def test_fixed_rate_parameters_have_no_seconds_because_the_rate_is_unknown(gui, 
     assert {widget.text for widget in labels.values()} == {''}
 
 
-class FakeRowWidget:
-    def __init__(self):
-        self.visible = False
-
-    def grid(self):
-        self.visible = True
-
-    def grid_remove(self):
-        self.visible = False
-
-    def grid_forget(self):
-        self.visible = False
-
-
 @pytest.mark.parametrize("ticked", [True, False])
 def test_lag_filter_rows_follow_the_checkbox(gui, monkeypatch, ticked):
-    rows = [FakeRowWidget() for _ in range(8)]
-    error = FakeRowWidget()
+    rows = [FakeWidget() for _ in range(8)]
+    error = FakeWidget()
     error.visible = True
     monkeypatch.setattr(gui_updates, "_w", {'lag_filter_rows': rows, 'error_label_lag_filter': error})
     gui({"use_lag_filter": ticked})
@@ -378,15 +360,15 @@ def test_group_average_says_how_many_windows_it_covers(tmp_path):
 
 def test_batch_group_average_reports_the_window_counts(tmp_path):
     import batch_processing
-    from test_batch import _params, _write_person
+    from helpers import batch_params, write_person
     rng = np.random.default_rng(0)
     for name, n_beats in (("long", 1000), ("short", 400)):
         (tmp_path / "in" / name).mkdir(parents=True)
         ibi = 800 + 50 * np.convolve(rng.normal(size=n_beats), np.ones(4) / 2, mode="same")
         for person in ("P1", "P2"):
-            _write_person(tmp_path / "in" / name / f"{person}.xlsx", {"Coupled": ibi + rng.normal(0, 5, n_beats)})
+            write_person(tmp_path / "in" / name / f"{person}.xlsx", {"Coupled": ibi + rng.normal(0, 5, n_beats)})
     (tmp_path / "out").mkdir()
-    batch_processing.batch_process(_params(tmp_path / "in", tmp_path / "out"))
+    batch_processing.batch_process(batch_params(tmp_path / "in", tmp_path / "out"))
 
     def windows(name):
         return openpyxl.load_workbook(tmp_path / "out" / name)["correlations"].max_row - 1

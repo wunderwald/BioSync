@@ -11,7 +11,7 @@ import batch_processing
 import callbacks
 import utils
 import xlsx
-from test_batch import _params, _write_dyad, _write_person, N_BEATS, _ibi
+from helpers import N_BEATS, batch_params, ibi, write_dyad, write_person
 
 
 def _write_sheets(path, sheet_names):
@@ -76,16 +76,16 @@ def _write_mismatched_dyad(folder):
     """First file has another sheet, the other two are a coupled pair."""
     os.makedirs(folder)
     rng = np.random.default_rng(0)
-    coupled = _ibi(rng)
+    coupled = ibi(rng)
     _write_sheets(os.path.join(folder, "A_notes.xlsx"), ["Notes"])
     for name in ("P1.xlsx", "P2.xlsx"):
-        _write_person(os.path.join(folder, name), {"Coupled": coupled + rng.normal(0, 5, N_BEATS)})
+        write_person(os.path.join(folder, name), {"Coupled": coupled + rng.normal(0, 5, N_BEATS)})
 
 
 def test_batch_uses_the_matching_pair_and_says_so(tmp_path):
     _write_mismatched_dyad(tmp_path / "in" / "dyad0")
     (tmp_path / "out").mkdir()
-    summary = batch_processing.batch_process(_params(tmp_path / "in", tmp_path / "out"))
+    summary = batch_processing.batch_process(batch_params(tmp_path / "in", tmp_path / "out"))
     assert summary['processed'] == ["dyad0"] and summary['failed'] == []
     assert "used P1.xlsx and P2.xlsx" in summary['warnings'][0]
 
@@ -96,13 +96,13 @@ def test_batch_says_when_it_fell_back(tmp_path):
     for name, sheets in {"a.xlsx": ["X"], "b.xlsx": ["Y"], "c.xlsx": ["Z"]}.items():
         _write_sheets(folder / name, sheets)
     (tmp_path / "out").mkdir()
-    summary = batch_processing.batch_process(_params(tmp_path / "in", tmp_path / "out"))
+    summary = batch_processing.batch_process(batch_params(tmp_path / "in", tmp_path / "out"))
     assert "because no two have the same sheets" in summary['warnings'][0]
 
 
 def test_random_pairs_use_the_matching_pair_for_real_dyads(tmp_path, monkeypatch):
     _write_mismatched_dyad(tmp_path / "in" / "dyad0")
-    _write_dyad(tmp_path / "in" / "dyad1", seed=1)
+    write_dyad(tmp_path / "in" / "dyad1", seed=1)
     used = []
     real = batch_processing._process_dyad
 
@@ -112,7 +112,7 @@ def test_random_pairs_use_the_matching_pair_for_real_dyads(tmp_path, monkeypatch
 
     monkeypatch.setattr(batch_processing, "_process_dyad", recording)
     monkeypatch.setattr(batch_processing, "ttest_ind", lambda *args, **kwargs: (0, 1))
-    batch_processing.random_pair_analysis(_params(tmp_path / "in", tmp_path), str(tmp_path / "in"), random_pair_count=0)
+    batch_processing.random_pair_analysis(batch_params(tmp_path / "in", tmp_path), str(tmp_path / "in"), random_pair_count=0)
     assert used == [("P1.xlsx", "P2.xlsx"), ("P1.xlsx", "P2.xlsx")]
 
 

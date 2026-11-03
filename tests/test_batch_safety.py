@@ -14,7 +14,7 @@ import callbacks
 import state
 import validation
 from signal_processing import guess_is_event_based
-from test_batch import ImmediateTimer, _params, _write_dyad, _write_person
+from helpers import FakeTimer, batch_params, write_dyad, write_person
 
 
 # ---------------------------------------------------------------------------
@@ -86,15 +86,15 @@ def _write_short_dyad(folder, n_beats=20):
     os.makedirs(folder)
     ibi = 800 + 20 * np.sin(np.arange(n_beats))
     for person, noise in (("P1", 0), ("P2", 3)):
-        _write_person(os.path.join(folder, f"{person}.xlsx"), {"Coupled": ibi + noise * np.cos(np.arange(n_beats))})
+        write_person(os.path.join(folder, f"{person}.xlsx"), {"Coupled": ibi + noise * np.cos(np.arange(n_beats))})
 
 
 @pytest.mark.parametrize("windowed", [True, False])
 def test_short_dyad_is_skipped_with_the_reason_and_leaves_no_files(tmp_path, windowed):
-    _write_dyad(tmp_path / "in" / "long", seed=0)
+    write_dyad(tmp_path / "in" / "long", seed=0)
     _write_short_dyad(tmp_path / "in" / "short")
     (tmp_path / "out").mkdir()
-    summary = batch_processing.batch_process(_params(tmp_path / "in", tmp_path / "out", checkbox_windowed_xcorr=windowed))
+    summary = batch_processing.batch_process(batch_params(tmp_path / "in", tmp_path / "out", checkbox_windowed_xcorr=windowed))
     assert summary['processed'] == ["long"]
     (name, reason), = summary['failed']
     assert name == "short" and "Doesn't fit the settings" in reason and "samples" in reason
@@ -103,23 +103,23 @@ def test_short_dyad_is_skipped_with_the_reason_and_leaves_no_files(tmp_path, win
 
 def test_random_pairs_skip_pairs_that_dont_fit(tmp_path):
     for index in range(2):
-        _write_dyad(tmp_path / "in" / f"long{index}", seed=index)
+        write_dyad(tmp_path / "in" / f"long{index}", seed=index)
     _write_short_dyad(tmp_path / "in" / "short")
-    result = batch_processing.random_pair_analysis(_params(tmp_path / "in", tmp_path), str(tmp_path / "in"), random_pair_count=30, seed=1)
+    result = batch_processing.random_pair_analysis(batch_params(tmp_path / "in", tmp_path), str(tmp_path / "in"), random_pair_count=30, seed=1)
     failures = result[6]
     assert failures and all("Doesn't fit the settings" in reason for _, reason in failures)
     assert len(result[3]) == 2      # the two long real dyads
 
 
 def test_failure_while_plotting_leaves_no_files(tmp_path, monkeypatch):
-    _write_dyad(tmp_path / "in" / "dyad0", seed=0)
+    write_dyad(tmp_path / "in" / "dyad0", seed=0)
     (tmp_path / "out").mkdir()
 
     def broken_plot(*args, **kwargs):
         raise RuntimeError("plot failed")
 
     monkeypatch.setattr(batch_processing, "plot_windowed_cross_correlation", broken_plot)
-    summary = batch_processing.batch_process(_params(tmp_path / "in", tmp_path / "out"))
+    summary = batch_processing.batch_process(batch_params(tmp_path / "in", tmp_path / "out"))
     assert summary['failed'] == [("dyad0", "plot failed")]
     assert os.listdir(tmp_path / "out") == []
 
@@ -131,21 +131,21 @@ def test_failure_while_plotting_leaves_no_files(tmp_path, monkeypatch):
 @pytest.mark.parametrize("same_column", [True, False])
 def test_output_folder_inside_the_input_is_never_a_dyad(tmp_path, same_column):
     for index in range(2):
-        _write_dyad(tmp_path / "study" / f"d{index}", seed=index)
+        write_dyad(tmp_path / "study" / f"d{index}", seed=index)
     results = tmp_path / "study" / "results"
     results.mkdir()
     if same_column:     # result files that happen to have the selected column
         for name in ("a.xlsx", "b.xlsx"):
-            _write_person(results / name, {"Coupled": 800 + np.arange(1000) % 7})
+            write_person(results / name, {"Coupled": 800 + np.arange(1000) % 7})
     for _ in range(2):
-        summary = batch_processing.batch_process(_params(tmp_path / "study", results))
+        summary = batch_processing.batch_process(batch_params(tmp_path / "study", results))
         assert summary['processed'] == ["d0", "d1"] and summary['failed'] == []
         assert "results: skipped, because it is the output folder" in summary['warnings']
 
 
 @pytest.mark.parametrize("path_to_output", ["link", "relative"])
 def test_output_folder_reached_through_another_path_is_recognised(tmp_path, monkeypatch, path_to_output):
-    _write_dyad(tmp_path / "study" / "d0", seed=0)
+    write_dyad(tmp_path / "study" / "d0", seed=0)
     (tmp_path / "study" / "results").mkdir()
     if path_to_output == "link":
         os.symlink(tmp_path / "study" / "results", tmp_path / "link")
@@ -153,7 +153,7 @@ def test_output_folder_reached_through_another_path_is_recognised(tmp_path, monk
     else:
         monkeypatch.chdir(tmp_path / "study" / "d0")
         output = os.path.join("..", "results")
-    summary = batch_processing.batch_process(_params(tmp_path / "study", output))
+    summary = batch_processing.batch_process(batch_params(tmp_path / "study", output))
     assert summary['processed'] == ["d0"] and summary['failed'] == []
     assert "results: skipped, because it is the output folder" in summary['warnings']
 
@@ -185,15 +185,15 @@ def test_missing_output_folder_has_no_earlier_results(tmp_path):
 
 @pytest.fixture
 def app(fake_state, tmp_path, monkeypatch):
-    _write_dyad(tmp_path / "in" / "d0", seed=0)
+    write_dyad(tmp_path / "in" / "d0", seed=0)
     (tmp_path / "out").mkdir()
     for name in ("val_INPUT_DATA_VALID", "val_CORRELATION_SETTINGS_VALID", "val_CORRELATION_SETTINGS_VALID_SXC"):
         getattr(fake_state, name).set(True)
     fake_state.val_job_running.set(False)
     fake_state.val_job_progress.set(0)
-    fake_state.timer = ImmediateTimer()
+    fake_state.timer = FakeTimer()
     monkeypatch.setitem(callbacks._tabview, "tabview", fake_state.timer)
-    monkeypatch.setattr(callbacks, "_analysis_params", lambda: _params(tmp_path / "in", tmp_path / "out"))
+    monkeypatch.setattr(callbacks, "_analysis_params", lambda: batch_params(tmp_path / "in", tmp_path / "out"))
     fake_state.asked = []
     fake_state.answer = True
     monkeypatch.setattr(callbacks.messagebox, "askyesno", lambda title, text: fake_state.asked.append(text) or fake_state.answer)

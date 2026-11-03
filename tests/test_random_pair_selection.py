@@ -10,7 +10,7 @@ import pytest
 import batch_processing
 import callbacks
 from batch_processing import _eligible_random_pairs
-from test_batch import ImmediateTimer, _params, _write_dyad
+from helpers import FakeTimer, batch_params, write_dyad
 
 
 def _dyad(root, name, files):
@@ -73,13 +73,13 @@ def test_group_to_dyads_folders_of_one_group_have_no_random_pairs(tmp_path):
 def test_analysis_refuses_when_no_random_pair_is_possible(tmp_path):
     _dyad(tmp_path, "d0", {"a.xlsx": "A", "b.xlsx": "B"})
     with pytest.raises(ValueError, match="No random pairs are possible"):
-        batch_processing.random_pair_analysis(_params(tmp_path, tmp_path), str(tmp_path), random_pair_count=3)
+        batch_processing.random_pair_analysis(batch_params(tmp_path, tmp_path), str(tmp_path), random_pair_count=3)
 
 
 @pytest.fixture
 def dyads(tmp_path):
     for index in range(3):
-        _write_dyad(tmp_path / "in" / f"dyad{index}", seed=index)
+        write_dyad(tmp_path / "in" / f"dyad{index}", seed=index)
     return tmp_path / "in"
 
 
@@ -98,7 +98,7 @@ def _recorded_pairs(monkeypatch):
 
 def test_drawn_pairs_are_always_from_different_folders(dyads, monkeypatch):
     used = _recorded_pairs(monkeypatch)
-    batch_processing.random_pair_analysis(_params(dyads, dyads), str(dyads), random_pair_count=300, seed=1)
+    batch_processing.random_pair_analysis(batch_params(dyads, dyads), str(dyads), random_pair_count=300, seed=1)
     random_pairs = used[:300]
     assert all(os.path.dirname(a) != os.path.dirname(b) for a, b in random_pairs)
     assert len({frozenset(pair) for pair in random_pairs}) == 12     # every possible pair turns up
@@ -106,7 +106,7 @@ def test_drawn_pairs_are_always_from_different_folders(dyads, monkeypatch):
 
 def test_both_people_can_be_person_a(dyads, monkeypatch):
     used = _recorded_pairs(monkeypatch)
-    batch_processing.random_pair_analysis(_params(dyads, dyads), str(dyads), random_pair_count=300, seed=1)
+    batch_processing.random_pair_analysis(batch_params(dyads, dyads), str(dyads), random_pair_count=300, seed=1)
     assert len(set(used[:300])) == 24
 
 
@@ -115,7 +115,7 @@ def test_same_seed_repeats_the_pairs_and_another_seed_does_not(dyads, monkeypatc
 
     def draw(seed):
         used.clear()
-        batch_processing.random_pair_analysis(_params(dyads, dyads), str(dyads), random_pair_count=30, seed=seed)
+        batch_processing.random_pair_analysis(batch_params(dyads, dyads), str(dyads), random_pair_count=30, seed=seed)
         return list(used[:30])
 
     assert draw(7) == draw(7)
@@ -123,7 +123,7 @@ def test_same_seed_repeats_the_pairs_and_another_seed_does_not(dyads, monkeypatc
 
 
 def test_same_seed_repeats_the_whole_result(dyads):
-    params = _params(dyads, dyads)
+    params = batch_params(dyads, dyads)
     first = batch_processing.random_pair_analysis(params, str(dyads), random_pair_count=5, seed=7)
     second = batch_processing.random_pair_analysis(params, str(dyads), random_pair_count=5, seed=7)
     assert first[:2] == second[:2]
@@ -142,9 +142,9 @@ def app(fake_state, dyads, tmp_path, monkeypatch):
     fake_state.val_rp_seed_input.set("")
     fake_state.val_random_pair_input_folder.set(str(dyads))
     fake_state.val_random_pair_output_file.set(str(tmp_path / "rp.xlsx"))
-    fake_state.timer = ImmediateTimer()
+    fake_state.timer = FakeTimer()
     monkeypatch.setitem(callbacks._tabview, "tabview", fake_state.timer)
-    monkeypatch.setattr(callbacks, "_analysis_params", lambda: _params(dyads, tmp_path))
+    monkeypatch.setattr(callbacks, "_analysis_params", lambda: batch_params(dyads, tmp_path))
     fake_state.dialogs = []
     for kind in ("showinfo", "showerror"):
         monkeypatch.setattr(callbacks.messagebox, kind, lambda title, text: fake_state.dialogs.append((title, text)))
@@ -210,10 +210,10 @@ def test_group_to_dyads_copies_end_to_end(tmp_path, monkeypatch):
     """Real spreadsheets, with the same person's file copied to two folders."""
     root = tmp_path / "in"
     for seed, name in enumerate(("dyad_1_2", "dyad_3_4")):
-        _write_dyad(root / name, seed=seed)
+        write_dyad(root / name, seed=seed)
     shutil.copy(root / "dyad_1_2" / "P1.xlsx", root / "dyad_3_4" / "P3.xlsx")
     used = _recorded_pairs(monkeypatch)
-    batch_processing.random_pair_analysis(_params(root, root), str(root), random_pair_count=100, seed=1)
+    batch_processing.random_pair_analysis(batch_params(root, root), str(root), random_pair_count=100, seed=1)
     pairs = used[:100]
     hashes = [(batch_processing._file_hash(a), batch_processing._file_hash(b)) for a, b in pairs]
     assert all(a != b for a, b in hashes)
