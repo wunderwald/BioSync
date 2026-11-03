@@ -85,10 +85,17 @@ def on_max_lag_input_change_sxc(name, index, mode):
 
 # ENTRY CALLBACKS — lag filter
 
+# The filter the user typed, or None to use the full range. It is kept while the max lag changes, so that
+# typing a max lag doesn't lose it: typing 40 passes 4, which would otherwise narrow the filter for good.
+_wanted_lag_filter = None
+_setting_lag_filter = False     # True while the app writes the filter fields itself
+
+
 def on_min_lag_input_change(name, index, mode):
     new_str_val = state.val_lag_filter_min_input.get()
     if new_str_val not in ('', '-'):
         state.val_lag_filter_min.set(int(new_str_val))
+    _remember_lag_filter()
     validation.check_wx_correlation_settings()
     state.PARAMS_CHANGED(debounce=True)
 
@@ -97,16 +104,44 @@ def on_max_lag_filter_input_change(name, index, mode):
     new_str_val = state.val_lag_filter_max_input.get()
     if new_str_val not in ('', '-'):
         state.val_lag_filter_max.set(int(new_str_val))
+    _remember_lag_filter()
     validation.check_wx_correlation_settings()
     state.PARAMS_CHANGED(debounce=True)
 
 
+def _remember_lag_filter():
+    global _wanted_lag_filter
+    if not _setting_lag_filter:
+        _wanted_lag_filter = (state.val_lag_filter_min.get(), state.val_lag_filter_max.get())
+
+
+def lag_filter_for_max_lag(wanted, max_lag):
+    """
+    The wanted filter, narrowed to what the max lag allows. Falls back to the full range when nothing of the
+    wanted filter is left, or when no filter was typed yet.
+    """
+    if wanted is None:
+        return -max_lag, max_lag
+    low = min(max(wanted[0], -max_lag), max_lag)
+    high = min(max(wanted[1], -max_lag), max_lag)
+    if high <= low:
+        return -max_lag, max_lag
+    return low, high
+
+
 def on_max_lag_change_update_filter(*args):
-    new_max_lag = state.val_max_lag.get()
-    state.val_lag_filter_min.set(-new_max_lag)
-    state.val_lag_filter_max.set(new_max_lag)
-    state.val_lag_filter_min_input.set(str(-new_max_lag))
-    state.val_lag_filter_max_input.set(str(new_max_lag))
+    global _setting_lag_filter
+    low, high = lag_filter_for_max_lag(_wanted_lag_filter, state.val_max_lag.get())
+    _setting_lag_filter = True
+    try:
+        state.val_lag_filter_min.set(low)
+        state.val_lag_filter_max.set(high)
+        if state.val_lag_filter_min_input.get() != str(low):
+            state.val_lag_filter_min_input.set(str(low))
+        if state.val_lag_filter_max_input.get() != str(high):
+            state.val_lag_filter_max_input.set(str(high))
+    finally:
+        _setting_lag_filter = False
     validation.check_wx_correlation_settings()
     state.PARAMS_CHANGED(debounce=True)
 
@@ -508,10 +543,17 @@ def _export_sxcorr_data(file_path):
     export_sxcorr_data(file_path, params)
 
 
+def _export_file_name(kind):
+    """The suggested name for an export: biosync_<wxc|xc>_<data|plot>, followed by the dyad folder if there is one."""
+    correlation_type = "wxc" if state.val_checkbox_windowed_xcorr.get() else "xc"
+    selected_dir = state.val_selected_dyad_dir.get()
+    name = f"biosync_{correlation_type}_{kind}"
+    return f"{name}_{os.path.basename(selected_dir)}" if selected_dir else name
+
+
 def export_data():
     corr_plot.flush_update()  # results must match settings typed just before clicking
-    selected_dir   = state.val_selected_dyad_dir.get()
-    filename_init  = f"wx_data_{os.path.basename(selected_dir)}" if selected_dir else "wx_data"
+    filename_init  = _export_file_name("data")
     file_path = filedialog.asksaveasfilename(
         title="Save As",
         defaultextension=".xlsx",
@@ -534,8 +576,7 @@ def export_plot():
     fig = state.dat_plot_data["fig"]
     if not fig:
         return
-    selected_dir  = state.val_selected_dyad_dir.get()
-    filename_init = f"wx_plot_{os.path.basename(selected_dir)}" if selected_dir else "wx_plot"
+    filename_init = _export_file_name("plot")
     file_path = filedialog.asksaveasfilename(
         title="Save As",
         defaultextension=".png",

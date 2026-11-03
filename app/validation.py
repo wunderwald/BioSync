@@ -4,7 +4,8 @@ import state
 
 
 def is_numeric_input(text):
-    return text == "" or text.isdigit()
+    # isdigit() would also accept characters such as '²', which int() can't read
+    return text == "" or text.isdecimal()
 
 
 def is_signed_numeric_input(text):
