@@ -14,6 +14,8 @@ _cmap_wxc = mcolors.LinearSegmentedColormap.from_list(
     ]
 )
 
+R_MAX_BIN_WIDTH = 0.05   # 40 bins from -1 to 1
+
 SCALING_PARAMS = {
     'FIGSIZE': (10, 8),
     'DPI': 100,
@@ -55,14 +57,18 @@ def plot_message(text):
     fig.text(0.5, 0.5, text, ha='center', va='center', wrap=True, color='#777777')
     return fig
 
-def _hist_range(values, low, high):
+def _hist_bins(values, low, high, width, centred=False):
     """
-    A fixed range for a histogram, widened to include every value. Without it, values that differ only by
-    rounding make bins narrower than numbers can be, and the histogram fails.
+    Bin edges of a fixed width from low to high, widened to include every value. With a fixed width, a few
+    windows with the same value give one narrow bar instead of one bar across the whole axis, and values that
+    differ only by rounding can't make bins narrower than numbers can be.
+    centred puts each whole number in the middle of its own bin, for lags.
     """
-    if len(values) == 0:
-        return (low, high)
-    return (min(low, float(np.min(values))), max(high, float(np.max(values))))
+    if len(values):
+        low, high = min(low, float(np.min(values))), max(high, float(np.max(values)))
+    if centred:
+        return np.arange(np.floor(low) - 0.5, np.ceil(high) + 1.5, width)
+    return np.arange(np.floor(low / width) * width, high + width, width)
 
 def plot_windowed_cross_correlation(wxc_data, window_size, max_lag, step_size, signal_a, signal_b, show_sigmoid_correlations=False, use_lag_filter=False, lag_filter_min=None, lag_filter_max=None):
     """
@@ -121,9 +127,8 @@ def plot_windowed_cross_correlation(wxc_data, window_size, max_lag, step_size, s
     ax1.set_title('Peak correlation per window')
     ax1.grid()
     r_max_hist_values = _without_flat_windows(r_max_values)
-    num_bins_r_max = max(1, min(len(r_max_values)//3, 40))
     ax1_hist = fig.add_subplot(ax1_gs_inner[1])
-    ax1_hist.hist(r_max_hist_values, bins=num_bins_r_max, range=_hist_range(r_max_hist_values, -1, 1), orientation='vertical', color='black', alpha=1)
+    ax1_hist.hist(r_max_hist_values, bins=_hist_bins(r_max_hist_values, -1, 1, R_MAX_BIN_WIDTH), orientation='vertical', color='black', alpha=1)
     ax1_hist.set_xlim(-1, 1)
 
     # Plot corresponding lags over time
@@ -134,9 +139,8 @@ def plot_windowed_cross_correlation(wxc_data, window_size, max_lag, step_size, s
     ax2.set_title('Lag of peak correlation per window')
     ax2.grid()
     tau_max_hist_values = _without_flat_windows(tau_max_values)
-    num_bins_tau_max = max(1, min(len(tau_max_values)//4, max_lag))
     ax2_hist = fig.add_subplot(ax2_gs_inner[1])
-    ax2_hist.hist(tau_max_hist_values, bins=num_bins_tau_max, range=_hist_range(tau_max_hist_values, _min_lag, _max_lag), orientation='vertical', color='black', alpha=1)
+    ax2_hist.hist(tau_max_hist_values, bins=_hist_bins(tau_max_hist_values, _min_lag, _max_lag, 1, centred=True), orientation='vertical', color='black', alpha=1)
     ax2_hist.set_xlim(-max_lag, max_lag)
 
     # Return the figure

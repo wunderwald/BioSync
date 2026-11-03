@@ -413,7 +413,7 @@ def guess_signal_type():
     raw_b = state.dat_workbook_data["columns_b"].get(column)
     if not (utils.is_numeric_array(raw_a) and utils.is_numeric_array(raw_b)):
         return
-    is_event_based = guess_is_event_based(raw_a, raw_b)
+    is_event_based = bool(guess_is_event_based(raw_a, raw_b))
     state.val_checkbox_eb.set(is_event_based)
     state.val_checkbox_fr.set(not is_event_based)
 
