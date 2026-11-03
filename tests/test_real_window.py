@@ -49,3 +49,13 @@ def test_eda_folder_loads_as_fixed_rate(report):
 
 def test_no_errors_in_callbacks(report):
     assert report['callback_errors'] == []
+
+
+def test_buttons_that_open_dialogs_run_on_release(report):
+    # On press, a dialog would make Tk miss the release and send every later click back to the button
+    assert report['click'] == {
+        'runs_on_press': [],
+        'runs_after_release': ['open_batch_input_folder'],
+        'runs_after_release_outside': [],
+        'runs_when_disabled': [],
+    }

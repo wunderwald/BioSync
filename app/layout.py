@@ -14,6 +14,25 @@ PARAMETER_ENTRY_WIDTH = 80
 PARAMETER_SECONDS_WIDTH = 60  # room for values like -19.8 s, so that the panel keeps its width
 
 
+def _button_opening_a_dialog(parent, command, **options):
+    """
+    A button that runs its command when the mouse button is released, not when it is pressed. CTkButton runs
+    commands on press, and a dialog opened then makes Tk miss the release: it keeps sending every later click
+    to the button, which reopens the dialog until the window is focused again. Releasing outside the button
+    cancels the click, as with any button.
+    """
+    button = tk.CTkButton(parent, **options)
+
+    def released(event):
+        x = event.widget.winfo_rootx() + event.x - button.winfo_rootx()
+        y = event.widget.winfo_rooty() + event.y - button.winfo_rooty()
+        if button.cget("state") != "disabled" and 0 <= x < button.winfo_width() and 0 <= y < button.winfo_height():
+            button.after_idle(command)
+
+    button.bind("<ButtonRelease-1>", released)
+    return button
+
+
 def needs_scrollbar(content_height, visible_height):
     return content_height > visible_height
 
@@ -108,7 +127,7 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     label_input_data = tk.CTkLabel(subgroup_input_data, text="Input Data", font=("Arial", 20, "bold"))
     label_input_data.grid(row=0, column=0, columnspan=2, pady=20, padx=10, sticky='w')
 
-    button_file_picker = tk.CTkButton(subgroup_input_data, text="Choose Dyad Folder", command=cb.open_dir_picker)
+    button_file_picker = _button_opening_a_dialog(subgroup_input_data, cb.open_dir_picker, text="Choose Dyad Folder")
     button_file_picker.grid(row=1, column=0, sticky="w", padx=10, pady=5)
 
     label_dir_picker = tk.CTkLabel(subgroup_input_data, text="No folder selected.", font=("Arial", 14, "bold"), wraplength=TAB_WIDTH - 20)
@@ -359,10 +378,10 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     subsubgroup_export_buttons = tk.CTkFrame(subgroup_export)
     subsubgroup_export_buttons.grid(row=1, column=0, columnspan=2, padx=0, pady=0)
 
-    button_export_data = tk.CTkButton(subsubgroup_export_buttons, text='Export XLSX', command=cb.export_data)
+    button_export_data = _button_opening_a_dialog(subsubgroup_export_buttons, cb.export_data, text='Export XLSX')
     button_export_data.grid(row=1, column=0, padx=10, pady=10)
 
-    button_export_plot = tk.CTkButton(subsubgroup_export_buttons, text='Export Plots', command=cb.export_plot)
+    button_export_plot = _button_opening_a_dialog(subsubgroup_export_buttons, cb.export_plot, text='Export Plots')
     button_export_plot.grid(row=1, column=1, padx=10, pady=10)
 
     # Batch processing subgroup
@@ -375,8 +394,8 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     info_batch = tk.CTkLabel(subgroup_batch, text="Applies the same settings to multiple dyads.")
     info_batch.grid(row=1, column=0, padx=10, sticky='w', columnspan=2)
 
-    button_batch_input_folder = tk.CTkButton(
-        subgroup_batch, text='Select input folder', command=cb.open_batch_input_folder
+    button_batch_input_folder = _button_opening_a_dialog(
+        subgroup_batch, cb.open_batch_input_folder, text='Select input folder'
     )
     button_batch_input_folder.grid(row=2, column=0, padx=10, pady=10, sticky='w')
 
@@ -386,17 +405,16 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     label_batch_input_num_subdirs = tk.CTkLabel(subgroup_batch, text="No folder selected.")
     # initially hidden
 
-    button_output_dir_picker = tk.CTkButton(
-        subgroup_batch, text='Select output folder', command=cb.open_batch_output_dir_picker
+    button_output_dir_picker = _button_opening_a_dialog(
+        subgroup_batch, cb.open_batch_output_dir_picker, text='Select output folder'
     )
     button_output_dir_picker.grid(row=3, column=0, padx=10, pady=10, sticky='w')
 
     label_output_dir = tk.CTkLabel(subgroup_batch, text="No folder selected.", wraplength=PATH_LABEL_WRAP)
     label_output_dir.grid(row=3, column=1, padx=10, sticky='w')
 
-    button_batch = tk.CTkButton(
-        subgroup_batch, text='Run batch process',
-        command=cb.handle_run_batch_button, state="disabled"
+    button_batch = _button_opening_a_dialog(
+        subgroup_batch, cb.handle_run_batch_button, text='Run batch process', state="disabled"
     )
     button_batch.grid(row=8, column=0, padx=10, pady=10, sticky='w')
 
@@ -407,18 +425,16 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     label_random_pair = tk.CTkLabel(subgroup_random_pair, text="Random Pair Analysis", font=("Arial", 20, "bold"))
     label_random_pair.grid(row=0, column=0, sticky='w', padx=10, columnspan=2, pady=10)
 
-    button_random_pair_input_folder = tk.CTkButton(
-        subgroup_random_pair, text='Select input folder',
-        command=cb.open_random_pair_input_dir_picker
+    button_random_pair_input_folder = _button_opening_a_dialog(
+        subgroup_random_pair, cb.open_random_pair_input_dir_picker, text='Select input folder'
     )
     button_random_pair_input_folder.grid(row=2, column=0, padx=10, pady=10, sticky='w')
 
     label_random_pair_input_folder = tk.CTkLabel(subgroup_random_pair, text="No folder selected.", wraplength=PATH_LABEL_WRAP)
     label_random_pair_input_folder.grid(row=2, column=1, padx=10, sticky='w')
 
-    button_random_pair_output_file = tk.CTkButton(
-        subgroup_random_pair, text='Select output file',
-        command=cb.open_random_pair_output_file_picker
+    button_random_pair_output_file = _button_opening_a_dialog(
+        subgroup_random_pair, cb.open_random_pair_output_file_picker, text='Select output file'
     )
     button_random_pair_output_file.grid(row=3, column=0, padx=10, pady=10, sticky='w')
 
@@ -451,9 +467,8 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     )
     label_rp_seed_info.grid(row=6, column=0, columnspan=2, sticky="w", padx=10, pady=5)
 
-    button_random_pair = tk.CTkButton(
-        subgroup_random_pair, text='Run rp analysis',
-        command=cb.handle_run_random_pair_button, state="disabled"
+    button_random_pair = _button_opening_a_dialog(
+        subgroup_random_pair, cb.handle_run_random_pair_button, text='Run rp analysis', state="disabled"
     )
     button_random_pair.grid(row=8, column=0, padx=10, pady=10, sticky='w')
 

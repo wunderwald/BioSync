@@ -20,6 +20,11 @@ import layout
 import state
 import validation
 
+# record which dialog-opening buttons run, instead of opening real dialogs
+runs = []
+for name in ("open_batch_input_folder", "handle_run_batch_button"):
+    setattr(callbacks, name, lambda name=name: runs.append(name))
+
 tk.set_appearance_mode("Light")
 tk.set_default_color_theme("theme_dark_grey.json")
 app = tk.CTk()
@@ -56,6 +61,32 @@ for key in ('dropdown_select_sheet', 'dropdown_select_column'):
         'opens_from_text': bool(dropdown._text_label.bind('<Button-1>')),
         'opens_from_arrow': bool(dropdown._canvas.bind('<Button-1>')),
     }
+
+# a click on a button that opens a dialog: nothing may happen until the mouse button is released
+def click(button, x=5, y=5, release_at=None):
+    button._canvas.event_generate("<ButtonPress-1>", x=x, y=y)
+    settle()
+    pressed = list(runs)
+    button._canvas.event_generate("<ButtonRelease-1>", x=release_at[0] if release_at else x, y=release_at[1] if release_at else y)
+    settle()
+    return pressed
+
+
+tabview._segmented_button_callback("Export & Batch")
+settle()
+picker = widgets['label_batch_input_folder'].master.grid_slaves(row=2, column=0)[0]
+report['click'] = {
+    'runs_on_press': click(picker),
+    'runs_after_release': list(runs),
+}
+runs.clear()
+click(picker, release_at=(-50, -50))
+report['click']['runs_after_release_outside'] = list(runs)
+runs.clear()
+click(widgets['button_batch'])
+report['click']['runs_when_disabled'] = list(runs)
+tabview._segmented_button_callback("Input Data")
+settle()
 
 # load EDA-like data: a real Tk variable rejects values the stand-ins in the other tests accept
 import tempfile
