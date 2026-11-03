@@ -118,12 +118,24 @@ def test_output_folder_inside_the_input_is_never_a_dyad(tmp_path, same_column):
         assert "results: skipped, because it is the output folder" in summary['warnings']
 
 
-def test_output_folder_reached_through_another_path_is_recognised(tmp_path):
+@pytest.mark.parametrize("path_to_output", ["link", "relative"])
+def test_output_folder_reached_through_another_path_is_recognised(tmp_path, monkeypatch, path_to_output):
     _write_dyad(tmp_path / "study" / "d0", seed=0)
     (tmp_path / "study" / "results").mkdir()
-    os.symlink(tmp_path / "study" / "results", tmp_path / "link")
-    summary = batch_processing.batch_process(_params(tmp_path / "study", tmp_path / "link"))
-    assert summary['processed'] == ["d0"]
+    if path_to_output == "link":
+        os.symlink(tmp_path / "study" / "results", tmp_path / "link")
+        output = tmp_path / "link"
+    else:
+        monkeypatch.chdir(tmp_path / "study" / "d0")
+        output = os.path.join("..", "results")
+    summary = batch_processing.batch_process(_params(tmp_path / "study", output))
+    assert summary['processed'] == ["d0"] and summary['failed'] == []
+    assert "results: skipped, because it is the output folder" in summary['warnings']
+
+
+def test_same_folder_ignores_case_where_the_system_does(monkeypatch):
+    monkeypatch.setattr(batch_processing.os.path, "normcase", str.lower)     # as on Windows
+    assert batch_processing._same_folder("/data/Results", "/data/results")
 
 
 # ---------------------------------------------------------------------------

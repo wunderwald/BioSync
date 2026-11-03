@@ -305,7 +305,8 @@ def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_
 
 
 def _same_folder(path_a, path_b):
-    return os.path.realpath(path_a) == os.path.realpath(path_b)
+    """True for two paths to one folder, also through links, and on Windows in another case."""
+    return os.path.normcase(os.path.realpath(path_a)) == os.path.normcase(os.path.realpath(path_b))
 
 # ---------------------------------------------------------------------------
 # RESULTS OF EARLIER RUNS
