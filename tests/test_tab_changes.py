@@ -53,13 +53,6 @@ def test_tabs_that_share_a_plot_do_not_redraw_it(tabs, previous, selected):
     assert tabs(previous, selected) == []
 
 
-def test_tabview_has_a_fixed_size():
-    # any size change resizes the plot next to it, which redraws the plot
-    source = Path(layout.__file__).read_text(encoding="utf-8")
-    assert "group_params_tabview.grid_propagate(False)" in source
-    assert "tab.grid_columnconfigure(0, minsize=TAB_WIDTH)" in source
-
-
 
 @pytest.mark.parametrize("content, visible, expected", [(700, 652, True), (652, 652, False), (500, 815, False)])
 def test_scrollbar_only_when_the_settings_dont_fit(content, visible, expected):

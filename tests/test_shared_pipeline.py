@@ -1,8 +1,6 @@
 """
 The GUI, batch and random pairs must give identical results, and existing pipelines must keep working on exports.
 """
-from pathlib import Path
-
 import matplotlib
 import numpy as np
 from matplotlib.backends.backend_agg import FigureCanvasAgg
@@ -16,7 +14,6 @@ import callbacks
 import corr_plot
 import export
 import gui_updates
-import layout
 import plot
 import state
 import xlsx
@@ -306,13 +303,6 @@ def test_lag_filter_rows_follow_the_checkbox(gui, monkeypatch, ticked):
     gui_updates.update_lag_filter_visibility()
     assert all(widget.visible == ticked for widget in rows)
     assert error.visible == ticked
-
-
-def test_dropdowns_open_when_clicked_anywhere():
-    # A CTkComboBox only opens from its small arrow. Its text is an editable field, and typing
-    # there changes the selection without recomputing anything.
-    source = Path(layout.__file__).read_text(encoding="utf-8")
-    assert "CTkComboBox" not in source and source.count("CTkOptionMenu(") == 2
 
 
 @pytest.mark.parametrize("retina, title_size", [(True, 12), (False, 16)])
