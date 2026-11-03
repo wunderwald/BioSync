@@ -31,7 +31,7 @@ def parse_filename(filename):
     Returns:
         dict: A dictionary containing the named substrings extracted from the filename if the pattern matches, otherwise empty dict.
     """
-    pattern = re.compile(NAMING_PATTERN)
+    pattern = re.compile(NAMING_PATTERN, re.IGNORECASE)
     match = pattern.match(filename)
     if match:
         return match.groupdict()
@@ -39,6 +39,10 @@ def parse_filename(filename):
         return {}
 def find_dict_by_field(dicts, field, value):
     return next((d for d in dicts if d.get(field) == value), None)
+
+def is_recording(file_name):
+    """Excel lock files (~$) and hidden files, such as the ._ files macOS writes on some drives, aren't recordings."""
+    return file_name.lower().endswith('.xlsx') and not file_name.startswith(('~$', '.'))
 
 def is_inside(path, parent):
     return path == parent or parent in path.parents
@@ -56,13 +60,16 @@ def read_subjects(input_dir):
     Raises:
         ValueError: If a file name doesn't match NAMING_PATTERN.
     """
-    # get list of per-subject directories
-    subject_ids = [subdir for subdir in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, subdir))]
+    # get list of per-subject directories, sorted so that dyad folder names are the same on every computer
+    subject_ids = sorted(
+        subdir for subdir in os.listdir(input_dir)
+        if os.path.isdir(os.path.join(input_dir, subdir)) and not subdir.startswith('.')
+    )
     subjects = [{'id': subject_id, 'dir': Path.joinpath(input_dir, subject_id)} for subject_id in subject_ids]
 
     # append information about per-condition files to subject data
     for subject in subjects:
-        xlsx_files = [f for f in os.listdir(subject['dir']) if f.endswith('.xlsx')]
+        xlsx_files = sorted(f for f in os.listdir(subject['dir']) if is_recording(f))
         xlsx_files_info = [{'path': Path.joinpath(subject['dir'], f), **parse_filename(f)} for f in xlsx_files]
         for file_info in xlsx_files_info:
             if 'condition' not in file_info:
