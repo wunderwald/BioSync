@@ -1,4 +1,5 @@
 import importlib.util
+import os
 from pathlib import Path
 
 import pytest
@@ -65,3 +66,30 @@ def test_scrollbar_only_when_the_settings_dont_fit(content, visible, expected):
 ])
 def test_build_warns_about_the_affected_tk(platform, version, affected):
     assert build_script.is_affected_tk(platform, version) == affected
+
+
+def _make_tcl_tk(base, parent):
+    tcl_dir, tk_dir = base / parent / "tcl8.6", base / parent / "tk8.6"
+    tcl_dir.mkdir(parents=True)
+    tk_dir.mkdir(parents=True)
+    (tcl_dir / "init.tcl").write_text("")
+    (tk_dir / "tk.tcl").write_text("")
+    return str(tcl_dir), str(tk_dir)
+
+
+@pytest.mark.parametrize("parent", ["tcl", "lib", os.path.join("Library", "lib")])
+def test_build_finds_tcl_tk_where_python_installers_put_it(tmp_path, parent):
+    expected = _make_tcl_tk(tmp_path, parent)
+    assert build_script.find_tcl_tk_data(str(tmp_path), "8.6", "8.6") == expected
+
+
+def test_build_ignores_tcl_tk_folders_without_their_scripts(tmp_path):
+    (tmp_path / "tcl" / "tcl8.6").mkdir(parents=True)
+    (tmp_path / "tcl" / "tk8.6").mkdir(parents=True)
+    assert build_script.find_tcl_tk_data(str(tmp_path), "8.6", "8.6") is None
+
+
+def test_build_finds_this_pythons_tcl_tk():
+    import sys
+    import tkinter
+    assert build_script.find_tcl_tk_data(sys.base_prefix, tkinter.TclVersion, tkinter.TkVersion) is not None
