@@ -6,7 +6,8 @@ import xlsx
 import utils
 from analysis import AnalysisConfig, analyze_dyad, signal_dfa, windowed_dfa
 from export import export_sxcorr_data, export_wxcorr_data, export_avg_wxcorr_data
-from cross_correlation import average_wxcorr_matrices, mean_ignoring_flat_windows
+from cross_correlation import average_wxcorr_matrices
+from measures import MEAN_R, dyad_measure, measure_problem
 import random
 import numpy as np
 from datetime import datetime
@@ -151,10 +152,10 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
 def _no_progress(done, total, text):
     pass
 
-def _average_correlations(all_correlations):
-    """One average per pair. A pair with only flat windows has no correlation to contribute."""
-    averages = [mean_ignoring_flat_windows(c) for c in all_correlations]
-    return [average for average in averages if not np.isnan(average)]
+def _measured_values(all_corr_data, config, measure):
+    """The measure of each pair. A pair with only flat windows has no value to contribute."""
+    values = [dyad_measure(corr_data, config, measure) for corr_data in all_corr_data]
+    return [value for value in values if not np.isnan(value)]
 
 def _file_hash(file_path):
     with open(file_path, 'rb') as file:
@@ -188,7 +189,7 @@ def _eligible_random_pairs(input_dir, dyad_folders):
         if frozenset((recording_a, recording_b)) not in real_pairs
     ]
 
-def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_progress, seed=None):
+def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_progress, seed=None, measure=MEAN_R):
     """
     Perform analysis on random pairs and real dyad correlations.
     Args:
@@ -197,12 +198,13 @@ def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_
         random_pair_count (int, optional): Number of random pairs to generate. Defaults to 100.
         progress (function, optional): Called with (done, total, text) before each pair or dyad.
         seed (int, optional): The same seed and files give the same random pairs.
+        measure (str, optional): The value compared for each pair, one of measures.MEASURES. Defaults to mean r.
     Returns:
         tuple: A tuple containing:
             - t_stat (float): The t-statistic from Welch's t-test.
             - p_value (float): The p-value from Welch's t-test.
-            - average_correlations_rp (list): List of average correlations for random pairs.
-            - average_correlations_real (list): List of average correlations for real dyads.
+            - average_correlations_rp (list): The measure of each random pair.
+            - average_correlations_real (list): The measure of each real dyad.
             - avg_wxcorr_real (list): Group-average wxcorr of real dyads (None for standard xcorr).
             - avg_wxcorr_rp (list): Group-average wxcorr of random pairs (None for standard xcorr).
             - failures (list): (name, error message) for each pair or dyad that could not be processed.
@@ -210,6 +212,11 @@ def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_
             - window_counts_real (list): Number of windows of each real dyad (empty for standard xcorr).
             - window_counts_rp (list): Number of windows of each random pair (empty for standard xcorr).
     """
+
+    config = AnalysisConfig.from_params(params)
+    problem = measure_problem(measure, config)
+    if problem:
+        raise ValueError(f"Can't compare {measure}: {problem}.")
 
     # get input data
     dyad_folders = sorted(f for f in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, f)))
@@ -225,7 +232,7 @@ def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_
 
     # process random pairs
     failures = []
-    all_correlations_rp = []
+    all_corr_data_rp = []
     all_wxcorr_rp = []
     total_steps = len(random_pairs) + len(dyad_folders)
     for pair_index, pair in enumerate(random_pairs):
@@ -239,17 +246,15 @@ def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_
             continue
         if not corr_data:
             continue
+        all_corr_data_rp.append(corr_data)
         if is_windowed_corr:
-            all_correlations_rp.append([val for d in corr_data for val in d['correlations']])
             all_wxcorr_rp.append(corr_data)
-        else:
-            all_correlations_rp.append(corr_data['corr'])
 
-    # calculate averages of all correlations
-    average_correlations_rp = _average_correlations(all_correlations_rp)
+    # the measure of each random pair
+    average_correlations_rp = _measured_values(all_corr_data_rp, config, measure)
 
     # process all real dyads
-    all_correlations_real = []
+    all_corr_data_real = []
     all_wxcorr_real = []
     for dyad_index, dyad_folder in enumerate(dyad_folders):
         progress(len(random_pairs) + dyad_index, total_steps, dyad_folder)
@@ -273,14 +278,12 @@ def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_
                 continue
             if not corr_data:
                 continue
+            all_corr_data_real.append(corr_data)
             if is_windowed_corr:
-                all_correlations_real.append([val for d in corr_data for val in d['correlations']])
                 all_wxcorr_real.append(corr_data)
-            else:
-                all_correlations_real.append(corr_data['corr'])
 
-    # calculate averages of all real dyad correlations
-    average_correlations_real = _average_correlations(all_correlations_real)
+    # the measure of each real dyad
+    average_correlations_real = _measured_values(all_corr_data_real, config, measure)
 
     # run Welch's t-test
     t_stat, p_value = ttest_ind(average_correlations_rp, average_correlations_real, equal_var=False)

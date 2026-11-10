@@ -120,6 +120,7 @@ pytest
 | `analysis.py` | `AnalysisConfig` and `analyze_dyad`: the pipeline shared by the GUI, batch and random pairs, so that they can't give different results. |
 | `signal_processing.py` | Resampling and alignment of raw IBI / EDA signals (`preprocess_dyad`). |
 | `cross_correlation.py` | `windowed_cross_correlation` and `standard_cross_correlation` algorithms. The windowed one computes many windows at once, and a test checks that it matches the original window-by-window computation exactly. |
+| `measures.py` | The number each dyad contributes to a random-pair or surrogate test: mean r, mean \|r_max\| or r at lag 0 (`dyad_measure`), and which settings rule one out (`measure_problem`). |
 | `dfa.py` | Detrended Fluctuation Analysis — `dfa`, `dfa_wxcorr`, `dfa_wxcorr_window_averages`. `analysis.py` decides which series it runs on. |
 | `plot.py` | Matplotlib figure factories for preprocessing preview, windowed xcorr, and standard xcorr plots. |
 | `export.py` | Writes XLSX result files for wxcorr, sxcorr, and random-pair analysis. Always exports raw (non-sigmoid) correlation values. |

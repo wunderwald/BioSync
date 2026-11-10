@@ -10,7 +10,9 @@ from scipy.stats import ttest_ind
 
 import batch_processing
 import plot
+from analysis import AnalysisConfig
 from cross_correlation import average_wxcorr_matrices, windowed_cross_correlation
+from measures import MEAN_R
 from signal_processing import preprocess_dyad
 
 WINDOW, STEP, MAX_LAG = 150, 75, 30
@@ -87,7 +89,13 @@ def test_group_average_of_only_flat_windows_is_nan(signal, recwarn):
 
 
 def test_random_pair_averages_leave_out_flat_windows(recwarn):
-    averages = batch_processing._average_correlations([[0.2, np.nan, 0.4], [np.nan, np.nan], [0.1, 0.3]])
+    config = AnalysisConfig(
+        signal_type='fixed-rate', windowed=False, standardised=False, window_size=WINDOW, step_size=STEP,
+        max_lag=MAX_LAG, absolute=False, average_windows=False, use_lag_filter=False, lag_filter_min=0,
+        lag_filter_max=0, max_lag_sxc=1, absolute_sxc=False,
+    )
+    results = [{'corr': [0.2, np.nan, 0.4]}, {'corr': [np.nan, np.nan]}, {'corr': [0.1, 0.3]}]
+    averages = batch_processing._measured_values(results, config, MEAN_R)
     assert averages == pytest.approx([0.3, 0.2])
     assert not np.isnan(ttest_ind(averages, [0.1, 0.2, 0.15], equal_var=False)[1])
     assert not recwarn.list
