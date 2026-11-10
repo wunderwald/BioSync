@@ -100,7 +100,7 @@ The **Surrogates** tab tests whether the real dyads in a folder are more coupled
 
 - **Re-paired people** don't count what all participants share as coupling, such as reactions to the same task at the same moments, or the same slow drift. With few dyads only few different sets exist, and the app warns when that limits p.
 - **Shuffled blocks** break that shared time course, so they count it as coupling. Longer blocks keep more of it and make the test stricter: the block length changes the result and has to be reported. A dyad needs at least 5 blocks. The p-values of single dyads aren't corrected for testing many dyads: with 33 dyads, 1 or 2 are expected below 0.05 by chance.
-- **Welch's t-test** is only there to repeat results of earlier versions. It treats every random pair as independent, but the same people appear again and again, so p comes out too small.
+- **Welch's t-test** is only there to repeat results of earlier versions. It treats every random pair as independent, but the same people appear again and again, so its p isn't exact: in simulations it found coupling in 2% to 8% of groups without any, depending on the data.
 
 ### Measures
 

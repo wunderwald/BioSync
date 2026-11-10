@@ -2,6 +2,7 @@ import tkinter
 import customtkinter as tk
 
 import state
+import validation
 import callbacks as cb
 from measures import MEASURES
 from surrogates import BLOCKS, REPAIRED, SURROGATE_DISTRIBUTION, WELCH
@@ -333,6 +334,22 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
         subgroup_data_type, text="Event-based data will be resampled to 5hz."
     )
     label_select_data_type.grid(row=5, column=0, columnspan=2, sticky="w", padx=10, pady=5)
+    # shown instead for fixed-rate data
+    frame_sampling_rate = tk.CTkFrame(subgroup_data_type, fg_color='transparent')
+    frame_sampling_rate.grid(row=6, column=0, columnspan=2, sticky="w", padx=0, pady=0)
+    tk.CTkLabel(frame_sampling_rate, text="Sampling rate").grid(row=0, column=0, sticky="w", padx=10, pady=5)
+    entry_sampling_rate = tk.CTkEntry(
+        frame_sampling_rate, width=PARAMETER_ENTRY_WIDTH,
+        validate="key", validatecommand=(app.register(validation.is_decimal_input), "%P"),
+        textvariable=state.val_sampling_rate_input, border_color='#777777',
+    )
+    entry_sampling_rate.grid(row=0, column=1, sticky="w", padx=(0, 5), pady=5)
+    tk.CTkLabel(frame_sampling_rate, text="Hz").grid(row=0, column=2, sticky="w", padx=(0, 10), pady=5)
+    label_sampling_rate_note = tk.CTkLabel(
+        frame_sampling_rate, textvariable=state.val_sampling_rate_note, wraplength=TAB_WIDTH - 30, justify='left',
+        font=("Arial", 12),
+    )
+    label_sampling_rate_note.grid(row=1, column=0, columnspan=3, sticky="w", padx=10, pady=(0, 5))
 
     checkbox_standardise = tk.CTkCheckBox(
         subgroup_data_type, text='standardise',
@@ -613,6 +630,8 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
         'label_output_dir':                    label_output_dir,
         'label_batch_input_num_subdirs':       label_batch_input_num_subdirs,
         'button_batch':                        button_batch,
+        'label_select_data_type':              label_select_data_type,
+        'frame_sampling_rate':                 frame_sampling_rate,
         'job_progress_panels':                 [job_progress_batch, surrogate_widgets.pop('job_progress')],
         **surrogate_widgets,
     }

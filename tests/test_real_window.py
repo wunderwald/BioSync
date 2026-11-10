@@ -100,3 +100,12 @@ def test_surrogates_tab_plots_its_last_result(report):
     assert plot['before_run'] == ["Run a surrogate analysis to see its result here."]
     assert plot['after_run'] == "Last run: dyads, seed 3." and plot['axes'] == 1
     assert plot['other_tab_axes_titles'] == ["Correlation Heatmap"]     # the other tabs keep the loaded dyad
+
+
+def test_fixed_rate_shows_seconds_only_with_a_known_rate(report):
+    unknown, entered = report['sampling_rate']['unknown'], report['sampling_rate']['entered']
+    assert unknown['field_shown'] and not unknown['resampling_note_shown']
+    assert unknown['note'].startswith("No time column found next to the data")
+    assert unknown['window_seconds'] == ''
+    assert entered['window_seconds'] == '75 s'      # 150 samples at 2 Hz
+    assert entered['note'] == "Entered by hand."

@@ -8,7 +8,7 @@ from tkinter import filedialog, messagebox
 import xlsx
 import utils
 from analysis import AnalysisConfig, preprocess_signals, signal_dfa
-from signal_processing import guess_is_event_based
+from signal_processing import detect_sampling_rate, guess_is_event_based
 from batch_processing import batch_process, find_result_files, remove_result_files
 from export import export_sxcorr_data, export_surrogate_result, export_wxcorr_data, left_out_names
 from surrogates import (
@@ -252,6 +252,61 @@ def on_rp_n_input_change(name, index, mode):
         state.val_rp_n.set(new_val)
 
 
+# ---------------------------------------------------------------------------
+# SAMPLING RATE OF FIXED-RATE DATA
+# Only shown in seconds when it is known: from a time column next to the data, or entered by hand.
+# ---------------------------------------------------------------------------
+
+_rate_detection = {'data': None, 'found': None, 'files_disagree': False, 'filled': None}
+
+
+def _format_rate(rate):
+    return f"{rate:g}"
+
+
+def detect_sampling_rate_of_loaded_data(column):
+    """
+    Looks for a time column next to the data in both files. A found rate fills the field, once for each data, so
+    that a rate entered by hand stays until other data is loaded. Without a time column, a rate entered by hand
+    stays, and one that came from the previous data's time column is cleared.
+    """
+    data = (state.val_selected_file_a.get(), state.val_selected_file_b.get(), state.val_selected_sheet.get(),
+            column, state.val_checkbox_data_has_headers.get())
+    if data == _rate_detection['data']:
+        return
+    found_a = detect_sampling_rate(state.dat_workbook_data["columns_a"], column)
+    found_b = detect_sampling_rate(state.dat_workbook_data["columns_b"], column)
+    files_disagree = bool(found_a and found_b and found_a[0] != found_b[0])
+    found = None if files_disagree else (found_a or found_b)
+    previously_filled = _rate_detection['filled']
+    _rate_detection.update(data=data, found=found, files_disagree=files_disagree, filled=None)
+    if found:
+        _rate_detection['filled'] = _format_rate(found[0])
+        state.val_sampling_rate_input.set(_rate_detection['filled'])
+    elif previously_filled is not None and state.val_sampling_rate_input.get() == previously_filled:
+        state.val_sampling_rate_input.set('')
+    update_sampling_rate_note()
+
+
+def on_sampling_rate_input_change(name, index, mode):
+    state.val_sampling_rate.set(validation.parse_decimal(state.val_sampling_rate_input.get()))
+    update_sampling_rate_note()
+
+
+def update_sampling_rate_note(*args):
+    rate = state.val_sampling_rate.get()
+    found = _rate_detection['found']
+    if found and rate == found[0]:
+        note = f"From column '{found[1]}'."
+    elif rate:
+        note = "Entered by hand." + (f" Column '{found[1]}' says {_format_rate(found[0])} Hz." if found else "")
+    elif _rate_detection['files_disagree']:
+        note = "The time columns of the two files give different rates. Enter the rate to see times in seconds."
+    else:
+        note = "No time column found next to the data. Optional: enter the rate to see times in seconds."
+    state.val_sampling_rate_note.set(note)
+
+
 # The block length follows the window size until it is set to something else
 _block_length = {'follows_window': True}
 
@@ -376,6 +431,8 @@ def setup_traces():
     state.val_checkbox_data_has_headers.trace_add('write', on_change_data_has_headers)
     state.val_rp_n_input.trace_add("write", on_rp_n_input_change)
     state.val_block_length_input.trace_add("write", on_block_length_input_change)
+    state.val_sampling_rate_input.trace_add("write", on_sampling_rate_input_change)
+    update_sampling_rate_note()
     state.val_window_size.trace_add("write", on_window_size_change_update_block_length)
 
     # batch ready state
@@ -481,6 +538,7 @@ def preprocess_data():
 
     raw_signal_a = state.dat_workbook_data["columns_a"][column]
     raw_signal_b = state.dat_workbook_data["columns_b"][column]
+    detect_sampling_rate_of_loaded_data(column)
     if not (utils.is_numeric_array(raw_signal_a) and utils.is_numeric_array(raw_signal_b)):
         set_invalid_data(f"Column '{column}' contains values that aren't numbers, or empty cells.")
         return

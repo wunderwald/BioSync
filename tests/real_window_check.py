@@ -108,6 +108,23 @@ report['eda'] = {
     'fixed_rate': state.val_checkbox_fr.get(), 'valid': state.val_INPUT_DATA_VALID.get(), 'reason': state.val_input_error.get(),
 }
 
+
+def rate_display():
+    return {
+        'field_shown': bool(widgets['frame_sampling_rate'].winfo_ismapped()),
+        'resampling_note_shown': bool(widgets['label_select_data_type'].winfo_ismapped()),
+        'note': state.val_sampling_rate_note.get(),
+        'window_seconds': widgets['label_window_size_seconds'].cget('text'),
+    }
+
+
+tabview._segmented_button_callback("Input Data")
+settle()
+report['sampling_rate'] = {'unknown': rate_display()}
+state.val_sampling_rate_input.set("2")
+settle()
+report['sampling_rate']['entered'] = rate_display()
+
 state.val_checkbox_lag_filter.set(True)       # the tallest content: lag filter rows and the job panel
 state.val_job_running.set(True)
 settle()

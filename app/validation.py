@@ -13,6 +13,19 @@ def is_signed_numeric_input(text):
     return re.fullmatch(r"-?\d*", text) is not None
 
 
+def is_decimal_input(text):
+    """Digits with at most one decimal point, including the '2.' on the way to '2.5'."""
+    return re.fullmatch(r"[0-9]*\.?[0-9]*", text) is not None
+
+
+def parse_decimal(text):
+    """The number a decimal field holds, or 0 if it holds none yet, such as '' or '.'."""
+    try:
+        return float(text)
+    except ValueError:
+        return 0.0
+
+
 def make_validator(app):
     """Register and return the numeric input validator against the CTk app instance."""
     return app.register(is_numeric_input)

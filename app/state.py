@@ -85,6 +85,9 @@ val_block_length                     = None
 val_surrogate_plan                   = None   # the sentence that says what the test will do
 val_surrogate_problem                = None   # why the test can't run with these settings, if it can't
 val_surrogate_warning                = None   # what limits the result, for example few different surrogate sets
+val_sampling_rate_input              = None   # the sampling rate field of fixed-rate data
+val_sampling_rate                    = None   # its rate in Hz, 0 if unknown
+val_sampling_rate_note               = None   # where the rate comes from
 val_job_running                      = None
 val_job_progress                     = None
 val_job_progress_text                = None
@@ -156,6 +159,7 @@ def init_state(retina):
     global val_random_pair_input_folder, val_random_pair_output_file, val_random_pair_is_ready
     global val_surrogate_method, val_surrogate_test, val_surrogate_measure, val_block_length_input
     global val_block_length, val_surrogate_plan, val_surrogate_problem, val_surrogate_warning
+    global val_sampling_rate_input, val_sampling_rate, val_sampling_rate_note
     global val_job_running, val_job_progress, val_job_progress_text, val_job_cancel_requested
     global val_dfa_text, val_input_error, val_exporting
     global dat_plot_data, dat_workbook_data, dat_physiological_data, dat_correlation_data
@@ -222,6 +226,9 @@ def init_state(retina):
     val_surrogate_plan                     = tk.StringVar(value='')
     val_surrogate_problem                  = tk.StringVar(value='')
     val_surrogate_warning                  = tk.StringVar(value='')
+    val_sampling_rate_input                = tk.StringVar(value='')
+    val_sampling_rate                      = tk.DoubleVar(value=0.0)
+    val_sampling_rate_note                 = tk.StringVar(value='')
     val_job_running                        = tk.BooleanVar(value=False)
     val_job_progress                       = tk.DoubleVar(value=0)
     val_job_progress_text                  = tk.StringVar(value='')

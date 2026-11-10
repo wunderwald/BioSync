@@ -1,9 +1,53 @@
+import re
+
 import numpy as np
 from scipy.interpolate import CubicSpline
 from scipy.stats import zscore
 
 # event-based signals are resampled to this rate
 EVENT_BASED_SAMPLING_RATE_HZ = 5
+
+# A column named like this, with equal steps, gives the sampling rate of fixed-rate data. Its values are seconds,
+# unless its name says milliseconds.
+TIME_COLUMN_WORD = 'time'
+MILLISECONDS_IN_NAME = re.compile(r'(?<![a-z])(ms|msec|millisec\w*)(?![a-z])')
+MIN_TIME_VALUES = 3
+STEP_TOLERANCE = 0.01   # how far a step may differ from the others, relative to them: room for rounded times
+
+
+def _time_column_rate(name, values):
+    """The sampling rate a column of times gives, or None if it isn't one with equal, rising steps."""
+    if TIME_COLUMN_WORD not in name.lower():
+        return None
+    times = list(values)
+    while times and times[-1] is None:      # a shorter column is padded with empty cells
+        times.pop()
+    if len(times) < MIN_TIME_VALUES or not all(
+        isinstance(t, (int, float)) and not isinstance(t, bool) for t in times
+    ):
+        return None
+    steps = np.diff(np.asarray(times, dtype=float))
+    step = float(np.median(steps))
+    if step <= 0 or np.any(np.abs(steps - step) > STEP_TOLERANCE * step):
+        return None
+    if MILLISECONDS_IN_NAME.search(name.lower()):
+        step /= 1000
+    return float(f"{1 / step:.6g}")      # 1 / 0.1 is 9.999999999999998 otherwise
+
+
+def detect_sampling_rate(columns, data_column):
+    """
+    The sampling rate of fixed-rate data from a time column next to it, as (rate in Hz, column name), or None.
+    Only the data's own sheet counts: a rate written elsewhere in a file can be the device's, before averaging,
+    such as 1000 Hz for data averaged to 0.5 s intervals.
+    """
+    for name, values in columns.items():
+        if name == data_column:
+            continue
+        rate = _time_column_rate(str(name), values)
+        if rate is not None:
+            return rate, name
+    return None
 
 def _replace_invalid_EDA(eda):
     '''

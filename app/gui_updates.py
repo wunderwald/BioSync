@@ -39,9 +39,13 @@ def setup_traces():
     for var in (
         state.val_window_size, state.val_step_size, state.val_max_lag, state.val_max_lag_sxc,
         state.val_lag_filter_min, state.val_lag_filter_max, state.val_checkbox_eb, state.val_block_length,
+        state.val_sampling_rate,
     ):
         var.trace_add('write', update_parameter_labels)
     update_parameter_labels()
+
+    state.val_checkbox_eb.trace_add('write', update_sampling_rate_visibility)
+    update_sampling_rate_visibility()
 
     state.val_LAG_FILTER_VALID.trace_add('write', update_lag_filter_entries_on_validation)
 
@@ -172,11 +176,30 @@ def update_step_size_entry_on_validation(*args):
         _w['error_label_step_size'].grid(row=6, column=0, columnspan=4, sticky="w", padx=10, pady=0)
 
 
+def _sampling_rate():
+    """Hz, or 0 if unknown: event-based data is resampled at a fixed rate, fixed-rate data has the rate entered."""
+    if state.val_checkbox_eb.get():
+        return EVENT_BASED_SAMPLING_RATE_HZ
+    return state.val_sampling_rate.get() or 0
+
+
 def _seconds_text(samples):
-    """Fixed-rate data can have any sampling rate, so only event-based data can be shown in seconds."""
-    if not state.val_checkbox_eb.get():
+    """A parameter in seconds, or nothing when the sampling rate is unknown."""
+    rate = _sampling_rate()
+    if not rate:
         return ''
-    return f"{samples / EVENT_BASED_SAMPLING_RATE_HZ:g} s"
+    seconds = samples / rate
+    return f"{seconds:.0f} s" if abs(seconds) >= 100 else f"{seconds:.3g} s"
+
+
+def update_sampling_rate_visibility(*args):
+    """Event-based data has a fixed resampling rate. Fixed-rate data shows the field for its rate instead."""
+    if state.val_checkbox_eb.get():
+        _w['label_select_data_type'].grid()
+        _w['frame_sampling_rate'].grid_remove()
+    else:
+        _w['label_select_data_type'].grid_remove()
+        _w['frame_sampling_rate'].grid()
 
 
 def update_parameter_labels(*args):
@@ -341,7 +364,7 @@ METHOD_EXPLANATIONS = {
     BLOCKS: "Cuts partner B's signal into blocks and puts them in a random order. Asks whether a dyad's "
             "coupling depends on the timing between the partners, and also gives a p-value for each dyad.",
     WELCH: "The test of earlier versions, to repeat their results. It counts every random pair as independent, "
-           "which they aren't, as the same people appear again and again, so p comes out too small.",
+           "which they aren't, as the same people appear again and again, so its p isn't exact.",
 }
 MEASURE_EXPLANATIONS = {
     MEAN_R: "The average correlation over all windows and lags.",
