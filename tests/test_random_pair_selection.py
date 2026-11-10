@@ -191,17 +191,24 @@ def test_seed_of_zero_is_a_seed(app):
     assert _run_and_read(app)['Random seed'] == 0
 
 
+# The rows of the first sheet before the surrogate tests were added (commit b76a0dd), which pipelines read by position
+EARLIER_ROWS = [
+    't-statistic', 'p-value', 'xcorr type', 'Data type', 'Window size', 'Max lag', 'Step size',
+    'Absolute correlation values', 'Standardised (z-score)', 'Lag filter used', 'Lag filter minimum',
+    'Lag filter maximum', 'Input dyad directory', 'Random seed', 'Different random pairs possible',
+    'Random pairs requested', 'Random pairs used', 'Real dyads used',
+]
+
+
 def test_new_rows_come_after_the_existing_ones(app):
     app.val_rp_seed_input.set("1")
     callbacks.handle_run_random_pair_button()
     app.timer.run_until_idle(60)
     sheet = openpyxl.load_workbook(app.output).worksheets[0]
     names = [row[0] for row in sheet.iter_rows(max_col=1, values_only=True) if row[0]]
-    assert names[:2] == ['t-statistic', 'p-value']
-    assert names[-7:] == [
-        'Input dyad directory', 'Random seed', 'Different random pairs possible',
-        'Random pairs requested', 'Random pairs used', 'Real dyads used', 'Files not used for random pairs',
-    ]
+    assert names[:len(EARLIER_ROWS)] == EARLIER_ROWS
+    assert names[len(EARLIER_ROWS):] == ['Files not used for random pairs', 'Method', 'Measure', 'Sides', 'Summary']
+    assert [cell.value for cell in sheet[1][3:5]] == ['random pair correlation', 'real pair correlation']
 
 
 def test_seed_is_read_before_the_job_starts(app):

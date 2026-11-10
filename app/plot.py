@@ -4,6 +4,8 @@ import matplotlib.gridspec as gridspec
 import matplotlib.colors as mcolors
 import numpy as np
 
+from surrogates import BLOCKS, REPAIRED, SIGNIFICANCE_LEVEL, WELCH, format_p
+
 # Custom diverging colormap
 _cmap_wxc = mcolors.LinearSegmentedColormap.from_list(
     'wxc_diverging',
@@ -355,22 +357,13 @@ def save_figure_to_png(fig, filepath):
 REAL_COLOR = '#cc00bb'          # the positive pole of the heatmap, the app's accent
 SURROGATE_COLOR = '#b4b4b4'
 SURROGATE_DARK_COLOR = '#555555'
-SIGNIFICANCE_LEVEL = 0.05
 SURROGATE_HISTOGRAM_BINS = 30
 MANY_DYADS = 20                 # from here on, dyad names get smaller text
 MAX_DYAD_LABELS = 40            # beyond this, only every n-th dyad is named
 DYAD_PANEL_POINTS = 450         # about the height of the dyad panel, which sets how thick each dyad's marks can be
 
 
-def format_p(p_value):
-    if p_value != p_value:      # NaN
-        return "p = -"
-    return "p < 0.001" if p_value < 0.001 else f"p = {p_value:.3f}"
-
-
 def _method_title(result):
-    # imported here: surrogates imports the analysis modules, which plotting doesn't need otherwise
-    from surrogates import BLOCKS, REPAIRED
     if result.method == REPAIRED:
         return f"Real dyads vs. {result.n_surrogates} sets of re-paired people"
     if result.method == BLOCKS:
@@ -465,7 +458,6 @@ def plot_surrogate_result(result):
     The figure of a surrogates.SurrogateResult: the group test, and for shuffled blocks also each dyad's test.
     Welch compares single random pairs with the real dyads, so it shows both groups' values instead.
     """
-    from surrogates import BLOCKS, WELCH
     fig = Figure(figsize=SCALING_PARAMS['FIGSIZE'], dpi=SCALING_PARAMS['DPI'], layout='constrained')
     if result.method == WELCH:
         _draw_welch_groups(fig.add_subplot(), result)

@@ -42,6 +42,8 @@ MIN_BLOCKS = 5
 GREATER = 'one-sided (real higher)'
 TWO_SIDED = 'two-sided'
 
+SIGNIFICANCE_LEVEL = 0.05
+
 
 @dataclass
 class SurrogateResult:
@@ -145,6 +147,32 @@ def _random_pair_candidates(input_dir, dyad_folders, params):
 def _draw_random_pairs(eligible_pairs, n_random_pairs, rng):
     """Random pairs with replacement, with a random person A and B, as in earlier versions."""
     return [rng.sample(rng.choice(eligible_pairs), 2) for _ in range(n_random_pairs)]
+
+
+def format_p(p_value):
+    if p_value != p_value:      # NaN
+        return "p = -"
+    return "p < 0.001" if p_value < 0.001 else f"p = {p_value:.3f}"
+
+
+def result_summary(result):
+    """One sentence that says what was tested and the result, for the export and the app."""
+    n = len(result.real_values)
+    if result.method == REPAIRED:
+        compared = f"{result.n_surrogates} sets of {n} re-paired people"
+    elif result.method == BLOCKS:
+        compared = f"{result.n_surrogates} shuffled versions of each dyad, in blocks of {result.block_length} samples"
+    else:
+        compared = f"{result.n_surrogates} random pairs with Welch's t-test"
+    sentence = f"{result.measure} of {n} real dyads compared with {compared} ({result.side}): "
+    if result.method == WELCH:
+        t_text = "t = -" if result.t_statistic != result.t_statistic else f"t = {result.t_statistic:.2f}"
+        return sentence + f"{t_text}, {format_p(result.p_value)}."
+    sentence += f"{format_p(result.p_value)}"
+    if result.method == BLOCKS:
+        n_significant = sum(p < SIGNIFICANCE_LEVEL for p in result.dyad_p_values)
+        sentence += f" for the group, and {n_significant} of {n} dyads with p < {SIGNIFICANCE_LEVEL} on their own"
+    return sentence + "."
 
 
 def comparison_side(measure, config):

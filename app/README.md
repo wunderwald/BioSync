@@ -124,7 +124,7 @@ pytest
 | `surrogates.py` | Tests that compare real dyads with surrogates, in which coupling can't exist. `surrogate_analysis` runs any of the three methods and returns a `SurrogateResult`: re-paired people (`repaired_pair_test`), shuffled blocks of partner B's signal (`block_shuffle_test`, which also gives a p-value for each dyad), and random pairs with Welch's t-test (`welch_random_pair_test`, the test of earlier versions, which draws pairs exactly as they did). Each reads every recording once, and leaves files without the selected sheet out of random pairs. |
 | `dfa.py` | Detrended Fluctuation Analysis — `dfa`, `dfa_wxcorr`, `dfa_wxcorr_window_averages`. `analysis.py` decides which series it runs on. |
 | `plot.py` | Matplotlib figure factories for preprocessing preview, windowed xcorr, and standard xcorr plots, and for surrogate test results (`plot_surrogate_result`). |
-| `export.py` | Writes XLSX result files for wxcorr, sxcorr, and random-pair analysis. Always exports raw (non-sigmoid) correlation values. |
+| `export.py` | Writes XLSX result files for wxcorr, sxcorr, and surrogate tests (`export_surrogate_result`, with the result figure as PNG). The Welch export keeps the first sheet of earlier versions and adds rows at its end. Always exports raw (non-sigmoid) correlation values. |
 | `batch_processing.py` | Iterates a folder of dyads, runs the full analysis pipeline on each, and saves per-dyad XLSX + PNG output. |
 | `xlsx.py` | Thin wrappers around openpyxl for reading and writing Excel files. `read_xlsx` returns the values of all sheets and closes the file. |
 | `utils.py` | Small helpers (`is_numeric_array`, `count_subdirectories`, `resource_path`, …). |

@@ -36,7 +36,8 @@ def write_matrix_sheet(workbook: Workbook, matrix: dict):
     for label, row in zip(matrix['row_labels'], matrix['rows']):
         sheet.append([_cell_value(label), *(_cell_value(value) for value in row)])
 
-def write_xlsx(vectors: dict, single_values: dict, output_path: str, sheet_title: str="xcorr data", matrix: dict=None):
+def write_xlsx(vectors: dict, single_values: dict, output_path: str, sheet_title: str="xcorr data", matrix: dict=None,
+               extra_sheets: list=()):
     """
     Write data to an Excel file. Existing analysis pipelines read the first sheet, so its layout and its text
     must stay as they are. New data belongs on another sheet.
@@ -45,6 +46,7 @@ def write_xlsx(vectors: dict, single_values: dict, output_path: str, sheet_title
         single_value (dict): A dictionary where keys are column names and values are single data values.
         output_path (str): The file path where the Excel file will be saved.
         matrix (dict, optional): Data for a second sheet, see write_matrix_sheet.
+        extra_sheets (list, optional): Data for more sheets after it, each as for write_matrix_sheet.
     Returns:
         None
     """
@@ -74,8 +76,8 @@ def write_xlsx(vectors: dict, single_values: dict, output_path: str, sheet_title
             sheet.cell(row=row_index+2, column=column_index, value=_cell_value(value))
         column_index += 1
 
-    if matrix is not None:
-        write_matrix_sheet(wb, matrix)
+    for sheet_data in ([matrix] if matrix is not None else []) + list(extra_sheets):
+        write_matrix_sheet(wb, sheet_data)
 
     # Save the workbook
     wb.save(output_path)

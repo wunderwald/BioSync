@@ -9,7 +9,7 @@ import utils
 from analysis import preprocess_signals, signal_dfa
 from signal_processing import guess_is_event_based
 from batch_processing import batch_process, find_result_files, remove_result_files
-from export import export_sxcorr_data, export_wxcorr_data, export_random_pair_data
+from export import export_sxcorr_data, export_surrogate_result, export_wxcorr_data, left_out_names
 from measures import MEAN_R
 from surrogates import WELCH, surrogate_analysis
 
@@ -816,36 +816,15 @@ def _random_pair_is_ready(*args):
 def run_random_pair(params, random_pair_count, input_dir, output_file, seed, progress):
     result = surrogate_analysis(WELCH, params, input_dir, random_pair_count, seed, MEAN_R, progress=progress)
     progress(1, 1, "Writing results")
-    export_random_pair_data(
-        file_path=output_file,
-        params=params,
-        input_dir=input_dir,
-        t_stat=result.t_statistic,
-        p_value=result.p_value,
-        avg_corr_rp=list(result.null_values),
-        avg_corr_real=result.real_values,
-        avg_wxcorr_real=result.avg_wxcorr_real,
-        avg_wxcorr_rp=result.avg_wxcorr_surrogates,
-        seed=seed,
-        n_eligible_pairs=result.n_pairs_possible,
-        n_random_pairs_requested=random_pair_count,
-        window_counts_real=result.window_counts_real,
-        window_counts_rp=result.window_counts_surrogates,
-        left_out_files=_left_out_names(result.left_out_files, input_dir),
-    )
+    export_surrogate_result(output_file, params, input_dir, result)
     return {
         'failures': result.failures,
         'p_value': result.p_value,
         'random_pairs_requested': random_pair_count,
         'random_pairs_used': result.n_pairs_used,
         'real_dyads_used': len(result.real_values),
-        'left_out_files': _left_out_names(result.left_out_files, input_dir),
+        'left_out_files': left_out_names(result.left_out_files, input_dir),
     }
-
-
-def _left_out_names(left_out_files, input_dir):
-    """Each left-out recording as 'folder/file (reason)'."""
-    return [f"{os.path.relpath(path, input_dir)} ({reason})" for path, reason in left_out_files]
 
 
 MIN_GROUP_SIZE = 2  # the t-test needs at least two values per group
