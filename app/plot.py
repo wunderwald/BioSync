@@ -347,3 +347,132 @@ def save_figure_to_png(fig, filepath):
         filepath (str): The full path where the PNG file should be saved.
     """
     fig.savefig(filepath, dpi=300, bbox_inches='tight')
+
+# ---------------------------------------------------------------------------
+# SURROGATE TESTS
+# ---------------------------------------------------------------------------
+
+REAL_COLOR = '#cc00bb'          # the positive pole of the heatmap, the app's accent
+SURROGATE_COLOR = '#b4b4b4'
+SURROGATE_DARK_COLOR = '#555555'
+SIGNIFICANCE_LEVEL = 0.05
+SURROGATE_HISTOGRAM_BINS = 30
+MANY_DYADS = 20                 # from here on, dyad names get smaller text
+MAX_DYAD_LABELS = 40            # beyond this, only every n-th dyad is named
+DYAD_PANEL_POINTS = 450         # about the height of the dyad panel, which sets how thick each dyad's marks can be
+
+
+def format_p(p_value):
+    if p_value != p_value:      # NaN
+        return "p = -"
+    return "p < 0.001" if p_value < 0.001 else f"p = {p_value:.3f}"
+
+
+def _method_title(result):
+    # imported here: surrogates imports the analysis modules, which plotting doesn't need otherwise
+    from surrogates import BLOCKS, REPAIRED
+    if result.method == REPAIRED:
+        return f"Real dyads vs. {result.n_surrogates} sets of re-paired people"
+    if result.method == BLOCKS:
+        return f"Real dyads vs. {result.n_surrogates} sets of shuffled versions (blocks of {result.block_length} samples)"
+    return f"Real dyads vs. {result.n_surrogates} random pairs, Welch's t-test"
+
+
+def _with_margin(low, high):
+    margin = (high - low) * 0.05 or 0.01
+    return low - margin, high + margin
+
+
+def _draw_surrogate_sets(ax, result):
+    """Histogram of the surrogate group means, with the real group mean as a line."""
+    null_values = _without_flat_windows(result.null_values)
+    counts, _, _ = ax.hist(null_values, bins=SURROGATE_HISTOGRAM_BINS, color=SURROGATE_COLOR, edgecolor='white',
+                           linewidth=1)
+    ax.axvline(result.real_value, color=REAL_COLOR, linewidth=2.5)
+    ax.set_xlim(*_with_margin(min(null_values.min(), result.real_value), max(null_values.max(), result.real_value)))
+    ax.set_ylim(0, counts.max() * 1.18)     # room for the label of the real value above the bars
+    ax.text(result.real_value, 0.97, f" real {result.real_value:.3f} ", transform=ax.get_xaxis_transform(),
+            color=REAL_COLOR, va='top', ha='left' if result.real_value <= np.median(null_values) else 'right')
+    ax.set_xlabel(f"{result.measure}, mean over dyads")
+    ax.set_ylabel('surrogate sets')
+    ax.set_title(f"{_method_title(result)}\n{result.measure}: {format_p(result.p_value)}, {result.side}")
+
+
+def _draw_welch_groups(ax, result):
+    """Every random pair and real dyad as a dot, in two rows, with each row's mean."""
+    jitter = np.random.default_rng(0)       # fixed, so that a figure of the same result looks the same
+    rows = [
+        ('random pairs', _without_flat_windows(result.null_values), SURROGATE_DARK_COLOR),
+        ('real dyads', np.asarray(result.real_values, dtype=float), REAL_COLOR),
+    ]
+    for row, (label, values, color) in enumerate(rows):
+        ax.scatter(values, row + jitter.uniform(-0.15, 0.15, len(values)), s=36, color=color, alpha=0.6,
+                   edgecolors='white', linewidths=0.8, label=f"{label} (n = {len(values)})")
+        if len(values):
+            ax.plot([values.mean()] * 2, [row - 0.3, row + 0.3], color=color, linewidth=2.5)
+    ax.set_yticks([0, 1], [label for label, _, _ in rows])
+    ax.set_ylim(-0.6, 1.6)
+    ax.set_xlabel(result.measure)
+    t_text = "t = -" if result.t_statistic != result.t_statistic else f"t = {result.t_statistic:.2f}"
+    ax.set_title(f"{_method_title(result)}\n{result.measure}: {t_text}, {format_p(result.p_value)}, {result.side}")
+    ax.grid(axis='x', color='#e6e6e6')
+    ax.set_axisbelow(True)
+
+
+def _draw_dyad_tests(ax, result):
+    """One row per dyad: the middle 95% of its shuffled versions, and its real value, filled if p < 0.05."""
+    n = len(result.dyad_names)
+    rows = np.arange(n)[::-1]       # the first dyad at the top
+    row_points = DYAD_PANEL_POINTS / n
+    bar_width = float(np.clip(row_points * 0.45, 1.5, 6))
+    marker_size = float(np.clip(row_points * 0.6, 3, 8))
+    for row, value, null_values, p_value in zip(rows, result.real_values, result.dyad_null_values, result.dyad_p_values):
+        null_values = _without_flat_windows(null_values)
+        low, high = np.percentile(null_values, [2.5, 97.5])
+        ax.plot([low, high], [row, row], color=SURROGATE_COLOR, linewidth=bar_width, solid_capstyle='round')
+        ax.plot([np.median(null_values)] * 2, [row - 0.3, row + 0.3], color=SURROGATE_DARK_COLOR, linewidth=1)
+        significant = p_value < SIGNIFICANCE_LEVEL
+        ax.plot(value, row, 'o', markersize=marker_size, color=REAL_COLOR,
+                markerfacecolor=REAL_COLOR if significant else 'white', markeredgewidth=min(1.8, marker_size / 4))
+
+    # dyad names on the left, p-values on the right. Many dyads get smaller text, and beyond MAX_DYAD_LABELS only
+    # every n-th is named, so that the labels never overlap.
+    every = -(-n // MAX_DYAD_LABELS)
+    labelled = list(range(0, n, every))
+    text = {'fontsize': 'x-small' if n >= MANY_DYADS else 'medium'}
+    ax.set_ylim(-0.7, n - 0.3)
+    ax.set_yticks(rows[labelled], [result.dyad_names[i] for i in labelled], **text)
+    p_axis = ax.twinx()
+    p_axis.set_ylim(ax.get_ylim())
+    p_axis.set_yticks(rows[labelled], [format_p(result.dyad_p_values[i]) for i in labelled], **text)
+    for label, i in zip(p_axis.get_yticklabels(), labelled):
+        label.set_color('black' if result.dyad_p_values[i] < SIGNIFICANCE_LEVEL else SURROGATE_DARK_COLOR)
+    p_axis.tick_params(length=0)
+
+    ax.set_xlabel(result.measure)
+    n_significant = sum(p < SIGNIFICANCE_LEVEL for p in result.dyad_p_values)
+    ax.set_title(
+        f"Each dyad vs. its own shuffled versions: {n_significant} of {n} with p < {SIGNIFICANCE_LEVEL}\n"
+        f"grey: middle 95% of shuffled versions, | their median, ● real p < {SIGNIFICANCE_LEVEL}, ○ real p ≥ {SIGNIFICANCE_LEVEL}",
+        fontsize='medium',
+    )
+    ax.grid(axis='x', color='#e6e6e6')
+    ax.set_axisbelow(True)
+
+
+def plot_surrogate_result(result):
+    """
+    The figure of a surrogates.SurrogateResult: the group test, and for shuffled blocks also each dyad's test.
+    Welch compares single random pairs with the real dyads, so it shows both groups' values instead.
+    """
+    from surrogates import BLOCKS, WELCH
+    fig = Figure(figsize=SCALING_PARAMS['FIGSIZE'], dpi=SCALING_PARAMS['DPI'], layout='constrained')
+    if result.method == WELCH:
+        _draw_welch_groups(fig.add_subplot(), result)
+    elif result.method == BLOCKS:
+        gs = gridspec.GridSpec(2, 1, height_ratios=[1, 2 if len(result.dyad_names) < MANY_DYADS else 3], figure=fig)
+        _draw_surrogate_sets(fig.add_subplot(gs[0]), result)
+        _draw_dyad_tests(fig.add_subplot(gs[1]), result)
+    else:
+        _draw_surrogate_sets(fig.add_subplot(), result)
+    return fig
