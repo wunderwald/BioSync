@@ -490,10 +490,19 @@ def test_export_suggests_a_name_and_can_be_cancelled(ran, monkeypatch, export, e
 
 def test_plot_export_is_the_figure_of_the_last_result(ran, monkeypatch):
     saved = []
-    monkeypatch.setattr(callbacks, "export_surrogate_figure", lambda path, result: saved.append((path, result)))
+    monkeypatch.setattr(callbacks, "export_surrogate_figure",
+                        lambda path, result: saved.append((path, result, ran.val_exporting.get())))
     callbacks.export_surrogate_plot()
-    assert saved == [(str(ran.output.with_suffix(".png")), ran.dat_surrogate_run['result'])]
+    # the PNG button, not the XLSX one, says it's exporting
+    assert saved == [(str(ran.output.with_suffix(".png")), ran.dat_surrogate_run['result'], "surrogate plot")]
     assert not ran.output.exists()
+
+
+def test_data_export_marks_its_own_button_busy(ran, monkeypatch):
+    busy = []
+    monkeypatch.setattr(callbacks, "export_surrogate_result", lambda *args: busy.append(ran.val_exporting.get()))
+    callbacks.export_surrogate_data()
+    assert busy == ["surrogate data"]
 
 
 @pytest.mark.parametrize("export, extension", [
