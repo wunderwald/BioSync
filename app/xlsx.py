@@ -98,7 +98,7 @@ def read_xlsx(input_path: str):
         wb.close()
     return workbook
 
-def _read_sheet_names(input_path: str):
+def read_sheet_names(input_path: str):
     try:
         wb = load_workbook(input_path, read_only=True)
     except Exception:
@@ -120,7 +120,7 @@ def choose_dyad_files(directory: str, file_names: list):
     """
     if len(file_names) == 2:
         return file_names[0], file_names[1], True
-    sheet_names = {name: _read_sheet_names(os.path.join(directory, name)) for name in file_names}
+    sheet_names = {name: read_sheet_names(os.path.join(directory, name)) for name in file_names}
     for name_a, name_b in combinations(file_names, 2):
         if sheet_names[name_a] is not None and sheet_names[name_a] == sheet_names[name_b]:
             return name_a, name_b, True

@@ -164,7 +164,8 @@ def export_sxcorr_data(file_path, params):
 
 def export_random_pair_data(file_path, params, input_dir, t_stat, p_value, avg_corr_rp, avg_corr_real,
                             avg_wxcorr_real=None, avg_wxcorr_rp=None, seed='-', n_eligible_pairs='-',
-                            n_random_pairs_requested='-', window_counts_real=None, window_counts_rp=None):
+                            n_random_pairs_requested='-', window_counts_real=None, window_counts_rp=None,
+                            left_out_files=None):
     # collect metadata
     is_windowed_xcorr = params['checkbox_windowed_xcorr']
     metadata = {
@@ -197,6 +198,7 @@ def export_random_pair_data(file_path, params, input_dir, t_stat, p_value, avg_c
         'Random pairs requested': n_random_pairs_requested,
         'Random pairs used': len(avg_corr_rp),
         'Real dyads used': len(avg_corr_real),
+        'Files not used for random pairs': "; ".join(left_out_files) if left_out_files else '-',
     }
 
     # collect vector data
