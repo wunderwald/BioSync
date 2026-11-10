@@ -150,7 +150,7 @@ def surrogate_state():
 
 surrogates_report = {'start': surrogate_state()}
 widgets['dropdown_surrogate_test']._clicked = None
-widgets['dropdown_surrogate_test']._dropdown_callback("Welch's t-test (earlier versions)")
+widgets['dropdown_surrogate_test']._dropdown_callback("Welch's t-test")
 settle()
 surrogates_report['welch'] = surrogate_state()
 widgets['dropdown_surrogate_test']._dropdown_callback("Surrogate distribution")
