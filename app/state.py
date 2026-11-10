@@ -98,6 +98,8 @@ dat_plot_data         = {}
 dat_workbook_data     = {}
 dat_physiological_data = {}
 dat_correlation_data  = {}
+# the last surrogate analysis: its result, the settings it ran with, and whether they have changed since
+dat_surrogate_run     = {'result': None, 'settings': None, 'folder': '', 'stale': False}
 
 
 # whether the update requested last should wait for typing to pause

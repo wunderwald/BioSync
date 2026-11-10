@@ -175,6 +175,27 @@ settle()
 surrogates_report['allowed_again'] = surrogate_state()
 surrogates_report['widest'] = tabview.tab("Surrogates").winfo_children()[0].winfo_children()[0].winfo_children()[0].winfo_reqwidth()
 report['surrogates'] = surrogates_report
+
+# the plot area of the Surrogates tab: a hint before any run, then the last result
+import surrogates
+corr_plot.UPDATE()      # PARAMS_CHANGED schedules this in the app; app.py connects it, this script doesn't
+settle()
+surrogate_plot = {'before_run': [text.get_text() for text in corr_plot.canvas.figure.texts]}
+rng = np.random.default_rng(0)
+state.dat_surrogate_run.update(folder='/data/dyads', stale=False, result=surrogates.SurrogateResult(
+    method=surrogates.REPAIRED, measure='mean r', side=surrogates.TWO_SIDED, seed=3, dyad_names=['d1', 'd2'],
+    real_values=[0.2, 0.3], real_value=0.25, null_values=rng.normal(0.1, 0.03, 200), p_value=0.01,
+    n_surrogates=200, n_sets_possible=1000, failures=[],
+))
+corr_plot.UPDATE()
+settle()
+surrogate_plot['after_run'] = corr_plot.canvas.figure._suptitle.get_text() if corr_plot.canvas.figure._suptitle else None
+surrogate_plot['axes'] = len(corr_plot.canvas.figure.axes)
+tabview._segmented_button_callback("Correlation")
+corr_plot.UPDATE()
+settle()
+surrogate_plot['other_tab_axes_titles'] = [ax.get_title() for ax in corr_plot.canvas.figure.axes][:1]
+report['surrogate_plot'] = surrogate_plot
 report['callback_errors'] = errors
 print(json.dumps(report), flush=True)
 os._exit(0)     # skips Tk's slow and noisy shutdown

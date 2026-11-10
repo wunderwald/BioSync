@@ -93,3 +93,10 @@ def test_buttons_that_open_dialogs_run_on_release(report):
         'runs_after_release_outside': [],
         'runs_when_disabled': [],
     }
+
+
+def test_surrogates_tab_plots_its_last_result(report):
+    plot = report['surrogate_plot']
+    assert plot['before_run'] == ["Run a surrogate analysis to see its result here."]
+    assert plot['after_run'] == "Last run: dyads, seed 3." and plot['axes'] == 1
+    assert plot['other_tab_axes_titles'] == ["Correlation Heatmap"]     # the other tabs keep the loaded dyad

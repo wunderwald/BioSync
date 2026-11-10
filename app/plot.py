@@ -453,10 +453,14 @@ def _draw_dyad_tests(ax, result):
     ax.set_axisbelow(True)
 
 
-def plot_surrogate_result(result):
+STALE_COLOR = '#c27c0e'
+
+
+def plot_surrogate_result(result, note=None, note_is_warning=False):
     """
     The figure of a surrogates.SurrogateResult: the group test, and for shuffled blocks also each dyad's test.
     Welch compares single random pairs with the real dyads, so it shows both groups' values instead.
+    note is a line above everything, in orange if note_is_warning.
     """
     fig = Figure(figsize=SCALING_PARAMS['FIGSIZE'], dpi=SCALING_PARAMS['DPI'], layout='constrained')
     if result.method == WELCH:
@@ -467,4 +471,6 @@ def plot_surrogate_result(result):
         _draw_dyad_tests(fig.add_subplot(gs[1]), result)
     else:
         _draw_surrogate_sets(fig.add_subplot(), result)
+    if note:
+        fig.suptitle(note, color=STALE_COLOR if note_is_warning else SURROGATE_DARK_COLOR, fontsize='medium')
     return fig

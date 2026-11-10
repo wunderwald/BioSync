@@ -44,6 +44,8 @@ def tabs(fake_state, monkeypatch):
 @pytest.mark.parametrize("previous, selected", [
     ("Input Data", "Correlation"), ("Correlation", "Input Data"),
     ("Input Data", "Export & Batch"), ("Export & Batch", "Input Data"),
+    ("Correlation", "Surrogates"), ("Surrogates", "Correlation"),
+    ("Export & Batch", "Surrogates"), ("Surrogates", "Input Data"),
 ])
 def test_new_tab_is_shown_before_a_plot_change(tabs, previous, selected):
     assert tabs(previous, selected) == ["tab shown", "plot update"]

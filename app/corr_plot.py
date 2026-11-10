@@ -1,6 +1,8 @@
 import os
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from plot import plot_init, plot_message, update_sxcorr_plots, update_wxcorr_plots, update_preproc_plots
+from plot import (
+    plot_init, plot_message, plot_surrogate_result, update_sxcorr_plots, update_wxcorr_plots, update_preproc_plots,
+)
 from analysis import correlate_signals, format_dfa, windowed_dfa
 
 import state
@@ -8,6 +10,8 @@ import state
 canvas = None
 
 UPDATE_DEBOUNCE_MS = 250
+SURROGATES_TAB = "Surrogates"
+NO_SURROGATE_RESULT = "Run a surrogate analysis to see its result here."
 NO_WINDOWED_DFA = {'alpha_window_averages': None, 'alpha_per_lag': None, 'note': 'No valid results yet.'}
 
 _pending_update = None    # id of the scheduled UPDATE, if any
@@ -94,6 +98,8 @@ def update_plot(*args):
 
     if current_tab == "Input Data":
         _update_preprocess_plot()
+    elif current_tab == SURROGATES_TAB:
+        _update_surrogate_plot()
     elif state.val_checkbox_windowed_xcorr.get():
         _update_wxcorr_plot()
     else:
@@ -130,6 +136,18 @@ def _update_preprocess_plot():
         'column_b':      state.val_selected_column.get(),
         'is_resampled':  state.val_checkbox_eb.get(),
     })
+
+
+def _update_surrogate_plot():
+    """The last surrogate result. It stays when the settings change, because a run can take minutes."""
+    run = state.dat_surrogate_run
+    if run['result'] is None:
+        state.dat_plot_data["fig"] = plot_message(NO_SURROGATE_RESULT)
+        return
+    note = f"Last run: {os.path.basename(run['folder'])}, seed {run['result'].seed}."
+    if run['stale']:
+        note += " The settings have changed since, so this is the result of the earlier settings."
+    state.dat_plot_data["fig"] = plot_surrogate_result(run['result'], note=note, note_is_warning=run['stale'])
 
 
 def _update_wxcorr_plot():

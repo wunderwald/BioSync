@@ -30,6 +30,7 @@ def fake_state(monkeypatch):
     for name in vars(state).copy():
         if name.startswith("val_"):
             monkeypatch.setattr(state, name, FakeVar(""), raising=True)
+    monkeypatch.setattr(state, "dat_surrogate_run", {'result': None, 'settings': None, 'folder': '', 'stale': False})
     return state
 
 

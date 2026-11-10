@@ -25,6 +25,8 @@ import validation
 # (populated by app_layout.build_layout after widgets are created)
 # ---------------------------------------------------------------------------
 PREVIEW_TAB = "Input Data"
+SURROGATES_TAB = "Surrogates"
+TABS_WITH_OWN_PLOT = (PREVIEW_TAB, SURROGATES_TAB)   # the other tabs show the correlation of the loaded dyad
 
 _dropdowns = {}   # keys: 'sheet', 'column'
 _tabview   = {}   # key: 'tabview'
@@ -47,8 +49,7 @@ def on_tab_change():
     previous_tab = state.val_CURRENT_TAB.get()
     selected_tab = _tabview['tabview'].get()
     state.val_CURRENT_TAB.set(selected_tab)
-    # only the Input Data tab has its own plot, the others share one
-    if PREVIEW_TAB not in (previous_tab, selected_tab):
+    if previous_tab not in TABS_WITH_OWN_PLOT and selected_tab not in TABS_WITH_OWN_PLOT:
         return
     _tabview['tabview'].update_idletasks()  # show the new tab before the slower plot update
     state.PARAMS_CHANGED()
@@ -334,6 +335,29 @@ def update_surrogate_plan(*args):
     state.val_surrogate_plan.set('' if problem else plan_summary(choice, config, n_dyads))
     state.val_surrogate_warning.set('' if problem else (_surrogate_warning(choice) or ''))
     _surrogates_are_ready()
+    _update_surrogate_staleness()
+
+
+# settings that don't change a surrogate result
+SETTINGS_NOT_IN_A_RESULT = ('batch_input_folder', 'output_dir', 'sigmoid_correlations')
+
+
+def surrogate_settings(params, choice, input_dir):
+    """Everything a surrogate result depends on, so that a change since the run can be noticed."""
+    kept = tuple(sorted((key, value) for key, value in params.items() if key not in SETTINGS_NOT_IN_A_RESULT))
+    return kept, choice, input_dir
+
+
+def _update_surrogate_staleness():
+    run = state.dat_surrogate_run
+    if run['result'] is None:
+        return
+    stale = run['settings'] != surrogate_settings(_analysis_params(), surrogate_choice(),
+                                                  state.val_random_pair_input_folder.get())
+    if stale != run['stale']:
+        run['stale'] = stale
+        if state.val_CURRENT_TAB.get() == SURROGATES_TAB:
+            state.PARAMS_CHANGED()
 
 
 # ---------------------------------------------------------------------------
@@ -372,6 +396,10 @@ def setup_traces():
         state.val_checkbox_windowed_xcorr, state.val_checkbox_average_windows, state.val_checkbox_lag_filter,
         state.val_lag_filter_min, state.val_lag_filter_max, state.val_max_lag, state.val_checkbox_absolute_corr,
         state.val_checkbox_absolute_corr_sxc, state.val_random_pair_output_file,
+        # these only matter for whether the shown result is out of date
+        state.val_window_size, state.val_step_size, state.val_max_lag_sxc, state.val_checkbox_standardise,
+        state.val_selected_sheet, state.val_selected_column, state.val_checkbox_data_has_headers,
+        state.val_checkbox_eb, state.val_checkbox_fr,
     ):
         var.trace_add('write', update_surrogate_plan)
     _surrogates['method'] = surrogate_choice().method
@@ -993,8 +1021,18 @@ def handle_run_surrogate_button():
     output_file = state.val_random_pair_output_file.get()
     seed_input = state.val_rp_seed_input.get()
     seed = int(seed_input) if seed_input else random.randrange(MAX_RANDOM_SEED)
+    settings = surrogate_settings(params, choice, input_dir)
     _start_job(
         "Surrogate analysis",
         lambda progress: run_surrogate_analysis(params, choice, input_dir, output_file, seed, progress),
-        _show_surrogate_summary,
+        lambda summary: _surrogate_run_finished(summary, settings, input_dir),
     )
+
+
+def _surrogate_run_finished(summary, settings, input_dir):
+    """Keeps the result for the Surrogates tab's plot, shows it there, and says what was found."""
+    state.dat_surrogate_run.update(result=summary['result'], settings=settings, folder=input_dir, stale=False)
+    _update_surrogate_staleness()       # settings changed during the run make it out of date at once
+    if state.val_CURRENT_TAB.get() == SURROGATES_TAB:
+        state.PARAMS_CHANGED()
+    _show_surrogate_summary(summary)

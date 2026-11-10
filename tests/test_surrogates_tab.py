@@ -9,7 +9,9 @@ import openpyxl
 import pytest
 
 import callbacks
+import corr_plot
 import gui_updates
+import plot
 import surrogates
 from analysis import AnalysisConfig
 from helpers import FakeTimer, FakeWidget, batch_params, write_dyad
@@ -120,6 +122,7 @@ def tab(fake_state, monkeypatch):
     monkeypatch.setitem(callbacks._surrogates, 'method', REPAIRED)
     monkeypatch.setitem(callbacks._surrogates, 'folder', {})
     monkeypatch.setitem(callbacks._block_length, 'follows_window', True)
+    monkeypatch.setitem(fake_state.dat_plot_data, 'fig', None)
     return fake_state
 
 
@@ -352,3 +355,99 @@ def test_a_problem_stops_the_run_before_it_starts(run, tmp_path, monkeypatch):
     assert run.dialogs == [("showwarning", "Can't run the surrogate analysis",
                             "Can't compare r at lag 0: it needs a correlation for each lag, and 'average windows' is on.")]
     assert not run.output.exists()
+
+
+# ---------------------------------------------------------------------------
+# THE RESULT IN THE PLOT AREA
+# ---------------------------------------------------------------------------
+
+def _figure_texts(fig):
+    return [text.get_text() for text in fig.texts]
+
+
+def test_plot_says_how_to_get_a_result_before_any_run(tab, monkeypatch):
+    tab.val_CURRENT_TAB.set("Surrogates")
+    corr_plot.update_plot()
+    assert _figure_texts(tab.dat_plot_data["fig"]) == [corr_plot.NO_SURROGATE_RESULT]
+
+
+@pytest.fixture
+def ran(run, tmp_path, monkeypatch):
+    """A finished run, with settings that a test can change afterwards."""
+    params = batch_params(tmp_path / "in", tmp_path)
+    monkeypatch.setattr(callbacks, "_analysis_params", lambda: dict(params))
+    run.params = params
+    run.redraws = []
+    monkeypatch.setattr(callbacks.state, "PARAMS_CHANGED", lambda debounce=False: run.redraws.append(debounce))
+    run.val_CURRENT_TAB.set("Surrogates")
+    _set_n(run, 20)
+    callbacks.handle_run_surrogate_button()
+    run.timer.run_until_idle(60)
+    return run
+
+
+def test_finished_run_is_kept_and_shown(ran):
+    stored = ran.dat_surrogate_run
+    assert stored['result'].n_surrogates == 20 and stored['result'].seed == 7
+    assert stored['stale'] is False
+    assert ran.redraws                  # the Surrogates tab is open, so its plot is redrawn
+    corr_plot.update_plot()
+    fig = ran.dat_plot_data["fig"]
+    assert fig._suptitle.get_text() == "Last run: in, seed 7."
+    assert any("re-paired people" in ax.get_title() for ax in fig.axes)
+
+
+@pytest.mark.parametrize("change, stale", [
+    (lambda run: run.params.update(window_size=100), True),
+    (lambda run: run.val_surrogate_measure.set(MEAN_ABS_R_MAX), True),
+    (lambda run: _set_n(run, 21), True),
+    (lambda run: run.val_random_pair_input_folder.set("elsewhere"), True),
+    (lambda run: run.val_rp_seed_input.set("8"), False),                 # the next run, not this result
+    (lambda run: run.val_random_pair_output_file.set("other.xlsx"), False),
+    (lambda run: run.params.update(sigmoid_correlations=True), False),   # only changes how heatmaps look
+])
+def test_result_is_marked_when_its_settings_change(ran, change, stale):
+    ran.redraws.clear()
+    change(ran)
+    callbacks.update_surrogate_plan()
+    assert ran.dat_surrogate_run['stale'] is stale
+    assert bool(ran.redraws) is stale
+    corr_plot.update_plot()
+    suptitle = ran.dat_plot_data["fig"]._suptitle
+    assert ("settings have changed since" in suptitle.get_text()) is stale
+    assert (suptitle.get_color() == plot.STALE_COLOR) is stale
+
+
+def test_changing_a_setting_back_unmarks_the_result(ran):
+    ran.params.update(window_size=100)
+    callbacks.update_surrogate_plan()
+    ran.params.update(window_size=150)
+    callbacks.update_surrogate_plan()
+    assert ran.dat_surrogate_run['stale'] is False
+
+
+def test_the_plot_only_redraws_when_the_mark_changes(ran):
+    ran.params.update(window_size=100)
+    callbacks.update_surrogate_plan()
+    ran.redraws.clear()
+    ran.params.update(window_size=90)
+    callbacks.update_surrogate_plan()
+    assert ran.redraws == []
+
+
+def test_other_tabs_are_not_redrawn_for_a_surrogate_result(ran):
+    ran.val_CURRENT_TAB.set("Correlation")
+    ran.redraws.clear()
+    ran.params.update(window_size=100)
+    callbacks.update_surrogate_plan()
+    assert ran.dat_surrogate_run['stale'] is True and ran.redraws == []
+
+
+def test_settings_changed_during_the_run_mark_the_result_at_once(run, tmp_path, monkeypatch):
+    params = batch_params(tmp_path / "in", tmp_path)
+    monkeypatch.setattr(callbacks, "_analysis_params", lambda: dict(params))
+    _set_n(run, 20)
+    callbacks.handle_run_surrogate_button()
+    params.update(window_size=100)      # while the job runs
+    run.timer.run_until_idle(60)
+    assert run.dat_surrogate_run['stale'] is True
