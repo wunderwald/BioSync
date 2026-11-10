@@ -8,8 +8,10 @@ import xlsx
 import utils
 from analysis import preprocess_signals, signal_dfa
 from signal_processing import guess_is_event_based
-from batch_processing import batch_process, find_result_files, random_pair_analysis, remove_result_files
+from batch_processing import batch_process, find_result_files, remove_result_files
 from export import export_sxcorr_data, export_wxcorr_data, export_random_pair_data
+from measures import MEAN_R
+from surrogates import WELCH, surrogate_analysis
 
 import corr_plot
 import state
@@ -812,38 +814,38 @@ def _random_pair_is_ready(*args):
 
 
 def run_random_pair(params, random_pair_count, input_dir, output_file, seed, progress):
-    (t_stat, p_value, avg_corr_rp, avg_corr_real, avg_wxcorr_real, avg_wxcorr_rp, failures, n_eligible_pairs,
-     window_counts_real, window_counts_rp) = random_pair_analysis(
-        params=params,
-        random_pair_count=random_pair_count,
-        input_dir=input_dir,
-        progress=progress,
-        seed=seed,
-    )
+    result = surrogate_analysis(WELCH, params, input_dir, random_pair_count, seed, MEAN_R, progress=progress)
     progress(1, 1, "Writing results")
     export_random_pair_data(
         file_path=output_file,
         params=params,
         input_dir=input_dir,
-        t_stat=t_stat,
-        p_value=p_value,
-        avg_corr_rp=avg_corr_rp,
-        avg_corr_real=avg_corr_real,
-        avg_wxcorr_real=avg_wxcorr_real,
-        avg_wxcorr_rp=avg_wxcorr_rp,
+        t_stat=result.t_statistic,
+        p_value=result.p_value,
+        avg_corr_rp=list(result.null_values),
+        avg_corr_real=result.real_values,
+        avg_wxcorr_real=result.avg_wxcorr_real,
+        avg_wxcorr_rp=result.avg_wxcorr_surrogates,
         seed=seed,
-        n_eligible_pairs=n_eligible_pairs,
+        n_eligible_pairs=result.n_pairs_possible,
         n_random_pairs_requested=random_pair_count,
-        window_counts_real=window_counts_real,
-        window_counts_rp=window_counts_rp,
+        window_counts_real=result.window_counts_real,
+        window_counts_rp=result.window_counts_surrogates,
+        left_out_files=_left_out_names(result.left_out_files, input_dir),
     )
     return {
-        'failures': failures,
-        'p_value': p_value,
+        'failures': result.failures,
+        'p_value': result.p_value,
         'random_pairs_requested': random_pair_count,
-        'random_pairs_used': len(avg_corr_rp),
-        'real_dyads_used': len(avg_corr_real),
+        'random_pairs_used': result.n_pairs_used,
+        'real_dyads_used': len(result.real_values),
+        'left_out_files': _left_out_names(result.left_out_files, input_dir),
     }
+
+
+def _left_out_names(left_out_files, input_dir):
+    """Each left-out recording as 'folder/file (reason)'."""
+    return [f"{os.path.relpath(path, input_dir)} ({reason})" for path, reason in left_out_files]
 
 
 MIN_GROUP_SIZE = 2  # the t-test needs at least two values per group
@@ -871,6 +873,8 @@ def _show_random_pair_summary(summary):
     lines = [f"Finished, {len(failures)} pairs or dyads skipped."]
     if problems:
         lines += [""] + problems
+    if summary.get('left_out_files'):
+        lines += ["", "Not used for random pairs:"] + summary['left_out_files'][:MAX_LISTED_FAILURES]
     if failures:
         lines += ["", "Skipped:"] + _format_failures(failures)
     if problems:
