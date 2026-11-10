@@ -5,6 +5,10 @@ group means that reach the real group mean.
 
 Re-paired people: each surrogate set has as many pairs as there are real dyads, made of people from different
 dyads. It asks whether the real dyads are more coupled than strangers recorded in the same setting.
+
+Shuffled blocks: partner B's signal is cut into blocks, which are put in a random order. It keeps each signal's
+short-term course and breaks the timing between the partners. It asks whether a dyad's coupling depends on the
+moment-to-moment timing, and gives a p-value for each dyad as well as for the group.
 """
 import math
 import os
@@ -15,11 +19,15 @@ import numpy as np
 
 import utils
 import xlsx
-from analysis import AnalysisConfig, analyze_dyad
+from analysis import AnalysisConfig, analyze_dyad, correlate_signals
 from batch_processing import _eligible_random_pairs, _no_progress
 from measures import MEAN_ABS_R_MAX, dyad_measure, measure_problem
 
 REPAIRED = 're-paired people'
+BLOCKS = 'shuffled blocks'
+
+# fewer blocks have too few orders for a dyad to be significant: 4 blocks have 24, so p can't go below about 0.04
+MIN_BLOCKS = 5
 
 GREATER = 'one-sided (real higher)'
 TWO_SIDED = 'two-sided'
@@ -37,10 +45,16 @@ class SurrogateResult:
     null_values: np.ndarray     # the mean of each surrogate set
     p_value: float
     n_surrogates: int
-    n_pairs_possible: int       # pairs of people from different dyads
-    n_pairs_used: int           # of those, the pairs that gave a value
     n_sets_possible: int        # different surrogate sets, which limits how small p can usefully be
     failures: list              # (name, reason) for each dyad or pair without a value
+    # re-paired people
+    n_pairs_possible: int = None        # pairs of people from different dyads
+    n_pairs_used: int = None            # of those, the pairs that gave a value
+    # shuffled blocks, with one entry per dyad in dyad_names
+    block_length: int = None
+    dyad_null_values: list = None       # the measure of each of the dyad's surrogates
+    dyad_p_values: list = None
+    dyad_orders_possible: list = None   # different block orders, which limits how small the dyad's p can be
 
 
 def comparison_side(measure, config):
@@ -116,14 +130,32 @@ def _real_dyads(input_dir, dyad_folders):
     return dyads
 
 
-def _pair_value(recordings, file_path_a, file_path_b, params, config, measure):
-    raw_signal_a = recordings.signal(file_path_a, params['selected_column_a'])
-    raw_signal_b = recordings.signal(file_path_b, params['selected_column_b'])
-    _signals, corr_data = analyze_dyad(raw_signal_a, raw_signal_b, config)
+def _measure_of(corr_data, config, measure):
     value = dyad_measure(corr_data, config, measure)
     if np.isnan(value):
         raise ValueError("no correlation, because a signal doesn't change in any window")
     return value
+
+
+def _analysed_pair(recordings, file_path_a, file_path_b, params, config):
+    raw_signal_a = recordings.signal(file_path_a, params['selected_column_a'])
+    raw_signal_b = recordings.signal(file_path_b, params['selected_column_b'])
+    return analyze_dyad(raw_signal_a, raw_signal_b, config)
+
+
+def _pair_value(recordings, file_path_a, file_path_b, params, config, measure):
+    _signals, corr_data = _analysed_pair(recordings, file_path_a, file_path_b, params, config)
+    return _measure_of(corr_data, config, measure)
+
+
+def _check_measure(measure, config):
+    problem = measure_problem(measure, config)
+    if problem:
+        raise ValueError(f"Can't compare {measure}: {problem}.")
+
+
+def _dyad_folders(input_dir):
+    return sorted(f for f in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, f)))
 
 
 def repaired_pair_test(params, input_dir, n_surrogates=1000, progress=_no_progress, seed=None,
@@ -145,13 +177,11 @@ def repaired_pair_test(params, input_dir, n_surrogates=1000, progress=_no_progre
         ValueError: if the measure doesn't fit the settings, or there are too few dyads or pairs.
     """
     config = AnalysisConfig.from_params(params)
-    problem = measure_problem(measure, config)
-    if problem:
-        raise ValueError(f"Can't compare {measure}: {problem}.")
+    _check_measure(measure, config)
     if n_surrogates < 1:
         raise ValueError("At least one surrogate set is needed.")
 
-    dyad_folders = sorted(f for f in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, f)))
+    dyad_folders = _dyad_folders(input_dir)
     real_dyads = _real_dyads(input_dir, dyad_folders)
     eligible_pairs = _eligible_random_pairs(input_dir, dyad_folders)
     if not eligible_pairs:
@@ -207,4 +237,130 @@ def repaired_pair_test(params, input_dir, n_surrogates=1000, progress=_no_progre
         n_pairs_used=len(pair_values),
         n_sets_possible=math.comb(len(pair_values), len(real_values)),
         failures=failures,
+    )
+
+
+def shuffle_blocks(signal, block_length, order):
+    """
+    The signal with its whole blocks of block_length samples in the given order. Samples after the last whole
+    block stay at the end.
+    """
+    signal = np.asarray(signal)
+    n_whole = len(order) * block_length
+    blocks = signal[:n_whole].reshape(len(order), block_length)
+    return np.concatenate([blocks[list(order)].ravel(), signal[n_whole:]])
+
+
+def _shuffled_order(n_blocks, rng):
+    """A random order of the blocks, other than the original one, so that every surrogate is shuffled."""
+    if n_blocks < 2:
+        raise ValueError(f"{n_blocks} blocks can't be shuffled")
+    original = list(range(n_blocks))
+    while True:
+        order = rng.sample(original, n_blocks)
+        if order != original:
+            return order
+
+
+def _block_count_problem(n_samples, block_length):
+    n_blocks = n_samples // block_length
+    if n_blocks < MIN_BLOCKS:
+        return (
+            f"{n_samples} samples fit only {n_blocks} blocks of {block_length}, "
+            f"and at least {MIN_BLOCKS} are needed"
+        )
+    return None
+
+
+def _block_surrogate_values(signals, config, measure, block_length, n_surrogates, rng):
+    """The measure of n_surrogates versions of the dyad, with B's blocks shuffled. B's z-scores keep their order."""
+    signal_a, signal_b, signal_a_std, signal_b_std = signals
+    n_blocks = len(signal_b) // block_length
+    values = np.empty(n_surrogates)
+    for index in range(n_surrogates):
+        order = _shuffled_order(n_blocks, rng)
+        shuffled = (
+            signal_a, shuffle_blocks(signal_b, block_length, order),
+            signal_a_std, shuffle_blocks(signal_b_std, block_length, order),
+        )
+        values[index] = dyad_measure(correlate_signals(shuffled, config), config, measure)
+    return values
+
+
+def block_shuffle_test(params, input_dir, block_length, n_surrogates=1000, progress=_no_progress, seed=None,
+                       measure=MEAN_ABS_R_MAX):
+    """
+    Compares each real dyad in input_dir with versions of it in which B's blocks are shuffled, and the group mean
+    with surrogate sets that take one shuffled version of each dyad. The same seed and files give the same result.
+    Args:
+        params (dict): The settings, see batch_processing.batch_process.
+        input_dir (str): A folder with one folder per dyad.
+        block_length (int): Samples per block, after preprocessing (for event-based data at 5 Hz).
+        n_surrogates (int): The number of shuffled versions of each dyad, which is also the number of sets.
+        progress (function): Called with (done, total, text) before each dyad.
+        seed (int): Seeds the block orders.
+        measure (str): One of measures.MEASURES.
+    Returns:
+        SurrogateResult
+    Raises:
+        ValueError: if the measure doesn't fit the settings, or no dyad could be analysed.
+    """
+    config = AnalysisConfig.from_params(params)
+    _check_measure(measure, config)
+    if n_surrogates < 1:
+        raise ValueError("At least one surrogate is needed.")
+    if block_length < 1:
+        raise ValueError("A block needs at least one sample.")
+
+    real_dyads = _real_dyads(input_dir, _dyad_folders(input_dir))
+    rng = random.Random(seed)
+    recordings = _Recordings(params)
+    failures = []
+    dyad_names, real_values, dyad_null_values, dyad_orders_possible = [], [], [], []
+    for index, (name, file_path_a, file_path_b) in enumerate(real_dyads):
+        progress(index, len(real_dyads) + 1, name)
+        try:
+            signals, corr_data = _analysed_pair(recordings, file_path_a, file_path_b, params, config)
+            problem = _block_count_problem(len(signals[1]), block_length)
+            if problem:
+                raise ValueError(problem)
+            value = _measure_of(corr_data, config, measure)
+            null_values = _block_surrogate_values(signals, config, measure, block_length, n_surrogates, rng)
+        except Exception as e:
+            failures.append((name, str(e)))
+            continue
+        dyad_names.append(name)
+        real_values.append(value)
+        dyad_null_values.append(null_values)
+        dyad_orders_possible.append(math.factorial(len(signals[1]) // block_length) - 1)
+
+    if not real_values:
+        raise ValueError("No real dyad could be analysed.")
+
+    progress(len(real_dyads), len(real_dyads) + 1, "Surrogate sets")
+    side = comparison_side(measure, config)
+    # set i takes each dyad's surrogate i. The orders were drawn independently, so the sets are random combinations.
+    # A shuffled version whose windows are all flat has no value, and is left out of its set.
+    null_values = np.nanmean(np.array(dyad_null_values), axis=0)
+    real_value = float(np.mean(real_values))
+    return SurrogateResult(
+        method=BLOCKS,
+        measure=measure,
+        side=side,
+        seed=seed,
+        dyad_names=dyad_names,
+        real_values=real_values,
+        real_value=real_value,
+        null_values=null_values,
+        p_value=surrogate_p_value(real_value, null_values, side),
+        n_surrogates=n_surrogates,
+        n_sets_possible=math.prod(dyad_orders_possible),
+        failures=failures,
+        block_length=block_length,
+        dyad_null_values=dyad_null_values,
+        dyad_p_values=[
+            surrogate_p_value(value, dyad_null[~np.isnan(dyad_null)], side)
+            for value, dyad_null in zip(real_values, dyad_null_values)
+        ],
+        dyad_orders_possible=dyad_orders_possible,
     )
