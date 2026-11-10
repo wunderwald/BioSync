@@ -1,0 +1,354 @@
+"""
+The Surrogates tab: which test its choices mean, what it says before a run, what stops a run, and the run itself.
+"""
+import math
+import os
+
+import numpy as np
+import openpyxl
+import pytest
+
+import callbacks
+import gui_updates
+import surrogates
+from analysis import AnalysisConfig
+from helpers import FakeTimer, FakeWidget, batch_params, write_dyad
+from measures import MEAN_ABS_R_MAX, MEAN_R, R_AT_LAG_0
+from surrogates import (
+    BLOCKS, GREATER, REPAIRED, SURROGATE_DISTRIBUTION, TWO_SIDED, WELCH, SurrogateChoice, choice_problem,
+    few_sets_warning, folder_overview, plan_summary, smallest_p,
+)
+
+
+def _config(**overrides):
+    settings = dict(
+        signal_type='event-based', windowed=True, standardised=False, window_size=150, step_size=75, max_lag=30,
+        absolute=False, average_windows=False, use_lag_filter=False, lag_filter_min=-30, lag_filter_max=30,
+        max_lag_sxc=30, absolute_sxc=False,
+    )
+    settings.update(overrides)
+    return AnalysisConfig(**settings)
+
+
+# ---------------------------------------------------------------------------
+# PLANNING, WITHOUT THE WINDOW
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("choice, config, expected", [
+    (SurrogateChoice(REPAIRED, MEAN_R, 1000), _config(), None),
+    (SurrogateChoice(REPAIRED, R_AT_LAG_0, 1000), _config(average_windows=True),
+     "Can't compare r at lag 0: it needs a correlation for each lag, and 'average windows' is on."),
+    (SurrogateChoice(BLOCKS, R_AT_LAG_0, 1000, 150), _config(use_lag_filter=True, lag_filter_min=2, lag_filter_max=9),
+     "Can't compare r at lag 0: the lag filter leaves out lag 0."),
+    (SurrogateChoice(WELCH, MEAN_R, 1), _config(), "The t-test needs at least 2 random pairs."),
+    (SurrogateChoice(REPAIRED, MEAN_R, 0), _config(), "At least one surrogate is needed."),
+    (SurrogateChoice(BLOCKS, MEAN_R, 1000, 0), _config(), "Enter a block length."),
+    (SurrogateChoice(BLOCKS, MEAN_R, 1000, 30), _config(), None),
+])
+def test_choice_problem(choice, config, expected):
+    assert choice_problem(choice, config) == expected
+
+
+@pytest.mark.parametrize("n, side, expected", [(1000, GREATER, 1 / 1001), (1000, TWO_SIDED, 2 / 1001), (0, TWO_SIDED, 1.0)])
+def test_smallest_p(n, side, expected):
+    assert smallest_p(n, side) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("choice, n_dyads, expected", [
+    (SurrogateChoice(REPAIRED, MEAN_ABS_R_MAX, 1000), 33,
+     "Compares mean |r_max| of the 33 real dyads with 1000 sets of re-paired people, one-sided (real higher). "
+     "The smallest possible p is 0.000999."),
+    (SurrogateChoice(BLOCKS, MEAN_R, 500, 60), None,
+     "Compares mean r of the real dyads with 500 shuffled versions of each dyad, in blocks of 60 samples, "
+     "two-sided. The smallest possible p is 0.00399."),
+    (SurrogateChoice(WELCH, MEAN_ABS_R_MAX, 100), 1,
+     "Compares mean |r_max| of the 1 real dyad with 100 random pairs with Welch's t-test, two-sided."),
+])
+def test_plan_summary(choice, n_dyads, expected):
+    assert plan_summary(choice, _config(), n_dyads) == expected
+
+
+def _folder(root, files_per_dyad):
+    for index, n_files in enumerate(files_per_dyad):
+        folder = root / f"dyad{index}"
+        folder.mkdir(parents=True)
+        for file_index in range(n_files):
+            (folder / f"P{file_index}.xlsx").write_text("x")
+    return root
+
+
+@pytest.mark.parametrize("files_per_dyad, dyads, pairs", [
+    ([2, 2, 2], 3, 15 - 3),
+    ([2, 3, 1], 2, 15 - 1 - 3),         # a folder with one recording is no dyad, but its person can be re-paired
+    ([], 0, 0),
+])
+def test_folder_overview_from_file_names(tmp_path, files_per_dyad, dyads, pairs):
+    overview = folder_overview(str(_folder(tmp_path, files_per_dyad)))
+    assert overview['n_dyads'] == dyads
+    assert overview['n_pairs'] == pairs
+    assert overview['n_sets'] == (math.comb(pairs, dyads) if pairs >= dyads else 0)
+
+
+def test_few_sets_warning():
+    assert few_sets_warning(None, 1000) is None
+    assert few_sets_warning(1000, 1000) is None
+    assert few_sets_warning(35, 1000) == (
+        "Only 35 different sets of re-paired people are possible, fewer than the 1000 drawn, so sets repeat and "
+        "p can't usefully go below about 1/35."
+    )
+    assert "Only about 35 different" in few_sets_warning(35, 1000, about=True)
+
+
+# ---------------------------------------------------------------------------
+# THE TAB'S STATE
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def tab(fake_state, monkeypatch):
+    for name, value in {
+        'val_surrogate_method': REPAIRED, 'val_surrogate_test': SURROGATE_DISTRIBUTION,
+        'val_surrogate_measure': MEAN_R, 'val_rp_n_input': "1000", 'val_rp_n': 1000, 'val_window_size': 150,
+        'val_block_length_input': "150", 'val_block_length': 150, 'val_checkbox_eb': True,
+        'val_checkbox_windowed_xcorr': True, 'val_checkbox_standardise': False, 'val_step_size': 75,
+        'val_max_lag': 30, 'val_checkbox_absolute_corr': False, 'val_checkbox_average_windows': False,
+        'val_checkbox_lag_filter': False, 'val_lag_filter_min': -30, 'val_lag_filter_max': 30, 'val_max_lag_sxc': 150,
+        'val_checkbox_absolute_corr_sxc': False, 'val_INPUT_DATA_VALID': True, 'val_CORRELATION_SETTINGS_VALID': True,
+        'val_CORRELATION_SETTINGS_VALID_SXC': True, 'val_job_running': False, 'val_data_length': 4000,
+        'val_random_pair_input_folder': '', 'val_random_pair_output_file': '',
+    }.items():
+        getattr(fake_state, name).set(value)
+    monkeypatch.setitem(callbacks._surrogates, 'method', REPAIRED)
+    monkeypatch.setitem(callbacks._surrogates, 'folder', {})
+    monkeypatch.setitem(callbacks._block_length, 'follows_window', True)
+    return fake_state
+
+
+def _set_n(tab, n):
+    tab.val_rp_n_input.set(str(n))
+    callbacks.on_rp_n_input_change(None, None, None)
+
+
+def _choose(tab, method=None, test=None):
+    if method:
+        tab.val_surrogate_method.set(method)
+    if test:
+        tab.val_surrogate_test.set(test)
+    callbacks.on_surrogate_method_change()
+    callbacks.on_rp_n_input_change(None, None, None)
+
+
+def test_welch_is_an_option_of_re_paired_people(tab):
+    assert callbacks.surrogate_choice() == SurrogateChoice(REPAIRED, MEAN_R, 1000, None)
+    tab.val_surrogate_test.set(WELCH)
+    assert callbacks.surrogate_choice().method == WELCH
+    tab.val_surrogate_method.set(BLOCKS)
+    assert callbacks.surrogate_choice() == SurrogateChoice(BLOCKS, MEAN_R, 1000, 150)
+
+
+def test_usual_number_follows_the_test_until_it_is_changed(tab):
+    _choose(tab, test=WELCH)
+    assert tab.val_rp_n_input.get() == "100"
+    _choose(tab, test=SURROGATE_DISTRIBUTION)
+    assert tab.val_rp_n_input.get() == "1000"
+    _set_n(tab, 250)
+    _choose(tab, test=WELCH)
+    assert tab.val_rp_n_input.get() == "250"
+
+
+def test_shuffled_blocks_keep_the_number_of_re_paired_people(tab):
+    _choose(tab, method=BLOCKS)
+    assert tab.val_rp_n_input.get() == "1000"
+
+
+def _set_window(tab, size):
+    tab.val_window_size.set(size)
+    callbacks.on_window_size_change_update_block_length()
+    callbacks.on_block_length_input_change(None, None, None)
+
+
+def _set_block_length(tab, text):
+    tab.val_block_length_input.set(text)
+    callbacks.on_block_length_input_change(None, None, None)
+
+
+def test_block_length_follows_the_window_size_until_it_is_changed(tab):
+    _set_window(tab, 100)
+    assert tab.val_block_length.get() == 100
+    _set_block_length(tab, "60")
+    _set_window(tab, 200)
+    assert tab.val_block_length.get() == 60
+    _set_block_length(tab, "200")      # the same as the window again
+    _set_window(tab, 250)
+    assert tab.val_block_length.get() == 250
+
+
+def test_plan_and_readiness(tab, tmp_path):
+    callbacks.update_surrogate_plan()
+    assert tab.val_surrogate_plan.get().startswith("Compares mean r of the real dyads with 1000 sets")
+    assert tab.val_random_pair_is_ready.get() is False          # no folder and file yet
+    _folder(tmp_path / "in", [2] * 6)
+    tab.val_random_pair_input_folder.set(str(tmp_path / "in"))
+    callbacks.on_surrogate_folder_change()
+    tab.val_random_pair_output_file.set(str(tmp_path / "out.xlsx"))
+    callbacks.update_surrogate_plan()
+    assert "the 6 real dyads" in tab.val_surrogate_plan.get()
+    assert tab.val_surrogate_problem.get() == ''
+    assert tab.val_random_pair_is_ready.get() is True
+
+
+def test_a_ruled_out_measure_stops_the_run(tab, tmp_path):
+    tab.val_random_pair_input_folder.set("in")
+    tab.val_random_pair_output_file.set("out.xlsx")
+    tab.val_surrogate_measure.set(R_AT_LAG_0)
+    tab.val_checkbox_average_windows.set(True)
+    callbacks.update_surrogate_plan()
+    assert "average windows" in tab.val_surrogate_problem.get()
+    assert tab.val_surrogate_plan.get() == ''
+    assert tab.val_random_pair_is_ready.get() is False
+
+
+def test_warns_when_few_sets_of_re_paired_people_exist(tab, tmp_path):
+    tab.val_random_pair_input_folder.set(str(_folder(tmp_path / "in", [2, 2, 2])))
+    callbacks.on_surrogate_folder_change()
+    assert tab.val_surrogate_warning.get().startswith("Only about 220 different sets")
+    _choose(tab, test=WELCH)            # Welch draws single pairs, not sets
+    assert tab.val_surrogate_warning.get() == ''
+
+
+def test_warns_about_a_folder_without_dyads(tab, tmp_path):
+    tab.val_random_pair_input_folder.set(str(_folder(tmp_path / "in", [1, 1])))
+    callbacks.on_surrogate_folder_change()
+    assert tab.val_surrogate_warning.get() == "The selected folder has no dyad folders with two recordings."
+
+
+@pytest.mark.parametrize("data_length, block_length, n, expected", [
+    (4000, 150, 1000, ''),
+    (600, 120, 1000, "allow 119 different orders, fewer than the 1000 drawn"),
+    (600, 120, 120, "allow 119 different orders, fewer than the 120 drawn"),
+    (600, 120, 119, ''),
+    (600, 150, 1000, "fits only 4 blocks of 150 samples, and at least 5 are needed"),
+])
+def test_warns_about_blocks_of_the_loaded_dyad(tab, data_length, block_length, n, expected):
+    tab.val_data_length.set(data_length)
+    _choose(tab, method=BLOCKS)
+    _set_n(tab, n)
+    _set_block_length(tab, str(block_length))
+    callbacks.update_surrogate_plan()
+    assert expected in tab.val_surrogate_warning.get()
+    if not expected:
+        assert tab.val_surrogate_warning.get() == ''
+
+
+# ---------------------------------------------------------------------------
+# WIDGETS
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def widgets(monkeypatch):
+    keys = ('label_surrogate_method_explanation', 'frame_surrogate_test', 'frame_block_length', 'label_surrogate_n',
+            'label_measure_explanation', 'label_surrogate_problem', 'label_surrogate_warning', 'entry_block_length')
+    fake = {key: FakeWidget() for key in keys}
+    monkeypatch.setattr(gui_updates, "_w", fake)
+    return fake
+
+
+@pytest.mark.parametrize("method, test, block_shown, test_shown, n_label, explained", [
+    (REPAIRED, SURROGATE_DISTRIBUTION, False, True, "Surrogates", "strangers"),
+    (REPAIRED, WELCH, False, True, "Random pairs", "earlier versions"),
+    (BLOCKS, SURROGATE_DISTRIBUTION, True, False, "Surrogates", "blocks"),
+    (BLOCKS, WELCH, True, False, "Surrogates", "blocks"),        # Welch is only an option of re-paired people
+])
+def test_method_widgets(tab, widgets, method, test, block_shown, test_shown, n_label, explained):
+    tab.val_surrogate_method.set(method)
+    tab.val_surrogate_test.set(test)
+    gui_updates.update_surrogate_method_widgets()
+    assert widgets['frame_block_length'].visible is block_shown
+    assert widgets['frame_surrogate_test'].visible is test_shown
+    assert widgets['label_surrogate_n'].text == n_label
+    assert explained in widgets['label_surrogate_method_explanation'].text
+
+
+def test_problem_and_warning_are_only_shown_with_text(tab, widgets):
+    tab.val_surrogate_problem.set("Enter a block length.")
+    tab.val_surrogate_warning.set("")
+    gui_updates.update_surrogate_messages()
+    assert widgets['label_surrogate_problem'].visible and not widgets['label_surrogate_warning'].visible
+    assert widgets['entry_block_length'].border_color == 'red'
+    tab.val_surrogate_problem.set("")
+    gui_updates.update_surrogate_messages()
+    assert not widgets['label_surrogate_problem'].visible
+    assert widgets['entry_block_length'].border_color == '#777777'
+
+
+# ---------------------------------------------------------------------------
+# RUNNING
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def run(tab, tmp_path, monkeypatch):
+    for index in range(3):
+        write_dyad(tmp_path / "in" / f"dyad{index}", seed=index)
+    tab.val_random_pair_input_folder.set(str(tmp_path / "in"))
+    tab.val_random_pair_output_file.set(str(tmp_path / "result.xlsx"))
+    tab.val_rp_seed_input.set("7")
+    tab.val_job_progress.set(0)
+    tab.timer = FakeTimer()
+    monkeypatch.setitem(callbacks._tabview, "tabview", tab.timer)
+    monkeypatch.setattr(callbacks, "_analysis_params", lambda: batch_params(tmp_path / "in", tmp_path))
+    tab.dialogs = []
+    for kind in ("showinfo", "showwarning", "showerror"):
+        monkeypatch.setattr(callbacks.messagebox, kind, lambda title, text, kind=kind: tab.dialogs.append((kind, title, text)))
+    tab.output = tmp_path / "result.xlsx"
+    return tab
+
+
+@pytest.mark.parametrize("method, block_length", [(REPAIRED, None), (BLOCKS, 300)])
+def test_run_writes_the_chosen_test_and_says_what_it_found(run, method, block_length):
+    _choose(run, method=method)
+    _set_n(run, 30)
+    if block_length:
+        _set_block_length(run, str(block_length))
+    callbacks.handle_run_surrogate_button()
+    run.timer.run_until_idle(60)
+    kind, title, text = run.dialogs[0]
+    rows = {row[0]: row[1] for row in openpyxl.load_workbook(run.output).worksheets[0].iter_rows(max_col=2, values_only=True)}
+    assert rows['Method'] == method and rows['Surrogate sets'] == 30 and rows['Random seed'] == 7
+    assert text.splitlines()[0] == rows['Summary']
+    assert os.path.exists(run.output.with_suffix(".png"))
+    if method == REPAIRED:
+        assert (kind, title) == ("showinfo", "Surrogate analysis finished")
+    else:
+        # 3 dyads of about 13 blocks: plenty of orders, so no problem either
+        assert rows['Block length (samples)'] == block_length
+        assert (kind, title) == ("showinfo", "Surrogate analysis finished")
+
+
+def test_few_sets_of_re_paired_people_turn_the_message_into_a_warning(run):
+    _set_n(run, 1000)       # 3 dyads, 12 pairs: 220 sets
+    callbacks.handle_run_surrogate_button()
+    run.timer.run_until_idle(60)
+    kind, title, text = run.dialogs[0]
+    assert (kind, title) == ("showwarning", "Surrogate analysis finished with problems")
+    assert "Only 220 different sets of re-paired people are possible" in text
+
+
+def test_few_block_orders_turn_the_message_into_a_warning(run):
+    _choose(run, method=BLOCKS)
+    _set_n(run, 150)
+    _set_block_length(run, "750")    # 5 blocks per dyad: 119 orders
+    callbacks.handle_run_surrogate_button()
+    run.timer.run_until_idle(60)
+    kind, title, text = run.dialogs[0]
+    assert (kind, title) == ("showwarning", "Surrogate analysis finished with problems")
+    assert "3 of 3 dyads allow fewer different block orders than the 150 drawn" in text
+
+
+def test_a_problem_stops_the_run_before_it_starts(run, tmp_path, monkeypatch):
+    run.val_surrogate_measure.set(R_AT_LAG_0)
+    monkeypatch.setattr(callbacks, "_analysis_params",
+                        lambda: batch_params(tmp_path / "in", tmp_path, checkbox_average_windows=True))
+    callbacks.handle_run_surrogate_button()
+    assert run.val_job_running.get() is False
+    assert run.dialogs == [("showwarning", "Can't run the surrogate analysis",
+                            "Can't compare r at lag 0: it needs a correlation for each lag, and 'average windows' is on.")]
+    assert not run.output.exists()

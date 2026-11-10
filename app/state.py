@@ -1,6 +1,8 @@
 import customtkinter as tk
 from analysis import AnalysisConfig
+from measures import MEAN_R
 from plot import plot_init
+from surrogates import DEFAULT_SURROGATES, REPAIRED, SURROGATE_DISTRIBUTION
 
 # ----------------------
 # DEFAULTS / INIT VALUES
@@ -10,6 +12,8 @@ INIT_WINDOW_SIZE = 150   # 150 := 30s for 5hz signals
 INIT_MAX_LAG     = 30    # 30 := 6s
 INIT_STEP_SIZE   = 75    # 75 := 15s
 INIT_MAX_LAG_SXC = 150
+INIT_SURROGATE_METHOD = REPAIRED
+INIT_SURROGATE_MEASURE = MEAN_R
 
 # ---------------------
 # DISPLAY
@@ -73,6 +77,14 @@ val_rp_seed_input                    = None
 val_random_pair_input_folder         = None
 val_random_pair_output_file          = None
 val_random_pair_is_ready             = None
+val_surrogate_method                 = None   # surrogates.REPAIRED or BLOCKS
+val_surrogate_test                   = None   # SURROGATE_DISTRIBUTION, or WELCH with re-paired people
+val_surrogate_measure                = None   # one of measures.MEASURES
+val_block_length_input               = None
+val_block_length                     = None
+val_surrogate_plan                   = None   # the sentence that says what the test will do
+val_surrogate_problem                = None   # why the test can't run with these settings, if it can't
+val_surrogate_warning                = None   # what limits the result, for example few different surrogate sets
 val_job_running                      = None
 val_job_progress                     = None
 val_job_progress_text                = None
@@ -140,6 +152,8 @@ def init_state(retina):
     global val_checkbox_data_has_headers, val_batch_input_folder, val_batch_output_folder
     global val_batch_processing_is_ready, val_rp_n_input, val_rp_n, val_rp_seed_input
     global val_random_pair_input_folder, val_random_pair_output_file, val_random_pair_is_ready
+    global val_surrogate_method, val_surrogate_test, val_surrogate_measure, val_block_length_input
+    global val_block_length, val_surrogate_plan, val_surrogate_problem, val_surrogate_warning
     global val_job_running, val_job_progress, val_job_progress_text, val_job_cancel_requested
     global val_dfa_text, val_input_error, val_exporting
     global dat_plot_data, dat_workbook_data, dat_physiological_data, dat_correlation_data
@@ -192,12 +206,20 @@ def init_state(retina):
     val_batch_input_folder                 = tk.StringVar(value='')
     val_batch_output_folder                = tk.StringVar(value='')
     val_batch_processing_is_ready         = tk.BooleanVar(value=False)
-    val_rp_n_input                         = tk.StringVar(value="100")
-    val_rp_n                               = tk.IntVar(value=100)
+    val_rp_n_input                         = tk.StringVar(value=str(DEFAULT_SURROGATES[INIT_SURROGATE_METHOD]))
+    val_rp_n                               = tk.IntVar(value=DEFAULT_SURROGATES[INIT_SURROGATE_METHOD])
     val_rp_seed_input                      = tk.StringVar(value='')
     val_random_pair_input_folder           = tk.StringVar(value='')
     val_random_pair_output_file            = tk.StringVar(value='')
     val_random_pair_is_ready               = tk.BooleanVar(value=False)
+    val_surrogate_method                   = tk.StringVar(value=INIT_SURROGATE_METHOD)
+    val_surrogate_test                     = tk.StringVar(value=SURROGATE_DISTRIBUTION)
+    val_surrogate_measure                  = tk.StringVar(value=INIT_SURROGATE_MEASURE)
+    val_block_length_input                 = tk.StringVar(value=str(INIT_WINDOW_SIZE))
+    val_block_length                       = tk.IntVar(value=INIT_WINDOW_SIZE)
+    val_surrogate_plan                     = tk.StringVar(value='')
+    val_surrogate_problem                  = tk.StringVar(value='')
+    val_surrogate_warning                  = tk.StringVar(value='')
     val_job_running                        = tk.BooleanVar(value=False)
     val_job_progress                       = tk.DoubleVar(value=0)
     val_job_progress_text                  = tk.StringVar(value='')

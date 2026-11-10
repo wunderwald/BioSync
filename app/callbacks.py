@@ -1,3 +1,4 @@
+import math
 import os
 import queue
 import random
@@ -6,12 +7,14 @@ from tkinter import filedialog, messagebox
 
 import xlsx
 import utils
-from analysis import preprocess_signals, signal_dfa
+from analysis import AnalysisConfig, preprocess_signals, signal_dfa
 from signal_processing import guess_is_event_based
 from batch_processing import batch_process, find_result_files, remove_result_files
 from export import export_sxcorr_data, export_surrogate_result, export_wxcorr_data, left_out_names
-from measures import MEAN_R
-from surrogates import WELCH, surrogate_analysis
+from surrogates import (
+    BLOCKS, DEFAULT_SURROGATES, MIN_BLOCKS, MIN_WELCH_GROUP, REPAIRED, WELCH, SurrogateChoice, choice_problem,
+    few_sets_warning, folder_overview, plan_summary, result_summary, surrogate_analysis,
+)
 
 import corr_plot
 import state
@@ -234,7 +237,7 @@ def update_dropdown_options(dropdown, dropdown_state_var, new_options):
 
 
 # ---------------------------------------------------------------------------
-# RANDOM PAIR N INPUT
+# SURROGATE SETTINGS
 # ---------------------------------------------------------------------------
 
 def on_rp_n_input_change(name, index, mode):
@@ -246,6 +249,91 @@ def on_rp_n_input_change(name, index, mode):
         if new_val < 0:
             new_val = 0
         state.val_rp_n.set(new_val)
+
+
+# The block length follows the window size until it is set to something else
+_block_length = {'follows_window': True}
+
+
+def on_block_length_input_change(name, index, mode):
+    new_str_val = state.val_block_length_input.get()
+    state.val_block_length.set(0 if new_str_val == '' else int(new_str_val))
+    _block_length['follows_window'] = state.val_block_length.get() == state.val_window_size.get()
+
+
+def on_window_size_change_update_block_length(*args):
+    if _block_length['follows_window']:
+        state.val_block_length_input.set(str(state.val_window_size.get()))
+
+
+def surrogate_choice():
+    """The test the Surrogates tab is set to. Welch's t-test is an option of re-paired people."""
+    method = state.val_surrogate_method.get()
+    if method == REPAIRED and state.val_surrogate_test.get() == WELCH:
+        method = WELCH
+    return SurrogateChoice(
+        method=method,
+        measure=state.val_surrogate_measure.get(),
+        n_surrogates=state.val_rp_n.get(),
+        block_length=state.val_block_length.get() if method == BLOCKS else None,
+    )
+
+
+_surrogates = {'method': None, 'folder': {}}
+
+
+def on_surrogate_method_change(*args):
+    """Welch's t-test and the surrogate distribution have different usual numbers, which follow the test."""
+    method = surrogate_choice().method
+    previous = _surrogates['method']
+    if previous and previous != method and state.val_rp_n.get() == DEFAULT_SURROGATES[previous]:
+        state.val_rp_n_input.set(str(DEFAULT_SURROGATES[method]))
+    _surrogates['method'] = method
+    update_surrogate_plan()
+
+
+def on_surrogate_folder_change(*args):
+    folder = state.val_random_pair_input_folder.get()
+    try:
+        _surrogates['folder'] = folder_overview(folder) if folder else {}
+    except OSError:
+        _surrogates['folder'] = {}
+    update_surrogate_plan()
+
+
+def _surrogate_warning(choice):
+    """What will limit the result, judged before the run from the folder and the loaded dyad."""
+    folder = _surrogates['folder']
+    if choice.method in (REPAIRED, WELCH) and folder:
+        if folder['n_dyads'] == 0:
+            return "The selected folder has no dyad folders with two recordings."
+        if choice.method == REPAIRED:
+            return few_sets_warning(folder['n_sets'], choice.n_surrogates, about=True)
+    if choice.method == BLOCKS and choice.block_length and state.val_INPUT_DATA_VALID.get():
+        n_blocks = state.val_data_length.get() // choice.block_length
+        if n_blocks < MIN_BLOCKS:
+            return (
+                f"The dyad loaded in Input Data fits only {n_blocks} blocks of {choice.block_length} samples, and "
+                f"at least {MIN_BLOCKS} are needed. Dyads as long as it would be skipped."
+            )
+        if math.factorial(n_blocks) - 1 < choice.n_surrogates:
+            return (
+                f"The dyad loaded in Input Data has {n_blocks} blocks, which allow {math.factorial(n_blocks) - 1} "
+                f"different orders, fewer than the {choice.n_surrogates} drawn. Its own p can't usefully go below "
+                f"about 1/{math.factorial(n_blocks) - 1}."
+            )
+    return None
+
+
+def update_surrogate_plan(*args):
+    choice = surrogate_choice()
+    config = state.analysis_config()
+    problem = choice_problem(choice, config)
+    state.val_surrogate_problem.set(problem or '')
+    n_dyads = _surrogates['folder'].get('n_dyads')
+    state.val_surrogate_plan.set('' if problem else plan_summary(choice, config, n_dyads))
+    state.val_surrogate_warning.set('' if problem else (_surrogate_warning(choice) or ''))
+    _surrogates_are_ready()
 
 
 # ---------------------------------------------------------------------------
@@ -263,6 +351,8 @@ def setup_traces():
     state.val_max_lag.trace_add('write', on_max_lag_change_update_filter)
     state.val_checkbox_data_has_headers.trace_add('write', on_change_data_has_headers)
     state.val_rp_n_input.trace_add("write", on_rp_n_input_change)
+    state.val_block_length_input.trace_add("write", on_block_length_input_change)
+    state.val_window_size.trace_add("write", on_window_size_change_update_block_length)
 
     # batch ready state
     state.val_INPUT_DATA_VALID.trace_add('write', _batch_processing_is_ready)
@@ -272,13 +362,20 @@ def setup_traces():
     state.val_batch_input_folder.trace_add('write', _batch_processing_is_ready)
     state.val_batch_output_folder.trace_add('write', _batch_processing_is_ready)
 
-    # random pair ready state
-    state.val_INPUT_DATA_VALID.trace_add('write', _random_pair_is_ready)
-    state.val_CORRELATION_SETTINGS_VALID.trace_add('write', _random_pair_is_ready)
-    state.val_CORRELATION_SETTINGS_VALID_SXC.trace_add('write', _random_pair_is_ready)
-    state.val_checkbox_windowed_xcorr.trace_add('write', _random_pair_is_ready)
-    state.val_random_pair_input_folder.trace_add('write', _random_pair_is_ready)
-    state.val_random_pair_output_file.trace_add('write', _random_pair_is_ready)
+    # surrogate analysis: what it will do, and whether it can run
+    state.val_surrogate_method.trace_add('write', on_surrogate_method_change)
+    state.val_surrogate_test.trace_add('write', on_surrogate_method_change)
+    state.val_random_pair_input_folder.trace_add('write', on_surrogate_folder_change)
+    for var in (
+        state.val_surrogate_measure, state.val_rp_n, state.val_block_length, state.val_data_length,
+        state.val_INPUT_DATA_VALID, state.val_CORRELATION_SETTINGS_VALID, state.val_CORRELATION_SETTINGS_VALID_SXC,
+        state.val_checkbox_windowed_xcorr, state.val_checkbox_average_windows, state.val_checkbox_lag_filter,
+        state.val_lag_filter_min, state.val_lag_filter_max, state.val_max_lag, state.val_checkbox_absolute_corr,
+        state.val_checkbox_absolute_corr_sxc, state.val_random_pair_output_file,
+    ):
+        var.trace_add('write', update_surrogate_plan)
+    _surrogates['method'] = surrogate_choice().method
+    update_surrogate_plan()
 
 
 # ---------------------------------------------------------------------------
@@ -652,7 +749,7 @@ def _start_job(title, work, on_success):
     state.val_job_progress_text.set(title)
     state.val_job_running.set(True)
     _batch_processing_is_ready()
-    _random_pair_is_ready()
+    _surrogates_are_ready()
     threading.Thread(target=run, daemon=True).start()
     _tabview['tabview'].after(JOB_POLL_MS, _poll_job, messages, title, on_success)
 
@@ -672,7 +769,7 @@ def _poll_job(messages, title, on_success):
             continue
         state.val_job_running.set(False)
         _batch_processing_is_ready()
-        _random_pair_is_ready()
+        _surrogates_are_ready()
         if message[0] == 'error':
             messagebox.showerror(f"{title} failed", str(message[1]))
         elif message[0] == 'cancelled':
@@ -795,13 +892,13 @@ def handle_run_batch_button():
 
 
 # ---------------------------------------------------------------------------
-# RANDOM PAIR ANALYSIS
+# SURROGATE ANALYSIS
 # ---------------------------------------------------------------------------
 
 MAX_RANDOM_SEED = 2**32
 
 
-def _random_pair_is_ready(*args):
+def _surrogates_are_ready(*args):
     data_is_valid = (
         state.val_INPUT_DATA_VALID.get() and validation.check_active_settings_valid() and
         not state.val_job_running.get()
@@ -810,32 +907,34 @@ def _random_pair_is_ready(*args):
         state.val_random_pair_input_folder.get() != '' and
         state.val_random_pair_output_file.get() != ''
     )
-    state.val_random_pair_is_ready.set(data_is_valid and io_is_ready)
+    state.val_random_pair_is_ready.set(bool(data_is_valid and io_is_ready and not state.val_surrogate_problem.get()))
 
 
-def run_random_pair(params, random_pair_count, input_dir, output_file, seed, progress):
-    result = surrogate_analysis(WELCH, params, input_dir, random_pair_count, seed, MEAN_R, progress=progress)
+def run_surrogate_analysis(params, choice, input_dir, output_file, seed, progress):
+    result = surrogate_analysis(
+        choice.method, params, input_dir, choice.n_surrogates, seed, choice.measure,
+        block_length=choice.block_length, progress=progress,
+    )
     progress(1, 1, "Writing results")
     export_surrogate_result(output_file, params, input_dir, result)
     return {
+        'result': result,
+        'method': result.method,
         'failures': result.failures,
         'p_value': result.p_value,
-        'random_pairs_requested': random_pair_count,
+        'random_pairs_requested': choice.n_surrogates,
         'random_pairs_used': result.n_pairs_used,
         'real_dyads_used': len(result.real_values),
         'left_out_files': left_out_names(result.left_out_files, input_dir),
     }
 
 
-MIN_GROUP_SIZE = 2  # the t-test needs at least two values per group
-
-
 def _random_pair_problems(summary):
-    """Reasons not to trust the result, as sentences. Empty if there are none."""
+    """Reasons not to trust the result of Welch's t-test, as sentences. Empty if there are none."""
     problems = []
-    if summary['random_pairs_used'] < MIN_GROUP_SIZE or summary['real_dyads_used'] < MIN_GROUP_SIZE:
+    if summary['random_pairs_used'] < MIN_WELCH_GROUP or summary['real_dyads_used'] < MIN_WELCH_GROUP:
         problems.append(
-            f"The t-test needs at least {MIN_GROUP_SIZE} random pairs and {MIN_GROUP_SIZE} real dyads, "
+            f"The t-test needs at least {MIN_WELCH_GROUP} random pairs and {MIN_WELCH_GROUP} real dyads, "
             f"and got {summary['random_pairs_used']} and {summary['real_dyads_used']}."
         )
     elif summary['p_value'] != summary['p_value']:   # NaN
@@ -846,10 +945,31 @@ def _random_pair_problems(summary):
     return problems
 
 
-def _show_random_pair_summary(summary):
+def _surrogate_problems(summary):
+    """Reasons not to trust the result, as sentences. Empty if there are none."""
+    if summary.get('method', WELCH) == WELCH:
+        return _random_pair_problems(summary)
+    result = summary['result']
+    problems = []
+    if result.method == REPAIRED:
+        warning = few_sets_warning(result.n_sets_possible, result.n_surrogates)
+        if warning:
+            problems.append(warning)
+    if result.method == BLOCKS:
+        few_orders = [orders for orders in result.dyad_orders_possible if orders < result.n_surrogates]
+        if few_orders:
+            problems.append(
+                f"{len(few_orders)} of {len(result.dyad_names)} dyads allow fewer different block orders than the "
+                f"{result.n_surrogates} drawn, so their own p can't usefully go below about 1/{min(few_orders)}."
+            )
+    return problems
+
+
+def _show_surrogate_summary(summary):
     failures = summary['failures']
-    problems = _random_pair_problems(summary)
-    lines = [f"Finished, {len(failures)} pairs or dyads skipped."]
+    problems = _surrogate_problems(summary)
+    lines = [result_summary(summary['result'])] if 'result' in summary else []
+    lines.append(f"Finished, {len(failures)} pairs or dyads skipped.")
     if problems:
         lines += [""] + problems
     if summary.get('left_out_files'):
@@ -857,23 +977,24 @@ def _show_random_pair_summary(summary):
     if failures:
         lines += ["", "Skipped:"] + _format_failures(failures)
     if problems:
-        messagebox.showwarning("Random pair analysis finished with problems", "\n".join(lines))
+        messagebox.showwarning("Surrogate analysis finished with problems", "\n".join(lines))
     else:
-        messagebox.showinfo("Random pair analysis finished", "\n".join(lines))
+        messagebox.showinfo("Surrogate analysis finished", "\n".join(lines))
 
 
-def handle_run_random_pair_button():
+def handle_run_surrogate_button():
     params = _analysis_params()
-    random_pair_count = state.val_rp_n.get()
-    if random_pair_count < MIN_GROUP_SIZE:
-        messagebox.showwarning("Too few random pairs", f"N must be at least {MIN_GROUP_SIZE} for the t-test.")
+    choice = surrogate_choice()
+    problem = choice_problem(choice, AnalysisConfig.from_params(params))
+    if problem:
+        messagebox.showwarning("Can't run the surrogate analysis", problem)
         return
     input_dir = state.val_random_pair_input_folder.get()
     output_file = state.val_random_pair_output_file.get()
     seed_input = state.val_rp_seed_input.get()
     seed = int(seed_input) if seed_input else random.randrange(MAX_RANDOM_SEED)
     _start_job(
-        "Random pair analysis",
-        lambda progress: run_random_pair(params, random_pair_count, input_dir, output_file, seed, progress),
-        _show_random_pair_summary,
+        "Surrogate analysis",
+        lambda progress: run_surrogate_analysis(params, choice, input_dir, output_file, seed, progress),
+        _show_surrogate_summary,
     )

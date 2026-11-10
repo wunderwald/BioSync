@@ -9,6 +9,7 @@ import openpyxl
 import pytest
 
 import callbacks
+from measures import MEAN_R
 import surrogates
 from surrogates import _eligible_random_pairs
 from helpers import FakeTimer, batch_params, write_dyad
@@ -146,6 +147,9 @@ def app(fake_state, dyads, tmp_path, monkeypatch):
     fake_state.val_job_running.set(False)
     fake_state.val_job_progress.set(0)
     fake_state.val_rp_n.set(3)
+    fake_state.val_surrogate_method.set(surrogates.REPAIRED)
+    fake_state.val_surrogate_test.set(surrogates.WELCH)
+    fake_state.val_surrogate_measure.set(MEAN_R)
     fake_state.val_rp_seed_input.set("")
     fake_state.val_random_pair_input_folder.set(str(dyads))
     fake_state.val_random_pair_output_file.set(str(tmp_path / "rp.xlsx"))
@@ -160,7 +164,7 @@ def app(fake_state, dyads, tmp_path, monkeypatch):
 
 
 def _run_and_read(app):
-    callbacks.handle_run_random_pair_button()
+    callbacks.handle_run_surrogate_button()
     app.timer.run_until_idle(60)
     sheet = openpyxl.load_workbook(app.output).worksheets[0]
     return {row[0]: row[1] for row in sheet.iter_rows(max_col=2, values_only=True) if row[0]}
@@ -202,7 +206,7 @@ EARLIER_ROWS = [
 
 def test_new_rows_come_after_the_existing_ones(app):
     app.val_rp_seed_input.set("1")
-    callbacks.handle_run_random_pair_button()
+    callbacks.handle_run_surrogate_button()
     app.timer.run_until_idle(60)
     sheet = openpyxl.load_workbook(app.output).worksheets[0]
     names = [row[0] for row in sheet.iter_rows(max_col=1, values_only=True) if row[0]]
@@ -213,7 +217,7 @@ def test_new_rows_come_after_the_existing_ones(app):
 
 def test_seed_is_read_before_the_job_starts(app):
     app.val_rp_seed_input.set("1234")
-    callbacks.handle_run_random_pair_button()
+    callbacks.handle_run_surrogate_button()
     app.val_rp_seed_input.set("99")
     app.timer.run_until_idle(60)
     metadata = {row[0]: row[1] for row in openpyxl.load_workbook(app.output).worksheets[0].iter_rows(max_col=2, values_only=True) if row[0]}
@@ -256,7 +260,7 @@ def test_problems_turn_the_message_into_a_warning(monkeypatch, overrides, kind):
     shown = []
     for name in ("showinfo", "showwarning"):
         monkeypatch.setattr(callbacks.messagebox, name, lambda title, text, name=name: shown.append((name, text)))
-    callbacks._show_random_pair_summary(_summary(**overrides))
+    callbacks._show_surrogate_summary(_summary(**overrides))
     assert shown[0][0] == kind
 
 
@@ -265,7 +269,7 @@ def test_too_small_n_does_not_start(app, n, monkeypatch):
     app.val_rp_n.set(n)
     warnings = []
     monkeypatch.setattr(callbacks.messagebox, "showwarning", lambda title, text: warnings.append(text))
-    callbacks.handle_run_random_pair_button()
+    callbacks.handle_run_surrogate_button()
     assert app.val_job_running.get() is False
     assert "at least 2" in warnings[0]
     assert not app.output.exists()
@@ -281,7 +285,7 @@ def test_failed_pairs_give_a_warning_and_are_recorded(app, dyads, monkeypatch):
     monkeypatch.setattr(callbacks.messagebox, "showwarning", lambda title, text: warnings.append(text))
     app.val_rp_n.set(20)
     app.val_rp_seed_input.set("1")
-    callbacks.handle_run_random_pair_button()
+    callbacks.handle_run_surrogate_button()
     app.timer.run_until_idle(60)
     metadata = {row[0]: row[1] for row in openpyxl.load_workbook(app.output).worksheets[0].iter_rows(max_col=2, values_only=True) if row[0]}
     assert metadata['Random pairs requested'] == 20

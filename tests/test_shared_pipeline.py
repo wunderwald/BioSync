@@ -267,7 +267,7 @@ def test_failed_export_shows_an_error(gui, monkeypatch):
 
 SECONDS_LABELS = (
     'label_window_size_seconds', 'label_step_size_seconds', 'label_max_lag_seconds', 'label_max_lag_sxc_seconds',
-    'label_lag_filter_min_seconds', 'label_lag_filter_max_seconds',
+    'label_lag_filter_min_seconds', 'label_lag_filter_max_seconds', 'label_block_length_seconds',
 )
 
 
@@ -278,17 +278,20 @@ def labels(gui, monkeypatch):
     return widgets
 
 
-def test_event_based_parameters_show_seconds(gui, labels):
+def test_event_based_parameters_show_seconds(gui, labels, fake_state):
     gui({"use_lag_filter": True, "lag_filter_min": -5, "lag_filter_max": 12})
+    fake_state.val_block_length.set(300)
     gui_updates.update_parameter_labels()
     assert {key: widget.text for key, widget in labels.items()} == {
         'label_window_size_seconds': '30 s', 'label_step_size_seconds': '15 s', 'label_max_lag_seconds': '6 s',
         'label_max_lag_sxc_seconds': '20 s', 'label_lag_filter_min_seconds': '-1 s', 'label_lag_filter_max_seconds': '2.4 s',
+        'label_block_length_seconds': '60 s',
     }
 
 
-def test_fixed_rate_parameters_have_no_seconds_because_the_rate_is_unknown(gui, labels):
+def test_fixed_rate_parameters_have_no_seconds_because_the_rate_is_unknown(gui, labels, fake_state):
     gui({"checkbox_eb": False, "checkbox_fr": True, "use_lag_filter": True})
+    fake_state.val_block_length.set(300)
     gui_updates.update_parameter_labels()
     assert {widget.text for widget in labels.values()} == {''}
 

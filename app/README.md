@@ -109,7 +109,7 @@ pytest
 | `state.py` | All `tk.Var` declarations and data containers (`dat_workbook_data`, `dat_physiological_data`, `dat_correlation_data`, `dat_plot_data`). Also holds the `PARAMS_CHANGED()` trigger and `analysis_config()`. Initialised via `init_state()` after the CTk window exists. |
 | `validation.py` | Pure input-validation logic — `check_window_size`, `check_max_lag`, `check_lag_filter`, etc. No widget references; reads/writes only from `state`. |
 | `callbacks.py` | All user-event handlers: entry/checkbox/dropdown `on_*` callbacks, file pickers, XLSX data loading, signal pre-processing, export handlers, batch processing, and random-pair analysis. Widget references needed for dropdown updates are injected via `register_dropdowns()` / `register_tabview()` after the layout is built. |
-| `layout.py` | Builds every widget across the three tabs (Input Data, Correlation, Export & Batch) inside a single `build_layout()` call. Returns a dict of widget references consumed by `gui_updates` and `corr_plot`. |
+| `layout.py` | Builds every widget across the four tabs (Input Data, Correlation, Export & Batch, Surrogates) inside a single `build_layout()` call. Returns a dict of widget references consumed by `gui_updates` and `corr_plot`. |
 | `gui_updates.py` | Reactive layer — functions that update widget appearance (border colours, error labels, show/hide panels, button enable/disable) in response to state-variable changes. Registered as `trace_add` callbacks via `setup_traces()`. Widget references are injected via `register_widgets()`. |
 | `corr_plot.py` | Runs windowed or standard cross-correlation + DFA when `PARAMS_CHANGED` events change their settings, updates the matplotlib figure, and refreshes the canvas. Separated into `_update_wxcorr_data`, `_update_sxcorr_data`, `update_plot`, `update_canvas`, and the top-level `UPDATE()` loop, which `schedule_update()` runs and `flush_update()` runs early. |
 
@@ -117,11 +117,11 @@ pytest
 
 | Module | Responsibility |
 |---|---|
-| `analysis.py` | `AnalysisConfig` and `analyze_dyad`: the pipeline shared by the GUI, batch and random pairs, so that they can't give different results. |
+| `analysis.py` | `AnalysisConfig` and `analyze_dyad`: the pipeline shared by the GUI, batch and surrogate tests, so that they can't give different results. |
 | `signal_processing.py` | Resampling and alignment of raw IBI / EDA signals (`preprocess_dyad`). |
 | `cross_correlation.py` | `windowed_cross_correlation` and `standard_cross_correlation` algorithms. The windowed one computes many windows at once, and a test checks that it matches the original window-by-window computation exactly. |
 | `measures.py` | The number each dyad contributes to a random-pair or surrogate test: mean r, mean \|r_max\| or r at lag 0 (`dyad_measure`), and which settings rule one out (`measure_problem`). |
-| `surrogates.py` | Tests that compare real dyads with surrogates, in which coupling can't exist. `surrogate_analysis` runs any of the three methods and returns a `SurrogateResult`: re-paired people (`repaired_pair_test`), shuffled blocks of partner B's signal (`block_shuffle_test`, which also gives a p-value for each dyad), and random pairs with Welch's t-test (`welch_random_pair_test`, the test of earlier versions, which draws pairs exactly as they did). Each reads every recording once, and leaves files without the selected sheet out of random pairs. |
+| `surrogates.py` | Tests that compare real dyads with surrogates, in which coupling can't exist. `surrogate_analysis` runs any of the three methods and returns a `SurrogateResult`: re-paired people (`repaired_pair_test`), shuffled blocks of partner B's signal (`block_shuffle_test`, which also gives a p-value for each dyad), and random pairs with Welch's t-test (`welch_random_pair_test`, the test of earlier versions, which draws pairs exactly as they did). Each reads every recording once, and leaves files without the selected sheet out of random pairs. It also has what the Surrogates tab shows before a run (`plan_summary`, `choice_problem`, `folder_overview`). |
 | `dfa.py` | Detrended Fluctuation Analysis — `dfa`, `dfa_wxcorr`, `dfa_wxcorr_window_averages`. `analysis.py` decides which series it runs on. |
 | `plot.py` | Matplotlib figure factories for preprocessing preview, windowed xcorr, and standard xcorr plots, and for surrogate test results (`plot_surrogate_result`). |
 | `export.py` | Writes XLSX result files for wxcorr, sxcorr, and surrogate tests (`export_surrogate_result`, with the result figure as PNG). The Welch export keeps the first sheet of earlier versions and adds rows at its end. Always exports raw (non-sigmoid) correlation values. |
@@ -147,6 +147,6 @@ tk theme (no window needed)
 ### Key design notes
 
 - **Late-registration pattern**: `callbacks.py` and `gui_updates.py` hold `_dropdowns` / `_widgets` dicts that are populated by `layout.py` after widgets are created. This avoids circular imports while keeping logic decoupled from widget construction.
-- **Background jobs**: batch and random pair analysis run on another thread through `callbacks._start_job`. Tk only works on the main thread, so a job gets a copy of the settings up front, must not use `state` or any widget, and reports progress through a queue.
+- **Background jobs**: batch processing and surrogate analysis run on another thread through `callbacks._start_job`. Tk only works on the main thread, so a job gets a copy of the settings up front, must not use `state` or any widget, and reports progress through a queue.
 - **Sigmoid is display-only**: the sigmoid-scaled view is toggled in the *Visualisation* section of the Correlation tab and affects only the on-screen plot. All XLSX exports always contain raw correlation values.
 - **Single update trigger**: `state.PARAMS_CHANGED()` increments `val_UPDATE_COUNT`, which schedules `corr_plot.UPDATE()` via a single `trace_add`, so repeated changes run it once. Typing passes `debounce=True` to wait 250 ms for a pause. Everything re-renders from one place. Anything that reads the results straight after a change has to call `corr_plot.flush_update()` first.

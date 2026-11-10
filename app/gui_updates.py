@@ -2,7 +2,9 @@ import os
 import utils
 import state
 import validation
+from measures import MEAN_ABS_R_MAX, MEAN_R, R_AT_LAG_0
 from signal_processing import EVENT_BASED_SAMPLING_RATE_HZ
+from surrogates import BLOCKS, REPAIRED, WELCH
 
 # ---------------------------------------------------------------------------
 # LATE-REGISTERED WIDGET REFERENCES
@@ -36,7 +38,7 @@ def setup_traces():
 
     for var in (
         state.val_window_size, state.val_step_size, state.val_max_lag, state.val_max_lag_sxc,
-        state.val_lag_filter_min, state.val_lag_filter_max, state.val_checkbox_eb,
+        state.val_lag_filter_min, state.val_lag_filter_max, state.val_checkbox_eb, state.val_block_length,
     ):
         var.trace_add('write', update_parameter_labels)
     update_parameter_labels()
@@ -91,6 +93,15 @@ def setup_traces():
         )
     )
     state.val_random_pair_is_ready.trace_add('write', update_active_state_random_pair_button)
+
+    state.val_surrogate_method.trace_add('write', update_surrogate_method_widgets)
+    state.val_surrogate_test.trace_add('write', update_surrogate_method_widgets)
+    update_surrogate_method_widgets()
+    state.val_surrogate_measure.trace_add('write', update_measure_explanation)
+    update_measure_explanation()
+    state.val_surrogate_problem.trace_add('write', update_surrogate_messages)
+    state.val_surrogate_warning.trace_add('write', update_surrogate_messages)
+    update_surrogate_messages()
 
     state.val_job_running.trace_add('write', update_job_progress_visibility)
     state.val_job_progress.trace_add('write', update_job_progress_bar)
@@ -176,6 +187,7 @@ def update_parameter_labels(*args):
         ('label_max_lag_sxc_seconds', state.val_max_lag_sxc),
         ('label_lag_filter_min_seconds', state.val_lag_filter_min),
         ('label_lag_filter_max_seconds', state.val_lag_filter_max),
+        ('label_block_length_seconds', state.val_block_length),
     ):
         _w[label].configure(text=_seconds_text(var.get()))
 
@@ -291,22 +303,85 @@ def update_active_state_run_batch_button(*args):
     )
 
 
+JOB_PROGRESS_ROW = 10      # below the content of every tab with a job
+
+
 def update_job_progress_visibility(*args):
-    if state.val_job_running.get():
-        _w['subgroup_job_progress'].grid(row=3, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
-    else:
-        _w['subgroup_job_progress'].grid_forget()
+    """Every tab that can start a job shows its progress, so that it is visible wherever it was started."""
+    for panel in _w['job_progress_panels']:
+        if state.val_job_running.get():
+            panel['frame'].grid(row=JOB_PROGRESS_ROW, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
+        else:
+            panel['frame'].grid_forget()
 
 
 def update_active_state_cancel_button(*args):
-    _w['button_cancel_job'].configure(state="disabled" if state.val_job_cancel_requested.get() else "normal")
+    for panel in _w['job_progress_panels']:
+        panel['button_cancel'].configure(state="disabled" if state.val_job_cancel_requested.get() else "normal")
 
 
 def update_job_progress_bar(*args):
-    _w['progress_bar_job'].set(state.val_job_progress.get())
+    for panel in _w['job_progress_panels']:
+        panel['progress_bar'].set(state.val_job_progress.get())
 
 
 def update_active_state_random_pair_button(*args):
     _w['button_random_pair'].configure(
         state="normal" if state.val_random_pair_is_ready.get() else "disabled"
+    )
+
+
+# ---------------------------------------------------------------------------
+# UPDATE FUNCTIONS — surrogates
+# ---------------------------------------------------------------------------
+
+METHOD_EXPLANATIONS = {
+    REPAIRED: "Pairs each person with people from other dyads. Asks whether the real dyads are more coupled "
+              "than strangers recorded in the same setting.",
+    BLOCKS: "Cuts partner B's signal into blocks and puts them in a random order. Asks whether a dyad's "
+            "coupling depends on the timing between the partners, and also gives a p-value for each dyad.",
+    WELCH: "The test of earlier versions, to repeat their results. It counts every random pair as independent, "
+           "which they aren't, as the same people appear again and again, so p comes out too small.",
+}
+MEASURE_EXPLANATIONS = {
+    MEAN_R: "The average correlation over all windows and lags.",
+    MEAN_ABS_R_MAX: "The strongest correlation at any lag, without its sign, averaged over the windows.",
+    R_AT_LAG_0: "The correlation without delay, averaged over the windows.",
+}
+
+
+def _effective_method():
+    method = state.val_surrogate_method.get()
+    return WELCH if method == REPAIRED and state.val_surrogate_test.get() == WELCH else method
+
+
+def update_surrogate_method_widgets(*args):
+    method = _effective_method()
+    _w['label_surrogate_method_explanation'].configure(text=METHOD_EXPLANATIONS.get(method, ''))
+    if state.val_surrogate_method.get() == REPAIRED:
+        _w['frame_surrogate_test'].grid()
+    else:
+        _w['frame_surrogate_test'].grid_remove()
+    if method == BLOCKS:
+        _w['frame_block_length'].grid()
+    else:
+        _w['frame_block_length'].grid_remove()
+    _w['label_surrogate_n'].configure(text="Random pairs" if method == WELCH else "Surrogates")
+
+
+def update_measure_explanation(*args):
+    _w['label_measure_explanation'].configure(text=MEASURE_EXPLANATIONS.get(state.val_surrogate_measure.get(), ''))
+
+
+def update_surrogate_messages(*args):
+    for key, var, row in (
+        ('label_surrogate_problem', state.val_surrogate_problem, 1),
+        ('label_surrogate_warning', state.val_surrogate_warning, 2),
+    ):
+        if var.get():
+            _w[key].grid(row=row, column=0, sticky='w', padx=10, pady=(0, 5))
+        else:
+            _w[key].grid_forget()
+    _w['entry_block_length'].configure(
+        border_color='red' if 'block length' in state.val_surrogate_problem.get() else '#777777'
     )

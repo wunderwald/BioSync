@@ -10,6 +10,7 @@ import pytest
 import batch_processing
 import surrogates
 import callbacks
+from measures import MEAN_R
 import gui_updates
 import state
 from helpers import FakeTimer, FakeWidget, batch_params, write_dyad
@@ -23,6 +24,9 @@ def app(fake_state, monkeypatch):
     fake_state.val_job_running.set(False)
     fake_state.val_job_progress.set(0)
     fake_state.val_rp_n.set(3)
+    fake_state.val_surrogate_method.set(surrogates.REPAIRED)
+    fake_state.val_surrogate_test.set(surrogates.WELCH)
+    fake_state.val_surrogate_measure.set(MEAN_R)
     for name in ("val_batch_input_folder", "val_batch_output_folder", "val_random_pair_input_folder", "val_random_pair_output_file"):
         getattr(fake_state, name).set("selected")
     fake_state.timer = FakeTimer()
@@ -58,7 +62,7 @@ def test_buttons_are_blocked_while_running_and_restored_afterwards(app):
     assert _both_ready(app) == (False, False)
 
     callbacks._batch_processing_is_ready()      # changing a setting while it runs must not re-enable them
-    callbacks._random_pair_is_ready()
+    callbacks._surrogates_are_ready()
     assert _both_ready(app) == (False, False)
 
     release.set()
@@ -162,11 +166,11 @@ def test_random_pairs_do_not_touch_state_on_their_thread(app, tmp_path, monkeypa
     violations = _guard_all_vars(monkeypatch)
     _guard_settings(monkeypatch, violations, batch_params(tmp_path / "in", tmp_path))
 
-    callbacks.handle_run_random_pair_button()
+    callbacks.handle_run_surrogate_button()
     timer.run_until_idle(60)
 
     assert violations == []
-    assert app.dialogs and app.dialogs[0][:2] == ("showinfo", "Random pair analysis finished")
+    assert app.dialogs and app.dialogs[0][:2] == ("showinfo", "Surrogate analysis finished")
     assert (tmp_path / "rp.xlsx").exists()
 
 
@@ -224,14 +228,14 @@ def test_closing_only_asks_while_a_job_runs(app, monkeypatch):
 
 
 def test_progress_is_only_visible_while_a_job_runs(app, monkeypatch):
-    frame = FakeWidget()
-    monkeypatch.setattr(gui_updates, "_w", {'subgroup_job_progress': frame})
+    frames = [FakeWidget(), FakeWidget()]
+    monkeypatch.setattr(gui_updates, "_w", {'job_progress_panels': [{'frame': frame} for frame in frames]})
     app.val_job_running.set(True)
     gui_updates.update_job_progress_visibility()
-    assert frame.visible
+    assert all(frame.visible for frame in frames)
     app.val_job_running.set(False)
     gui_updates.update_job_progress_visibility()
-    assert not frame.visible
+    assert not any(frame.visible for frame in frames)
 
 
 def _steps_until_cancelled(app, steps=3):
@@ -344,31 +348,31 @@ def test_cancelled_random_pairs_write_no_results(app, tmp_path, monkeypatch, can
     for index in range(2):
         write_dyad(tmp_path / "in" / f"dyad{index}", seed=index)
     output = tmp_path / "rp.xlsx"
-    real = callbacks.run_random_pair
+    real = callbacks.run_surrogate_analysis
 
-    def cancelling(params, count, input_dir, output_file, seed, progress):
+    def cancelling(params, choice, input_dir, output_file, seed, progress):
         def reporting(done, total, text):
             if text == cancel_at:
                 callbacks._job_cancel_event.set()
             progress(done, total, text)
-        return real(params, count, input_dir, output_file, seed, reporting)
+        return real(params, choice, input_dir, output_file, seed, reporting)
 
-    monkeypatch.setattr(callbacks, "run_random_pair", cancelling)
+    monkeypatch.setattr(callbacks, "run_surrogate_analysis", cancelling)
     monkeypatch.setattr(callbacks, "_analysis_params", lambda: batch_params(tmp_path / "in", tmp_path))
     app.val_random_pair_input_folder.set(str(tmp_path / "in"))
     app.val_random_pair_output_file.set(str(output))
 
-    callbacks.handle_run_random_pair_button()
+    callbacks.handle_run_surrogate_button()
     app.timer.run_until_idle(60)
 
     assert not output.exists()
-    assert app.dialogs[0][1] == "Random pair analysis cancelled"
+    assert app.dialogs[0][1] == "Surrogate analysis cancelled"
 
 
 @pytest.mark.parametrize("requested, expected", [(True, "disabled"), (False, "normal")])
 def test_cancel_button_can_only_be_clicked_once_per_run(app, monkeypatch, requested, expected):
-    button = FakeWidget()
-    monkeypatch.setattr(gui_updates, "_w", {'button_cancel_job': button})
+    buttons = [FakeWidget(), FakeWidget()]
+    monkeypatch.setattr(gui_updates, "_w", {'job_progress_panels': [{'button_cancel': button} for button in buttons]})
     app.val_job_cancel_requested.set(requested)
     gui_updates.update_active_state_cancel_button()
-    assert button.state == expected
+    assert [button.state for button in buttons] == [expected, expected]

@@ -40,7 +40,41 @@ def test_tab_changes_keep_the_panel_and_the_plot_the_same_size(report):
 
 def test_only_tabs_that_dont_fit_get_a_scrollbar(report):
     assert report['tabs']['Input Data']['scrollbar_shown'] is False
-    assert report['tabs']['Export & Batch']['scrollbar_shown'] is True
+    assert report['tabs']['Surrogates']['scrollbar_shown'] is True
+
+
+def test_every_tab_name_fits_in_the_tab_bar(report):
+    assert report['tab_bar_fits'] is True
+
+
+def test_surrogates_tab_shows_what_the_choices_need(report):
+    surrogates = report['surrogates']
+    start, welch, blocks = surrogates['start'], surrogates['welch'], surrogates['blocks']
+    assert (start['method'], start['n_label'], start['n']) == ("re-paired people", "Surrogates", "1000")
+    assert start['test_shown'] and not start['block_length_shown']
+    assert "1000 sets of re-paired people" in start['plan']
+    # Welch is the test of earlier versions, with their usual 100 random pairs
+    assert (welch['test'], welch['n_label'], welch['n']) == ("random pairs, Welch's t-test", "Random pairs", "100")
+    assert (blocks['method'], blocks['test'], blocks['n']) == ("shuffled blocks", "surrogate distribution", "1000")
+    assert blocks['block_length_shown'] and not blocks['test_shown']
+    assert "blocks of 150 samples" in blocks['plan']
+
+
+def test_block_length_follows_the_window_size(report):
+    assert report['surrogates']['block_length_follows_window'][0] == "100"
+
+
+def test_a_measure_the_settings_rule_out_is_named_and_blocks_the_run(report):
+    ruled_out, allowed = report['surrogates']['ruled_out'], report['surrogates']['allowed_again']
+    assert ruled_out['problem_shown'] and not ruled_out['run_enabled'] and ruled_out['plan'] == ""
+    assert ruled_out['problem'] == (
+        "Can't compare r at lag 0: it needs a correlation for each lag, and 'average windows' is on."
+    )
+    assert not allowed['problem_shown'] and "r at lag 0" in allowed['plan']
+
+
+def test_surrogates_tab_keeps_the_panel_width(report):
+    assert report['surrogates']['widest'] <= 410
 
 
 def test_eda_folder_loads_as_fixed_rate(report):

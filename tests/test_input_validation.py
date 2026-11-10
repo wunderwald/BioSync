@@ -173,7 +173,7 @@ def test_batch_and_random_pairs_only_need_the_active_settings(settings, windowed
     settings.val_random_pair_output_file.set("out.xlsx")
 
     callbacks._batch_processing_is_ready()
-    callbacks._random_pair_is_ready()
+    callbacks._surrogates_are_ready()
 
     assert settings.val_batch_processing_is_ready.get() == expected
     assert settings.val_random_pair_is_ready.get() == expected

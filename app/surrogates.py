@@ -596,3 +596,81 @@ def surrogate_analysis(method, params, input_dir, n_surrogates, seed, measure, b
     if method == WELCH:
         return welch_random_pair_test(params, input_dir, n_surrogates, progress, seed, measure)
     raise ValueError(f"Unknown method '{method}'.")
+
+
+# ---------------------------------------------------------------------------
+# PLANNING A TEST IN THE APP
+# ---------------------------------------------------------------------------
+
+SURROGATE_DISTRIBUTION = 'surrogate distribution'   # the test of re-paired people and shuffled blocks
+DEFAULT_SURROGATES = {REPAIRED: 1000, BLOCKS: 1000, WELCH: 100}
+MIN_WELCH_GROUP = 2         # the t-test needs at least two values per group
+
+
+@dataclass(frozen=True)
+class SurrogateChoice:
+    """What the app's Surrogates tab asks for, so that a job gets it in one piece."""
+    method: str
+    measure: str
+    n_surrogates: int
+    block_length: int = None
+
+
+def choice_problem(choice, config):
+    """Why the test can't run with these settings, or None. The same rules as the analysis, checked up front."""
+    problem = measure_problem(choice.measure, config)
+    if problem:
+        return f"Can't compare {choice.measure}: {problem}."
+    if choice.method == WELCH and choice.n_surrogates < MIN_WELCH_GROUP:
+        return f"The t-test needs at least {MIN_WELCH_GROUP} random pairs."
+    if choice.n_surrogates < 1:
+        return "At least one surrogate is needed."
+    if choice.method == BLOCKS and not choice.block_length:
+        return "Enter a block length."
+    return None
+
+
+def smallest_p(n_surrogates, side):
+    """The smallest p-value n surrogates can give."""
+    p = 1 / (n_surrogates + 1)
+    return p if side == GREATER else min(1.0, 2 * p)
+
+
+def plan_summary(choice, config, n_dyads=None):
+    """One sentence on what will be tested, shown before the run. n_dyads is the number in the chosen folder."""
+    side = TWO_SIDED if choice.method == WELCH else comparison_side(choice.measure, config)
+    if choice.method == REPAIRED:
+        compared = f"{choice.n_surrogates} sets of re-paired people"
+    elif choice.method == BLOCKS:
+        compared = f"{choice.n_surrogates} shuffled versions of each dyad, in blocks of {choice.block_length} samples"
+    else:
+        compared = f"{choice.n_surrogates} random pairs with Welch's t-test"
+    dyads = "the real dyads" if n_dyads is None else f"the {n_dyads} real dyad{'' if n_dyads == 1 else 's'}"
+    sentence = f"Compares {choice.measure} of {dyads} with {compared}, {side}."
+    if choice.method != WELCH:
+        sentence += f" The smallest possible p is {smallest_p(choice.n_surrogates, side):.3g}."
+    return sentence
+
+
+def folder_overview(input_dir):
+    """
+    The dyads in a folder, and about how many random pairs they allow, from the file names alone, so that it is
+    quick enough for the app. The analysis tells copies of a recording apart by content and can find fewer pairs.
+    """
+    dyad_files = [len(utils.list_dyad_files(os.path.join(input_dir, folder))) for folder in _dyad_folders(input_dir)]
+    dyad_files = [n for n in dyad_files if n]
+    n_recordings = sum(dyad_files)
+    n_pairs = math.comb(n_recordings, 2) - sum(math.comb(n, 2) for n in dyad_files)
+    n_dyads = sum(n >= 2 for n in dyad_files)
+    return {'n_dyads': n_dyads, 'n_pairs': n_pairs,
+            'n_sets': math.comb(n_pairs, n_dyads) if n_pairs >= n_dyads else 0}
+
+
+def few_sets_warning(n_sets_possible, n_surrogates, about=False):
+    """A warning when fewer different surrogate sets exist than are drawn, or None."""
+    if n_sets_possible is None or n_sets_possible >= n_surrogates:
+        return None
+    return (
+        f"Only {'about ' if about else ''}{n_sets_possible} different sets of re-paired people are possible, fewer "
+        f"than the {n_surrogates} drawn, so sets repeat and p can't usefully go below about 1/{n_sets_possible}."
+    )

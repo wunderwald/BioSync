@@ -113,7 +113,7 @@ state.val_job_running.set(True)
 settle()
 plot_resizes = []
 plot.bind('<Configure>', lambda event: plot_resizes.append((event.width, event.height)), add='+')
-for name in ("Input Data", "Correlation", "Export & Batch", "Input Data"):
+for name in ("Input Data", "Correlation", "Export & Batch", "Surrogates", "Input Data"):
     tabview._segmented_button_callback(name)
     settle()
     scrollbar = next(child for child in tabview.tab(name).winfo_children()[0].winfo_children()
@@ -125,6 +125,56 @@ for name in ("Input Data", "Correlation", "Export & Batch", "Input Data"):
     }
 
 report['plot_resizes_during_tab_changes'] = len(plot_resizes)
+report['tab_bar_fits'] = tabview._segmented_button.winfo_reqwidth() <= tabview.winfo_width()
+state.val_job_running.set(False)
+state.val_checkbox_lag_filter.set(False)
+
+# the Surrogates tab, used through its real widgets
+tabview._segmented_button_callback("Surrogates")
+settle()
+
+
+def shown(key):
+    return bool(widgets[key].winfo_ismapped())
+
+
+def surrogate_state():
+    return {
+        'method': state.val_surrogate_method.get(), 'test': state.val_surrogate_test.get(),
+        'block_length_shown': shown('frame_block_length'), 'test_shown': shown('frame_surrogate_test'),
+        'n_label': widgets['label_surrogate_n'].cget('text'), 'n': state.val_rp_n_input.get(),
+        'problem_shown': shown('label_surrogate_problem'), 'plan': state.val_surrogate_plan.get(),
+        'run_enabled': widgets['button_random_pair'].cget('state') == 'normal',
+    }
+
+
+surrogates_report = {'start': surrogate_state()}
+widgets['dropdown_surrogate_test']._clicked = None
+widgets['dropdown_surrogate_test']._dropdown_callback("Welch's t-test (earlier versions)")
+settle()
+surrogates_report['welch'] = surrogate_state()
+widgets['dropdown_surrogate_test']._dropdown_callback("Surrogate distribution")
+settle()
+widgets['segmented_surrogate_method']._buttons_dict["Shuffled blocks"].invoke()
+settle()
+surrogates_report['blocks'] = surrogate_state()
+state.val_window_size_input.set("100")
+settle()
+surrogates_report['block_length_follows_window'] = (
+    state.val_block_length_input.get(), widgets['label_block_length_seconds'].cget('text')
+)
+state.val_window_size_input.set("150")
+settle()
+state.val_checkbox_average_windows.set(True)
+widgets['segmented_surrogate_measure']._buttons_dict["r at lag 0"].invoke()
+settle()
+surrogates_report['ruled_out'] = surrogate_state()
+surrogates_report['ruled_out']['problem'] = state.val_surrogate_problem.get()
+state.val_checkbox_average_windows.set(False)
+settle()
+surrogates_report['allowed_again'] = surrogate_state()
+surrogates_report['widest'] = tabview.tab("Surrogates").winfo_children()[0].winfo_children()[0].winfo_children()[0].winfo_reqwidth()
+report['surrogates'] = surrogates_report
 report['callback_errors'] = errors
 print(json.dumps(report), flush=True)
 os._exit(0)     # skips Tk's slow and noisy shutdown

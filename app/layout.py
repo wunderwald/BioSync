@@ -3,6 +3,8 @@ import customtkinter as tk
 
 import state
 import callbacks as cb
+from measures import MEASURES
+from surrogates import BLOCKS, REPAIRED, SURROGATE_DISTRIBUTION, WELCH
 
 
 DROPDOWN_WIDTH = 240
@@ -12,6 +14,10 @@ TABVIEW_WIDTH = 422 + SCROLLBAR_SPACE
 PATH_LABEL_WRAP = 220  # long folder names wrap instead of running out of the fixed-size tabview
 PARAMETER_ENTRY_WIDTH = 80
 PARAMETER_SECONDS_WIDTH = 60  # room for values like -19.8 s, so that the panel keeps its width
+
+# what the Surrogates tab shows for each choice
+SURROGATE_METHOD_LABELS = {"Re-paired people": REPAIRED, "Shuffled blocks": BLOCKS}
+SURROGATE_TEST_LABELS = {"Surrogate distribution": SURROGATE_DISTRIBUTION, "Welch's t-test (earlier versions)": WELCH}
 
 
 def _button_opening_a_dialog(parent, command, **options):
@@ -81,6 +87,145 @@ def _parameter_row(parent, row, name, variable, validator):
     return label, entry, label_samples, label_seconds
 
 
+def _job_progress_panel(parent):
+    """The progress and Cancel button of a running batch or surrogate analysis, below the content of a tab."""
+    frame = tk.CTkFrame(parent)
+    label = tk.CTkLabel(frame, textvariable=state.val_job_progress_text)
+    label.grid(row=0, column=0, padx=10, pady=5, sticky='w')
+    progress_bar = tk.CTkProgressBar(frame)
+    progress_bar.grid(row=1, column=0, padx=10, pady=5, sticky='w')
+    button_cancel = tk.CTkButton(frame, text='Cancel', command=cb.cancel_job)
+    button_cancel.grid(row=2, column=0, padx=10, pady=5, sticky='w')
+    return {'frame': frame, 'progress_bar': progress_bar, 'button_cancel': button_cancel}
+
+
+def _heading(parent, row, text):
+    label = tk.CTkLabel(parent, text=text, font=("Arial", 14, "bold"))
+    label.grid(row=row, column=0, columnspan=4, sticky='w', padx=10, pady=(12, 2))
+    return label
+
+
+def _explanation(parent, row):
+    label = tk.CTkLabel(parent, text="", wraplength=TAB_WIDTH - 30, justify='left', font=("Arial", 12))
+    label.grid(row=row, column=0, columnspan=4, sticky='w', padx=10, pady=(2, 4))
+    return label
+
+
+def _build_surrogates_tab(tab, validate_numeric_input):
+    """
+    The Surrogates tab reads from top to bottom like the method: the dyads, what they are compared with, the
+    measure, how many surrogates, then a sentence on what will be tested, and the run.
+    """
+    group = tk.CTkFrame(tab)
+    group.grid(row=0, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
+
+    title = tk.CTkLabel(group, text="Surrogate Analysis", font=("Arial", 20, "bold"))
+    title.grid(row=0, column=0, columnspan=4, sticky='w', padx=10, pady=(10, 0))
+    intro = tk.CTkLabel(
+        group, wraplength=TAB_WIDTH - 30, justify='left', font=("Arial", 12),
+        text="Compares the real dyads with surrogates, in which coupling can't exist. "
+             "Uses the settings of the Input Data and Correlation tabs.",
+    )
+    intro.grid(row=1, column=0, columnspan=4, sticky='w', padx=10, pady=(0, 4))
+
+    _heading(group, 2, "Real dyads")
+    button_input_folder = _button_opening_a_dialog(group, cb.open_random_pair_input_dir_picker, text='Select input folder')
+    button_input_folder.grid(row=3, column=0, columnspan=2, padx=10, pady=5, sticky='w')
+    label_input_folder = tk.CTkLabel(group, text="No folder selected.", wraplength=PATH_LABEL_WRAP, justify='left')
+    label_input_folder.grid(row=3, column=2, columnspan=2, padx=10, sticky='w')
+
+    _heading(group, 4, "Compare with")
+    method_labels = {method: label for label, method in SURROGATE_METHOD_LABELS.items()}
+    segmented_method = tk.CTkSegmentedButton(
+        group, values=list(SURROGATE_METHOD_LABELS),
+        command=lambda label: state.val_surrogate_method.set(SURROGATE_METHOD_LABELS[label]),
+    )
+    segmented_method.set(method_labels[state.val_surrogate_method.get()])
+    segmented_method.grid(row=5, column=0, columnspan=4, sticky='w', padx=10, pady=5)
+    label_method_explanation = _explanation(group, 6)
+
+    # only for re-paired people: the test of earlier versions
+    frame_test = tk.CTkFrame(group, fg_color='transparent')
+    frame_test.grid(row=7, column=0, columnspan=4, sticky='w', padx=0, pady=0)
+    tk.CTkLabel(frame_test, text="Test").grid(row=0, column=0, sticky='w', padx=10, pady=5)
+    test_labels = {test: label for label, test in SURROGATE_TEST_LABELS.items()}
+    dropdown_test = tk.CTkOptionMenu(
+        frame_test, values=list(SURROGATE_TEST_LABELS), width=DROPDOWN_WIDTH, dynamic_resizing=False,
+        command=lambda label: state.val_surrogate_test.set(SURROGATE_TEST_LABELS[label]),
+    )
+    dropdown_test.set(test_labels[state.val_surrogate_test.get()])
+    dropdown_test.grid(row=0, column=1, sticky='w', padx=(0, 10), pady=5)
+
+    # only for shuffled blocks
+    frame_block_length = tk.CTkFrame(group, fg_color='transparent')
+    frame_block_length.grid(row=8, column=0, columnspan=4, sticky='w', padx=0, pady=0)
+    _, entry_block_length, _, label_block_length_seconds = _parameter_row(
+        frame_block_length, 0, 'Block length', state.val_block_length_input, validate_numeric_input
+    )
+
+    _heading(group, 9, "Measure")
+    segmented_measure = tk.CTkSegmentedButton(group, values=list(MEASURES), variable=state.val_surrogate_measure)
+    segmented_measure.grid(row=10, column=0, columnspan=4, sticky='w', padx=10, pady=5)
+    label_measure_explanation = _explanation(group, 11)
+
+    _heading(group, 12, "Repeats")
+    label_n = tk.CTkLabel(group, text="Surrogates")
+    label_n.grid(row=13, column=0, sticky="w", padx=10, pady=5)
+    entry_n = tk.CTkEntry(
+        group, width=PARAMETER_ENTRY_WIDTH, validate="key", validatecommand=(validate_numeric_input, "%P"),
+        textvariable=state.val_rp_n_input, border_color='#777777',
+    )
+    entry_n.grid(row=13, column=1, sticky="w", padx=(0, 5), pady=5)
+    tk.CTkLabel(group, text="Seed (optional)").grid(row=14, column=0, sticky="w", padx=10, pady=5)
+    entry_seed = tk.CTkEntry(
+        group, width=PARAMETER_ENTRY_WIDTH, validate="key", validatecommand=(validate_numeric_input, "%P"),
+        textvariable=state.val_rp_seed_input, border_color='#777777',
+    )
+    entry_seed.grid(row=14, column=1, sticky="w", padx=(0, 5), pady=5)
+    seed_info = _explanation(group, 15)
+    seed_info.configure(text="Left empty, a new seed is used. Every export records its seed, so a run can be repeated.")
+
+    # what will be tested, and what stops or limits it
+    frame_plan = tk.CTkFrame(group)
+    frame_plan.grid(row=16, column=0, columnspan=4, sticky='ew', padx=10, pady=(10, 5))
+    label_plan = tk.CTkLabel(frame_plan, textvariable=state.val_surrogate_plan, wraplength=TAB_WIDTH - 50, justify='left')
+    label_plan.grid(row=0, column=0, sticky='w', padx=10, pady=5)
+    label_problem = tk.CTkLabel(frame_plan, textvariable=state.val_surrogate_problem, text_color='red',
+                                wraplength=TAB_WIDTH - 50, justify='left')
+    label_warning = tk.CTkLabel(frame_plan, textvariable=state.val_surrogate_warning, text_color='#c27c0e',
+                                wraplength=TAB_WIDTH - 50, justify='left')
+    # problem and warning are shown when they have text
+
+    button_output_file = _button_opening_a_dialog(group, cb.open_random_pair_output_file_picker, text='Select output file')
+    button_output_file.grid(row=17, column=0, columnspan=2, padx=10, pady=5, sticky='w')
+    label_output_file = tk.CTkLabel(group, text="No file selected.", wraplength=PATH_LABEL_WRAP, justify='left')
+    label_output_file.grid(row=17, column=2, columnspan=2, padx=10, sticky='w')
+
+    button_run = _button_opening_a_dialog(group, cb.handle_run_surrogate_button, text='Run surrogate analysis',
+                                          state="disabled")
+    button_run.grid(row=18, column=0, columnspan=2, padx=10, pady=10, sticky='w')
+
+    return {
+        'label_random_pair_input_folder':    label_input_folder,
+        'label_random_pair_output_file':     label_output_file,
+        'button_random_pair':                button_run,
+        'segmented_surrogate_method':        segmented_method,
+        'label_surrogate_method_explanation': label_method_explanation,
+        'frame_surrogate_test':              frame_test,
+        'dropdown_surrogate_test':           dropdown_test,
+        'frame_block_length':                frame_block_length,
+        'entry_block_length':                entry_block_length,
+        'label_block_length_seconds':        label_block_length_seconds,
+        'segmented_surrogate_measure':       segmented_measure,
+        'label_measure_explanation':         label_measure_explanation,
+        'label_surrogate_n':                 label_n,
+        'entry_surrogate_n':                 entry_n,
+        'label_surrogate_problem':           label_problem,
+        'label_surrogate_warning':           label_warning,
+        'job_progress':                      _job_progress_panel(tab),
+    }
+
+
 def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     """
     Creates all widgets and grid/packs them into the app window.
@@ -113,8 +258,9 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     tab_input_data   = _scrollable(group_params_tabview.add("Input Data"))
     tab_correlation  = _scrollable(group_params_tabview.add("Correlation"))
     tab_export_batch = _scrollable(group_params_tabview.add("Export & Batch"))
+    tab_surrogates   = _scrollable(group_params_tabview.add("Surrogates"))
     group_params_tabview.configure(command=cb.on_tab_change)
-    for tab in (tab_input_data, tab_correlation, tab_export_batch):
+    for tab in (tab_input_data, tab_correlation, tab_export_batch, tab_surrogates):
         tab.grid_columnconfigure(0, minsize=TAB_WIDTH)
 
     # ---------------------------
@@ -418,71 +564,10 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     )
     button_batch.grid(row=8, column=0, padx=10, pady=10, sticky='w')
 
-    # Random pair analysis subgroup
-    subgroup_random_pair = tk.CTkFrame(tab_export_batch)
-    subgroup_random_pair.grid(row=2, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
+    # Progress of a running batch (initially hidden)
+    job_progress_batch = _job_progress_panel(tab_export_batch)
 
-    label_random_pair = tk.CTkLabel(subgroup_random_pair, text="Random Pair Analysis", font=("Arial", 20, "bold"))
-    label_random_pair.grid(row=0, column=0, sticky='w', padx=10, columnspan=2, pady=10)
-
-    button_random_pair_input_folder = _button_opening_a_dialog(
-        subgroup_random_pair, cb.open_random_pair_input_dir_picker, text='Select input folder'
-    )
-    button_random_pair_input_folder.grid(row=2, column=0, padx=10, pady=10, sticky='w')
-
-    label_random_pair_input_folder = tk.CTkLabel(subgroup_random_pair, text="No folder selected.", wraplength=PATH_LABEL_WRAP)
-    label_random_pair_input_folder.grid(row=2, column=1, padx=10, sticky='w')
-
-    button_random_pair_output_file = _button_opening_a_dialog(
-        subgroup_random_pair, cb.open_random_pair_output_file_picker, text='Select output file'
-    )
-    button_random_pair_output_file.grid(row=3, column=0, padx=10, pady=10, sticky='w')
-
-    label_random_pair_output_file = tk.CTkLabel(subgroup_random_pair, text="No file selected.", wraplength=PATH_LABEL_WRAP)
-    label_random_pair_output_file.grid(row=3, column=1, padx=10, sticky='w')
-
-    label_rp_n = tk.CTkLabel(subgroup_random_pair, text="N")
-    label_rp_n.grid(row=4, column=0, sticky="w", padx=10, pady=5)
-
-    entry_rp_n = tk.CTkEntry(
-        subgroup_random_pair,
-        validate="key", validatecommand=(validate_numeric_input, "%P"),
-        textvariable=state.val_rp_n_input, border_color='#777777'
-    )
-    entry_rp_n.grid(row=4, column=1, sticky="w", padx=10, pady=5)
-
-    label_rp_seed = tk.CTkLabel(subgroup_random_pair, text="Seed (optional)")
-    label_rp_seed.grid(row=5, column=0, sticky="w", padx=10, pady=5)
-
-    entry_rp_seed = tk.CTkEntry(
-        subgroup_random_pair,
-        validate="key", validatecommand=(validate_numeric_input, "%P"),
-        textvariable=state.val_rp_seed_input, border_color='#777777'
-    )
-    entry_rp_seed.grid(row=5, column=1, sticky="w", padx=10, pady=5)
-
-    label_rp_seed_info = tk.CTkLabel(
-        subgroup_random_pair, wraplength=TAB_WIDTH - 20, justify='left',
-        text="Left empty, a new seed is used. Every export records its seed, so a run can be repeated."
-    )
-    label_rp_seed_info.grid(row=6, column=0, columnspan=2, sticky="w", padx=10, pady=5)
-
-    button_random_pair = _button_opening_a_dialog(
-        subgroup_random_pair, cb.handle_run_random_pair_button, text='Run rp analysis', state="disabled"
-    )
-    button_random_pair.grid(row=8, column=0, padx=10, pady=10, sticky='w')
-
-    # Progress of a running batch or random pair analysis (initially hidden)
-    subgroup_job_progress = tk.CTkFrame(tab_export_batch)
-
-    label_job_progress = tk.CTkLabel(subgroup_job_progress, textvariable=state.val_job_progress_text)
-    label_job_progress.grid(row=0, column=0, padx=10, pady=5, sticky='w')
-
-    progress_bar_job = tk.CTkProgressBar(subgroup_job_progress)
-    progress_bar_job.grid(row=1, column=0, padx=10, pady=5, sticky='w')
-
-    button_cancel_job = tk.CTkButton(subgroup_job_progress, text='Cancel', command=cb.cancel_job)
-    button_cancel_job.grid(row=2, column=0, padx=10, pady=5, sticky='w')
+    surrogate_widgets = _build_surrogates_tab(tab_surrogates, validate_numeric_input)
 
     # -----------------------------------------------------------------
     # Inject widget references that callbacks need for dropdown updates
@@ -528,10 +613,6 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
         'label_output_dir':                    label_output_dir,
         'label_batch_input_num_subdirs':       label_batch_input_num_subdirs,
         'button_batch':                        button_batch,
-        'label_random_pair_input_folder':      label_random_pair_input_folder,
-        'label_random_pair_output_file':       label_random_pair_output_file,
-        'button_random_pair':                  button_random_pair,
-        'subgroup_job_progress':               subgroup_job_progress,
-        'progress_bar_job':                    progress_bar_job,
-        'button_cancel_job':                   button_cancel_job,
+        'job_progress_panels':                 [job_progress_batch, surrogate_widgets.pop('job_progress')],
+        **surrogate_widgets,
     }

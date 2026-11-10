@@ -26,7 +26,7 @@ def measure_problem(measure, config):
     if not config.windowed or measure == MEAN_R:
         return None
     if config.average_windows:
-        return f"{measure} needs a correlation for each lag, and 'average windows' is on"
+        return "it needs a correlation for each lag, and 'average windows' is on"
     if measure == R_AT_LAG_0:
         low, high = _windowed_lag_range(config)
         if not low <= 0 <= high:

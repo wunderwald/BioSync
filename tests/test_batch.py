@@ -15,6 +15,7 @@ import pytest
 
 import batch_processing
 import surrogates
+from measures import MEAN_R
 import callbacks
 import export
 import utils
@@ -194,7 +195,7 @@ def test_summary_reports_failed_and_incomplete_dyads(batch_dirs):
 @pytest.mark.parametrize("handler, runner, ready_var, input_var, output_var", [
     (callbacks.handle_run_batch_button, "run_batch_process", "val_batch_processing_is_ready",
      "val_batch_input_folder", "val_batch_output_folder"),
-    (callbacks.handle_run_random_pair_button, "run_random_pair", "val_random_pair_is_ready",
+    (callbacks.handle_run_surrogate_button, "run_surrogate_analysis", "val_random_pair_is_ready",
      "val_random_pair_input_folder", "val_random_pair_output_file"),
 ])
 def test_button_is_enabled_again_and_error_shown_after_a_crash(
@@ -205,6 +206,9 @@ def test_button_is_enabled_again_and_error_shown_after_a_crash(
     getattr(fake_state, input_var).set("in")
     getattr(fake_state, output_var).set("out")
     fake_state.val_rp_n.set(5)
+    fake_state.val_surrogate_method.set(surrogates.REPAIRED)
+    fake_state.val_surrogate_test.set(surrogates.WELCH)
+    fake_state.val_surrogate_measure.set(MEAN_R)
 
     def crash(*args):
         raise RuntimeError("disk full")
