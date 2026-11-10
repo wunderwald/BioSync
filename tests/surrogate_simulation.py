@@ -162,7 +162,8 @@ def significant_shares(scenario, n_groups, n_dyads, n_surrogates, n_welch_pairs=
 def _table(results, n_groups):
     columns = [(REPAIRED, measure) for measure in MEASURES] + [(BLOCKS, measure) for measure in MEASURES] + [
         (WELCH, MEASURES[0])]
-    header = "| Scenario | " + " | ".join(f"{method}, {measure}" for method, measure in columns) + " |"
+    names = [f"{method}, {measure}".replace("|", "\\|") for method, measure in columns]     # | would end a cell
+    header = "| Scenario | " + " | ".join(names) + " |"
     lines = [header, "|" + "---|" * (len(columns) + 1)]
     for name, shares in results.items():
         lines.append(f"| {name} | " + " | ".join(f"{100 * shares[key]:.0f}%" for key in columns) + " |")
