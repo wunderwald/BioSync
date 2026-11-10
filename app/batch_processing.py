@@ -1,5 +1,3 @@
-import hashlib
-import itertools
 import os
 import re
 import xlsx
@@ -7,11 +5,7 @@ import utils
 from analysis import AnalysisConfig, analyze_dyad, signal_dfa, windowed_dfa
 from export import export_sxcorr_data, export_wxcorr_data, export_avg_wxcorr_data
 from cross_correlation import average_wxcorr_matrices
-from measures import MEAN_R, dyad_measure, measure_problem
-import random
-import numpy as np
 from datetime import datetime
-from scipy.stats import ttest_ind
 from plot import plot_windowed_cross_correlation, plot_standard_cross_correlation, save_figure_to_png
 
 def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dyad_dir=''):
@@ -151,161 +145,6 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
 
 def _no_progress(done, total, text):
     pass
-
-def _measured_values(all_corr_data, config, measure):
-    """The measure of each pair. A pair with only flat windows has no value to contribute."""
-    values = [dyad_measure(corr_data, config, measure) for corr_data in all_corr_data]
-    return [value for value in values if not np.isnan(value)]
-
-def _file_hash(file_path):
-    with open(file_path, 'rb') as file:
-        return hashlib.sha256(file.read()).hexdigest()
-
-def _eligible_random_pairs(input_dir, dyad_folders):
-    """
-    Lists the pairs of recordings that can be used as random pairs. Recordings are told apart by their content,
-    because preprocessing/group_to_dyads.py copies a person's file to many folders. This leaves out self-pairs,
-    and real pairs, which are any two recordings that share a dyad folder.
-    Args:
-        input_dir (str): Path to the input directory containing dyad folders with Excel files.
-        dyad_folders (list): Names of the dyad folders, in a fixed order.
-    Returns:
-        list: (file_path_a, file_path_b) pairs, in a fixed order.
-    """
-    path_of_recording = {}
-    real_pairs = set()
-    for dyad_folder in dyad_folders:
-        dyad_path = os.path.join(input_dir, dyad_folder)
-        recordings = set()
-        for file_name in utils.list_dyad_files(dyad_path):
-            file_path = os.path.join(dyad_path, file_name)
-            recording = _file_hash(file_path)
-            path_of_recording.setdefault(recording, file_path)
-            recordings.add(recording)
-        real_pairs.update(frozenset(pair) for pair in itertools.combinations(recordings, 2))
-    return [
-        (path_of_recording[recording_a], path_of_recording[recording_b])
-        for recording_a, recording_b in itertools.combinations(path_of_recording, 2)
-        if frozenset((recording_a, recording_b)) not in real_pairs
-    ]
-
-def random_pair_analysis(params, input_dir, random_pair_count=100, progress=_no_progress, seed=None, measure=MEAN_R):
-    """
-    Perform analysis on random pairs and real dyad correlations.
-    Args:
-        params (dict): A dictionary of parameters, see batch_process function for details.
-        input_dir (str): Path to the input directory containing dyad folders with Excel files.
-        random_pair_count (int, optional): Number of random pairs to generate. Defaults to 100.
-        progress (function, optional): Called with (done, total, text) before each pair or dyad.
-        seed (int, optional): The same seed and files give the same random pairs.
-        measure (str, optional): The value compared for each pair, one of measures.MEASURES. Defaults to mean r.
-    Returns:
-        tuple: A tuple containing:
-            - t_stat (float): The t-statistic from Welch's t-test.
-            - p_value (float): The p-value from Welch's t-test.
-            - average_correlations_rp (list): The measure of each random pair.
-            - average_correlations_real (list): The measure of each real dyad.
-            - avg_wxcorr_real (list): Group-average wxcorr of real dyads (None for standard xcorr).
-            - avg_wxcorr_rp (list): Group-average wxcorr of random pairs (None for standard xcorr).
-            - failures (list): (name, error message) for each pair or dyad that could not be processed.
-            - n_eligible_pairs (int): Number of different pairs the random pairs were drawn from.
-            - window_counts_real (list): Number of windows of each real dyad (empty for standard xcorr).
-            - window_counts_rp (list): Number of windows of each random pair (empty for standard xcorr).
-    """
-
-    config = AnalysisConfig.from_params(params)
-    problem = measure_problem(measure, config)
-    if problem:
-        raise ValueError(f"Can't compare {measure}: {problem}.")
-
-    # get input data
-    dyad_folders = sorted(f for f in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, f)))
-    eligible_pairs = _eligible_random_pairs(input_dir, dyad_folders)
-    if not eligible_pairs:
-        raise ValueError("No random pairs are possible: all recordings are the same person or share a dyad folder.")
-    # make random_pair_count random pairs of xlsx files, with a random person A and B
-    rng = random.Random(seed)
-    random_pairs = [rng.sample(rng.choice(eligible_pairs), 2) for _ in range(random_pair_count)]
-
-    # read correlation type
-    is_windowed_corr = params['checkbox_windowed_xcorr']
-
-    # process random pairs
-    failures = []
-    all_corr_data_rp = []
-    all_wxcorr_rp = []
-    total_steps = len(random_pairs) + len(dyad_folders)
-    for pair_index, pair in enumerate(random_pairs):
-        progress(pair_index, total_steps, "Random pairs")
-        file_path_a, file_path_b = pair
-        try:
-            corr_data = _process_dyad(file_path_a, file_path_b, None, params, export=False)
-        except Exception as e:
-            print(f"! Skipping random pair: {e}")
-            failures.append((f"random pair {os.path.basename(file_path_a)}, {os.path.basename(file_path_b)}", str(e)))
-            continue
-        if not corr_data:
-            continue
-        all_corr_data_rp.append(corr_data)
-        if is_windowed_corr:
-            all_wxcorr_rp.append(corr_data)
-
-    # the measure of each random pair
-    average_correlations_rp = _measured_values(all_corr_data_rp, config, measure)
-
-    # process all real dyads
-    all_corr_data_real = []
-    all_wxcorr_real = []
-    for dyad_index, dyad_folder in enumerate(dyad_folders):
-        progress(len(random_pairs) + dyad_index, total_steps, dyad_folder)
-        dyad_path = os.path.join(input_dir, dyad_folder)
-        xlsx_files = utils.list_dyad_files(dyad_path)
-        if len(xlsx_files) >= 2:
-            file_a, file_b, _ = xlsx.choose_dyad_files(dyad_path, xlsx_files)
-            file_path_a = os.path.join(dyad_path, file_a)
-            file_path_b = os.path.join(dyad_path, file_b)
-            try:
-                corr_data = _process_dyad(
-                    file_path_a=file_path_a,
-                    file_path_b=file_path_b,
-                    output_dir=None,
-                    params=params,
-                    export=False
-                )
-            except Exception as e:
-                print(f"! Skipping {dyad_folder}: {e}")
-                failures.append((dyad_folder, str(e)))
-                continue
-            if not corr_data:
-                continue
-            all_corr_data_real.append(corr_data)
-            if is_windowed_corr:
-                all_wxcorr_real.append(corr_data)
-
-    # the measure of each real dyad
-    average_correlations_real = _measured_values(all_corr_data_real, config, measure)
-
-    # run Welch's t-test
-    t_stat, p_value = ttest_ind(average_correlations_rp, average_correlations_real, equal_var=False)
-
-    # compute group-average correlation matrices for wxcorr
-    avg_wxcorr_real = None
-    avg_wxcorr_rp   = None
-    if is_windowed_corr:
-        min_lag = (
-            min(params['lag_filter_min'], params['lag_filter_max'])
-            if params['use_lag_filter'] else -params['max_lag']
-        )
-        if all_wxcorr_real:
-            avg_wxcorr_real = average_wxcorr_matrices(all_wxcorr_real, min_lag, params['checkbox_average_windows'])
-        if all_wxcorr_rp:
-            avg_wxcorr_rp = average_wxcorr_matrices(all_wxcorr_rp, min_lag, params['checkbox_average_windows'])
-
-    return (
-        t_stat, p_value, average_correlations_rp, average_correlations_real, avg_wxcorr_real, avg_wxcorr_rp, failures,
-        len(eligible_pairs), [len(wxcorr) for wxcorr in all_wxcorr_real], [len(wxcorr) for wxcorr in all_wxcorr_rp],
-    )
-
 
 def _same_folder(path_a, path_b):
     """True for two paths to one folder, also through links, and on Windows in another case."""
