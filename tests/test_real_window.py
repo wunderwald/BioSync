@@ -118,7 +118,7 @@ def test_fixed_rate_shows_seconds_only_with_a_known_rate(report):
 
 def test_export_comes_after_the_run_and_needs_a_result(report):
     before, after = report['surrogate_plot']['export_before'], report['surrogate_plot']['export_after']
-    assert before == {'buttons': ('Export XLSX', 'disabled', 'Export PNG', 'disabled'),
+    assert before == {'buttons': ['Export XLSX', 'disabled', 'Export PNG', 'disabled'],
                       'text': "Run the analysis to export its result.", 'below_run': True, 'side_by_side': True}
-    assert after == {'buttons': ('Export XLSX', 'normal', 'Export PNG', 'normal'),
+    assert after == {'buttons': ['Export XLSX', 'normal', 'Export PNG', 'normal'],
                      'text': "Last run: dyads, seed 3.", 'below_run': True, 'side_by_side': True}
