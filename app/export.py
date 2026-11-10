@@ -327,13 +327,16 @@ def _figure(result):
     return fig
 
 
+def export_surrogate_figure(file_path, result):
+    """Saves the figure of a surrogates.SurrogateResult as a PNG, as the Surrogates tab shows it."""
+    save_figure_to_png(_figure(result), file_path)
+
+
 def export_surrogate_result(file_path, params, input_dir, result):
     """
-    Writes a surrogates.SurrogateResult to file_path, and its figure next to it as a PNG with the same name.
-    Welch keeps the file of earlier versions, with the new rows at the end of its first sheet. The figure is made
-    first, so that a failure leaves no files.
+    Writes a surrogates.SurrogateResult to file_path as xlsx. Welch keeps the file of earlier versions, with the
+    new rows at the end of its first sheet.
     """
-    fig = _figure(result)
     left_out = left_out_names(result.left_out_files, input_dir)
     sheets = [_dyad_sheet(result)]
     if result.method == BLOCKS:
@@ -391,4 +394,3 @@ def export_surrogate_result(file_path, params, input_dir, result):
         vectors = {'surrogate set mean': null_values, 'real dyad value': result.real_values}
         xlsx.write_xlsx(vectors=vectors, single_values=single_values, output_path=file_path,
                         sheet_title="Surrogate Analysis", extra_sheets=sheets)
-    save_figure_to_png(fig, f"{os.path.splitext(file_path)[0]}.png")

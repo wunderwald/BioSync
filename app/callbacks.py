@@ -10,7 +10,9 @@ import utils
 from analysis import AnalysisConfig, preprocess_signals, signal_dfa
 from signal_processing import detect_sampling_rate, guess_is_event_based
 from batch_processing import batch_process, find_result_files, remove_result_files
-from export import export_sxcorr_data, export_surrogate_result, export_wxcorr_data, left_out_names
+from export import (
+    export_surrogate_figure, export_surrogate_result, export_sxcorr_data, export_wxcorr_data, left_out_names,
+)
 from surrogates import (
     BLOCKS, DEFAULT_SURROGATES, MIN_BLOCKS, MIN_WELCH_GROUP, REPAIRED, WELCH, SurrogateChoice, choice_problem,
     few_sets_warning, folder_overview, plan_summary, result_summary, surrogate_analysis,
@@ -1095,22 +1097,31 @@ def _surrogate_run_finished(summary, settings, params, input_dir):
     _show_surrogate_summary(summary)
 
 
-def export_surrogate_results():
-    """Writes the last result, with the settings it was run with, and its figure next to it."""
+def _export_surrogates(kind, extension, file_type, write):
+    """Asks where to save the last result and writes it there with write(file_path, run)."""
     run = state.dat_surrogate_run
     if run['result'] is None:
         return
     file_path = filedialog.asksaveasfilename(
         title="Save As",
-        defaultextension=".xlsx",
+        defaultextension=extension,
         initialfile=f"biosync_surrogates_{os.path.basename(run['folder'])}",
-        filetypes=(("XLSX files", "*.xlsx"),)
+        filetypes=((f"{file_type} files", f"*{extension}"),)
     )
     if not file_path:
         return
     try:
-        _while_exporting(
-            "surrogates", lambda: export_surrogate_result(file_path, run['params'], run['folder'], run['result'])
-        )
+        _while_exporting(kind, lambda: write(file_path, run))
     except Exception as e:
         messagebox.showerror("Export failed", str(e))
+
+
+def export_surrogate_data():
+    """Writes the last result as xlsx, with the settings it was run with."""
+    _export_surrogates("surrogate data", ".xlsx", "XLSX",
+                       lambda path, run: export_surrogate_result(path, run['params'], run['folder'], run['result']))
+
+
+def export_surrogate_plot():
+    """Saves the figure of the last result as PNG."""
+    _export_surrogates("surrogate plot", ".png", "PNG", lambda path, run: export_surrogate_figure(path, run['result']))

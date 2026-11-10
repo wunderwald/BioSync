@@ -208,14 +208,20 @@ def _build_surrogates_tab(tab, validate_numeric_input):
     label_export.grid(row=0, column=0, sticky='w', padx=10, pady=(10, 0))
     label_result = tk.CTkLabel(group_export, text="", wraplength=TAB_WIDTH - 30, justify='left', font=("Arial", 12))
     label_result.grid(row=1, column=0, sticky='w', padx=10, pady=(0, 4))
-    button_export = _button_opening_a_dialog(group_export, cb.export_surrogate_results, text='Export results',
-                                             state="disabled")
-    button_export.grid(row=2, column=0, padx=10, pady=10, sticky='w')
+    frame_export_buttons = tk.CTkFrame(group_export, fg_color='transparent')
+    frame_export_buttons.grid(row=2, column=0, sticky='w', padx=0, pady=0)
+    button_export_data = _button_opening_a_dialog(frame_export_buttons, cb.export_surrogate_data, text='Export XLSX',
+                                                  state="disabled")
+    button_export_data.grid(row=0, column=0, padx=10, pady=10, sticky='w')
+    button_export_plot = _button_opening_a_dialog(frame_export_buttons, cb.export_surrogate_plot, text='Export PNG',
+                                                  state="disabled")
+    button_export_plot.grid(row=0, column=1, padx=10, pady=10, sticky='w')
 
     return {
         'label_random_pair_input_folder':    label_input_folder,
         'label_surrogate_result':            label_result,
-        'button_export_surrogates':          button_export,
+        'button_export_surrogate_data':      button_export_data,
+        'button_export_surrogate_plot':      button_export_plot,
         'button_random_pair':                button_run,
         'segmented_surrogate_method':        segmented_method,
         'label_surrogate_method_explanation': label_method_explanation,

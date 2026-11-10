@@ -127,7 +127,8 @@ def export_buttons(fake_state, monkeypatch):
     buttons = {
         'button_export_data': FakeWidget(toplevel=window, text='Export XLSX', state='normal'),
         'button_export_plot': FakeWidget(toplevel=window, text='Export Plots', state='normal'),
-        'button_export_surrogates': FakeWidget(toplevel=window, text='Export results', state='normal'),
+        'button_export_surrogate_data': FakeWidget(toplevel=window, text='Export XLSX', state='normal'),
+        'button_export_surrogate_plot': FakeWidget(toplevel=window, text='Export PNG', state='normal'),
     }
     monkeypatch.setattr(gui_updates, "_w", {**buttons, 'label_surrogate_result': FakeWidget()})
     monkeypatch.setattr(gui_updates, "_export_button_texts", {})
@@ -149,7 +150,8 @@ def export_buttons(fake_state, monkeypatch):
 
 
 @pytest.mark.parametrize("kind, busy_button", [
-    ("data", "button_export_data"), ("plot", "button_export_plot"), ("surrogates", "button_export_surrogates"),
+    ("data", "button_export_data"), ("plot", "button_export_plot"),
+    ("surrogate data", "button_export_surrogate_data"), ("surrogate plot", "button_export_surrogate_plot"),
 ])
 def test_window_shows_it_is_busy_while_exporting(export_buttons, kind, busy_button):
     seen = {}
@@ -161,13 +163,15 @@ def test_window_shows_it_is_busy_while_exporting(export_buttons, kind, busy_butt
 
     callbacks._while_exporting(kind, write)
     assert seen == {'cursor': 'watch', 'text': 'Exporting...', 'states': {
-        'button_export_data': 'disabled', 'button_export_plot': 'disabled', 'button_export_surrogates': 'disabled',
+        'button_export_data': 'disabled', 'button_export_plot': 'disabled',
+        'button_export_surrogate_data': 'disabled', 'button_export_surrogate_plot': 'disabled',
     }}
     assert export_buttons.window.cursor == ""
     assert {key: button.options for key, button in export_buttons.buttons.items()} == {
         'button_export_data': {'text': 'Export XLSX', 'state': 'normal'},
         'button_export_plot': {'text': 'Export Plots', 'state': 'normal'},
-        'button_export_surrogates': {'text': 'Export results', 'state': 'normal'},
+        'button_export_surrogate_data': {'text': 'Export XLSX', 'state': 'normal'},
+        'button_export_surrogate_plot': {'text': 'Export PNG', 'state': 'normal'},
     }
 
 

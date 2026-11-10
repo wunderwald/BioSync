@@ -1,6 +1,6 @@
 """
 The export of a surrogate test: what it says on its first sheet, the dyads and shuffled versions sheets, skipped
-dyads, and the figure next to it.
+dyads, and the figure, which is saved on its own.
 """
 import os
 
@@ -164,9 +164,11 @@ def test_welch_keeps_its_earlier_file_and_adds_rows_and_sheets(dyads, tmp_path):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("method", [REPAIRED, BLOCKS, WELCH])
-def test_figure_is_saved_next_to_the_file(dyads, tmp_path, method):
-    _export(dyads, tmp_path, method, measure=MEAN_R)
-    assert (tmp_path / "result.png").stat().st_size > 0
+def test_figure_is_saved_on_its_own(dyads, tmp_path, method):
+    result, _ = _export(dyads, tmp_path, method, measure=MEAN_R)
+    assert not (tmp_path / "result.png").exists()       # the xlsx export doesn't write it
+    export.export_surrogate_figure(str(tmp_path / "figure.png"), result)
+    assert (tmp_path / "figure.png").read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 
 
 def test_figure_of_many_dyads_is_taller():
@@ -182,11 +184,12 @@ def test_figure_of_many_dyads_is_taller():
     assert export._figure(result).get_size_inches()[1] == pytest.approx(3 + 0.2 * n)
 
 
-def test_a_failing_figure_leaves_no_files(dyads, tmp_path, monkeypatch):
-    monkeypatch.setattr(export, "plot_surrogate_result", lambda result: 1 / 0)
-    with pytest.raises(ZeroDivisionError):
-        _export(dyads, tmp_path, REPAIRED)
-    assert not [name for name in os.listdir(tmp_path) if name.startswith("result")]
+def test_the_saved_figure_is_the_taller_one(tmp_path, monkeypatch):
+    saved = []
+    monkeypatch.setattr(export, "_figure", lambda result: ("figure of", result))
+    monkeypatch.setattr(export, "save_figure_to_png", lambda fig, path: saved.append((fig, path)))
+    export.export_surrogate_figure("out.png", "result")
+    assert saved == [(("figure of", "result"), "out.png")]
 
 
 # ---------------------------------------------------------------------------

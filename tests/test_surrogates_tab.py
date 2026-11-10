@@ -298,7 +298,8 @@ def run(tab, tmp_path, monkeypatch):
     for kind in ("showinfo", "showwarning", "showerror"):
         monkeypatch.setattr(callbacks.messagebox, kind, lambda title, text, kind=kind: tab.dialogs.append((kind, title, text)))
     tab.output = tmp_path / "result.xlsx"
-    monkeypatch.setattr(callbacks.filedialog, "asksaveasfilename", lambda **kwargs: str(tab.output))
+    monkeypatch.setattr(callbacks.filedialog, "asksaveasfilename",
+                        lambda **kwargs: str(tab.output.with_suffix(kwargs['defaultextension'])))
     return tab
 
 
@@ -311,12 +312,14 @@ def test_run_writes_the_chosen_test_and_says_what_it_found(run, method, block_le
     callbacks.handle_run_surrogate_button()
     run.timer.run_until_idle(60)
     assert not run.output.exists()          # running doesn't export
-    callbacks.export_surrogate_results()
+    callbacks.export_surrogate_data()
     kind, title, text = run.dialogs[0]
     rows = {row[0]: row[1] for row in openpyxl.load_workbook(run.output).worksheets[0].iter_rows(max_col=2, values_only=True)}
     assert rows['Method'] == method and rows['Surrogate sets'] == 30 and rows['Random seed'] == 7
     assert text.splitlines()[0] == rows['Summary']
-    assert os.path.exists(run.output.with_suffix(".png"))
+    assert not os.path.exists(run.output.with_suffix(".png"))      # the plot has its own button
+    callbacks.export_surrogate_plot()
+    assert os.path.getsize(run.output.with_suffix(".png")) > 0
     if method == REPAIRED:
         assert (kind, title) == ("showinfo", "Surrogate analysis finished")
     else:
@@ -468,36 +471,52 @@ def test_export_has_the_settings_of_the_run_even_after_they_changed(ran):
     ran.params.update(window_size=100)
     _set_n(ran, 50)
     callbacks.update_surrogate_plan()
-    callbacks.export_surrogate_results()
+    callbacks.export_surrogate_data()
     rows = {row[0]: row[1] for row in openpyxl.load_workbook(ran.output).worksheets[0].iter_rows(max_col=2, values_only=True)}
     assert rows['Window size'] == 150 and rows['Surrogate sets'] == 20
-    assert os.path.exists(ran.output.with_suffix(".png"))
 
 
-def test_export_suggests_a_name_and_can_be_cancelled(ran, monkeypatch):
+@pytest.mark.parametrize("export, extension", [
+    (callbacks.export_surrogate_data, ".xlsx"), (callbacks.export_surrogate_plot, ".png"),
+])
+def test_export_suggests_a_name_and_can_be_cancelled(ran, monkeypatch, export, extension):
     asked = []
     monkeypatch.setattr(callbacks.filedialog, "asksaveasfilename", lambda **kwargs: asked.append(kwargs) or "")
-    callbacks.export_surrogate_results()
-    assert asked[0]['initialfile'] == "biosync_surrogates_in"
+    export()
+    assert (asked[0]['initialfile'], asked[0]['defaultextension']) == ("biosync_surrogates_in", extension)
+    assert asked[0]['filetypes'][0][1] == f"*{extension}"
+    assert not ran.output.exists() and not ran.output.with_suffix(".png").exists()
+
+
+def test_plot_export_is_the_figure_of_the_last_result(ran, monkeypatch):
+    saved = []
+    monkeypatch.setattr(callbacks, "export_surrogate_figure", lambda path, result: saved.append((path, result)))
+    callbacks.export_surrogate_plot()
+    assert saved == [(str(ran.output.with_suffix(".png")), ran.dat_surrogate_run['result'])]
     assert not ran.output.exists()
 
 
-def test_failed_export_shows_an_error(ran, monkeypatch):
-    monkeypatch.setattr(callbacks.filedialog, "asksaveasfilename", lambda **kwargs: "/nonexistent/folder/r.xlsx")
+@pytest.mark.parametrize("export, extension", [
+    (callbacks.export_surrogate_data, ".xlsx"), (callbacks.export_surrogate_plot, ".png"),
+])
+def test_failed_export_shows_an_error(ran, monkeypatch, export, extension):
+    monkeypatch.setattr(callbacks.filedialog, "asksaveasfilename", lambda **kwargs: f"/nonexistent/folder/r{extension}")
     ran.dialogs.clear()
-    callbacks.export_surrogate_results()
+    export()
     assert ran.dialogs[0][:2] == ("showerror", "Export failed")
     assert ran.val_exporting.get() == ''
 
 
 def test_nothing_to_export_before_a_run(run, monkeypatch):
     monkeypatch.setattr(callbacks.filedialog, "asksaveasfilename", lambda **kwargs: pytest.fail("asked for a file"))
-    callbacks.export_surrogate_results()
+    callbacks.export_surrogate_data()
+    callbacks.export_surrogate_plot()
 
 
 @pytest.fixture
 def export_widgets(tab, monkeypatch):
-    widgets = {'label_surrogate_result': FakeWidget(), 'button_export_surrogates': FakeWidget()}
+    widgets = {'label_surrogate_result': FakeWidget(), 'button_export_surrogate_data': FakeWidget(),
+               'button_export_surrogate_plot': FakeWidget()}
     monkeypatch.setattr(gui_updates, "_w", widgets)
     return widgets
 
@@ -506,29 +525,36 @@ def export_widgets(tab, monkeypatch):
     ("", False, "", False),
     ("Last run: in, seed 7.", False, "", True),
     ("Last run: in, seed 7.", True, "", False),             # a new result is on its way
-    ("Last run: in, seed 7.", False, "surrogates", False),
+    ("Last run: in, seed 7.", False, "surrogate data", False),
+    ("Last run: in, seed 7.", False, "surrogate plot", False),
 ])
 def test_export_button_needs_a_result(tab, export_widgets, result_text, running, exporting, enabled):
     tab.val_surrogate_result_text.set(result_text)
     tab.val_job_running.set(running)
     tab.val_exporting.set(exporting)
     gui_updates.update_surrogate_export()
-    assert export_widgets['button_export_surrogates'].state == ("normal" if enabled else "disabled")
+    for key in ('button_export_surrogate_data', 'button_export_surrogate_plot'):
+        assert export_widgets[key].state == ("normal" if enabled else "disabled")
     assert export_widgets['label_surrogate_result'].text == (result_text or gui_updates.NO_SURROGATE_RESULT_TEXT)
 
 
-def test_export_button_is_busy_while_writing_and_back_afterwards(tab, monkeypatch):
-    buttons = {key: FakeWidget(toplevel=FakeWidget(), text=text) for key, text in (
-        ('button_export_data', 'Export XLSX'), ('button_export_plot', 'Export Plots'),
-        ('button_export_surrogates', 'Export results'),
-    )}
+@pytest.mark.parametrize("kind, busy, idle", [
+    ("surrogate data", 'button_export_surrogate_data', 'button_export_surrogate_plot'),
+    ("surrogate plot", 'button_export_surrogate_plot', 'button_export_surrogate_data'),
+])
+def test_export_button_is_busy_while_writing_and_back_afterwards(tab, monkeypatch, kind, busy, idle):
+    texts = (('button_export_data', 'Export XLSX'), ('button_export_plot', 'Export Plots'),
+             ('button_export_surrogate_data', 'Export XLSX'), ('button_export_surrogate_plot', 'Export PNG'))
+    buttons = {key: FakeWidget(toplevel=FakeWidget(), text=text) for key, text in texts}
     monkeypatch.setattr(gui_updates, "_w", {**buttons, 'label_surrogate_result': FakeWidget()})
     monkeypatch.setattr(gui_updates, "_export_button_texts", {})
     monkeypatch.setattr(gui_updates.validation, "check_export_ready", lambda: True)
     tab.val_surrogate_result_text.set("Last run: in, seed 7.")
-    tab.val_exporting.set("surrogates")
+    tab.val_exporting.set(kind)
     gui_updates.update_export_busy()
-    assert (buttons['button_export_surrogates'].text, buttons['button_export_surrogates'].state) == ("Exporting...", "disabled")
+    assert (buttons[busy].text, buttons[busy].state) == ("Exporting...", "disabled")
+    assert buttons[idle].state == "disabled" and buttons[idle].text != "Exporting..."
     tab.val_exporting.set("")
     gui_updates.update_export_busy()
-    assert (buttons['button_export_surrogates'].text, buttons['button_export_surrogates'].state) == ("Export results", "normal")
+    assert {key: (buttons[key].text, buttons[key].state) for key, _ in texts[2:]} == {
+        key: (text, "normal") for key, text in texts[2:]}

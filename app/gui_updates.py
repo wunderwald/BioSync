@@ -264,7 +264,10 @@ def update_active_state_export_button(*args):
     _w['button_export_plot'].configure(state=state_str)
 
 
-_EXPORT_BUTTONS = {'data': 'button_export_data', 'plot': 'button_export_plot', 'surrogates': 'button_export_surrogates'}
+_EXPORT_BUTTONS = {
+    'data': 'button_export_data', 'plot': 'button_export_plot',
+    'surrogate data': 'button_export_surrogate_data', 'surrogate plot': 'button_export_surrogate_plot',
+}
 _export_button_texts = {}
 
 
@@ -412,4 +415,5 @@ def update_surrogate_export(*args):
     text = state.val_surrogate_result_text.get()
     _w['label_surrogate_result'].configure(text=text or NO_SURROGATE_RESULT_TEXT)
     can_export = bool(text) and not state.val_job_running.get() and not state.val_exporting.get()
-    _w['button_export_surrogates'].configure(state="normal" if can_export else "disabled")
+    for key in ('button_export_surrogate_data', 'button_export_surrogate_plot'):
+        _w[key].configure(state="normal" if can_export else "disabled")

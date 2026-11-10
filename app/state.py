@@ -2,7 +2,7 @@ import customtkinter as tk
 from analysis import AnalysisConfig
 from measures import MEAN_R
 from plot import plot_init
-from surrogates import DEFAULT_SURROGATES, REPAIRED, SURROGATE_DISTRIBUTION
+from surrogates import BLOCKS, DEFAULT_SURROGATES, SURROGATE_DISTRIBUTION
 
 # ----------------------
 # DEFAULTS / INIT VALUES
@@ -12,7 +12,7 @@ INIT_WINDOW_SIZE = 150   # 150 := 30s for 5hz signals
 INIT_MAX_LAG     = 30    # 30 := 6s
 INIT_STEP_SIZE   = 75    # 75 := 15s
 INIT_MAX_LAG_SXC = 150
-INIT_SURROGATE_METHOD = REPAIRED
+INIT_SURROGATE_METHOD = BLOCKS
 INIT_SURROGATE_MEASURE = MEAN_R
 
 # ---------------------

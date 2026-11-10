@@ -166,6 +166,9 @@ def surrogate_state():
 
 
 surrogates_report = {'start': surrogate_state()}
+widgets['segmented_surrogate_method']._buttons_dict["Re-paired people"].invoke()
+settle()
+surrogates_report['repaired'] = surrogate_state()
 widgets['dropdown_surrogate_test']._clicked = None
 widgets['dropdown_surrogate_test']._dropdown_callback("Welch's t-test")
 settle()
@@ -201,10 +204,12 @@ surrogate_plot = {'before_run': [text.get_text() for text in corr_plot.canvas.fi
 
 
 def export_state():
+    data, plot = widgets['button_export_surrogate_data'], widgets['button_export_surrogate_plot']
     return {
-        'button': widgets['button_export_surrogates'].cget('state'),
+        'buttons': (data.cget('text'), data.cget('state'), plot.cget('text'), plot.cget('state')),
         'text': widgets['label_surrogate_result'].cget('text'),
-        'below_run': widgets['button_export_surrogates'].winfo_rooty() > widgets['button_random_pair'].winfo_rooty(),
+        'below_run': data.winfo_rooty() > widgets['button_random_pair'].winfo_rooty(),
+        'side_by_side': data.winfo_rooty() == plot.winfo_rooty() and data.winfo_rootx() < plot.winfo_rootx(),
     }
 
 

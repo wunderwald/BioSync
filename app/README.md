@@ -95,7 +95,7 @@ The **Surrogates** tab tests whether the real dyads in a folder are more coupled
 | Method | Surrogates | Question | Result |
 |---|---|---|---|
 | **Re-paired people** | Sets of pairs of people from different dyads, each as large as the real group | Are partners more in sync than strangers recorded in the same setting? | p for the group |
-| **Shuffled blocks** | Partner B's signal cut into blocks of the block length (default: the window size) and put in a random order. Leftover samples stay at the end. | Does the moment-to-moment timing between these two people matter? | p for each dyad, and for the group |
+| **Shuffled blocks** (default) | Partner B's signal cut into blocks of the block length (default: the window size) and put in a random order. Leftover samples stay at the end. | Does the moment-to-moment timing between these two people matter? | p for each dyad, and for the group |
 | **Welch's t-test** | Random pairs drawn with replacement, compared with the real dyads by a t-test | As in earlier versions | p for the group |
 
 - **Re-paired people** don't count what all participants share as coupling, such as reactions to the same task at the same moments, or the same slow drift. With few dyads only few different sets exist, and the app warns when that limits p.
@@ -106,7 +106,7 @@ The **Surrogates** tab tests whether the real dyads in a folder are more coupled
 
 One number per dyad, pair or surrogate:
 
-- **mean r**: the average correlation over all windows and lags.
+- **mean r** (default): the average correlation over all windows and lags.
 - **mean |r_max|**: the strongest correlation at any lag in each window, without its sign, averaged over the windows. It is high even for strangers, which the surrogates share, so the comparison is fair, but it can be less sensitive. Not available with "average windows".
 - **r at lag 0**: the correlation without delay, averaged over the windows. Not available with "average windows", or when the lag filter leaves out lag 0.
 
@@ -119,7 +119,7 @@ The app decides this from the measure and settings, so it can't be chosen after 
 
 ### Results
 
-Before a run, the tab says in one sentence what will be tested, in red what stops the run, and in orange what will limit the result. A run doesn't write anything: the plot area of the tab shows the result until the next run. If settings change, the result stays and is marked as coming from the earlier settings. **Export results**, below the run, then writes the last result with the settings it was run with: an xlsx file with the summary, the settings and each dyad's values, and the figure as a PNG next to it. Report the method, the measure, the sides, the number of surrogates, the seed, the block length for shuffled blocks, and p: the export's "Summary" row has them in one sentence.
+Before a run, the tab says in one sentence what will be tested, in red what stops the run, and in orange what will limit the result. A run doesn't write anything: the plot area of the tab shows the result until the next run. If settings change, the result stays and is marked as coming from the earlier settings. The Export section below the run saves the last result with the settings it was run with: **Export XLSX** writes the summary, the settings and each dyad's values, and **Export PNG** saves the figure. Report the method, the measure, the sides, the number of surrogates, the seed, the block length for shuffled blocks, and p: the export's "Summary" row has them in one sentence.
 
 ---
 
@@ -163,7 +163,7 @@ pytest
 | `surrogates.py` | Tests that compare real dyads with surrogates, in which coupling can't exist. `surrogate_analysis` runs any of the three methods and returns a `SurrogateResult`: re-paired people (`repaired_pair_test`), shuffled blocks of partner B's signal (`block_shuffle_test`, which also gives a p-value for each dyad), and random pairs with Welch's t-test (`welch_random_pair_test`, the test of earlier versions, which draws pairs exactly as they did). Each reads every recording once, and leaves files without the selected sheet out of random pairs. It also has what the Surrogates tab shows before a run (`plan_summary`, `choice_problem`, `folder_overview`). |
 | `dfa.py` | Detrended Fluctuation Analysis — `dfa`, `dfa_wxcorr`, `dfa_wxcorr_window_averages`. `analysis.py` decides which series it runs on. |
 | `plot.py` | Matplotlib figure factories for preprocessing preview, windowed xcorr, and standard xcorr plots, and for surrogate test results (`plot_surrogate_result`). |
-| `export.py` | Writes XLSX result files for wxcorr, sxcorr, and surrogate tests (`export_surrogate_result`, with the result figure as PNG). The Welch export keeps the first sheet of earlier versions and adds rows at its end. Always exports raw (non-sigmoid) correlation values. |
+| `export.py` | Writes XLSX result files for wxcorr, sxcorr, and surrogate tests (`export_surrogate_result`; `export_surrogate_figure` saves the result figure as PNG). The Welch export keeps the first sheet of earlier versions and adds rows at its end. Always exports raw (non-sigmoid) correlation values. |
 | `batch_processing.py` | Iterates a folder of dyads, runs the full analysis pipeline on each, and saves per-dyad XLSX + PNG output. |
 | `xlsx.py` | Thin wrappers around openpyxl for reading and writing Excel files. `read_xlsx` returns the values of all sheets and closes the file. |
 | `utils.py` | Small helpers (`is_numeric_array`, `count_subdirectories`, `resource_path`, …). |

@@ -167,7 +167,7 @@ def _run(app):
     """Runs the analysis, and exports its result as a user would."""
     callbacks.handle_run_surrogate_button()
     app.timer.run_until_idle(60)
-    callbacks.export_surrogate_results()
+    callbacks.export_surrogate_data()
 
 
 def _rows(app):
@@ -229,7 +229,7 @@ def test_seed_is_read_before_the_job_starts(app):
     callbacks.handle_run_surrogate_button()
     app.val_rp_seed_input.set("99")
     app.timer.run_until_idle(60)
-    callbacks.export_surrogate_results()
+    callbacks.export_surrogate_data()
     assert _rows(app)['Random seed'] == 1234
 
 

@@ -49,10 +49,15 @@ def test_every_tab_name_fits_in_the_tab_bar(report):
 
 def test_surrogates_tab_shows_what_the_choices_need(report):
     surrogates = report['surrogates']
-    start, welch, blocks = surrogates['start'], surrogates['welch'], surrogates['blocks']
-    assert (start['method'], start['n_label'], start['n']) == ("re-paired people", "Surrogates", "1000")
-    assert start['test_shown'] and not start['block_length_shown']
-    assert "1000 sets of re-paired people" in start['plan']
+    start, repaired = surrogates['start'], surrogates['repaired']
+    welch, blocks = surrogates['welch'], surrogates['blocks']
+    # shuffled blocks with mean r is the default
+    assert (start['method'], start['n_label'], start['n']) == ("shuffled blocks", "Surrogates", "1000")
+    assert start['block_length_shown'] and not start['test_shown']
+    assert "mean r" in start['plan'] and "blocks of" in start['plan']
+    assert (repaired['method'], repaired['n']) == ("re-paired people", "1000")
+    assert repaired['test_shown'] and not repaired['block_length_shown']
+    assert "1000 sets of re-paired people" in repaired['plan']
     # Welch is the test of earlier versions, with their usual 100 random pairs
     assert (welch['test'], welch['n_label'], welch['n']) == ("random pairs, Welch's t-test", "Random pairs", "100")
     assert (blocks['method'], blocks['test'], blocks['n']) == ("shuffled blocks", "surrogate distribution", "1000")
@@ -113,5 +118,7 @@ def test_fixed_rate_shows_seconds_only_with_a_known_rate(report):
 
 def test_export_comes_after_the_run_and_needs_a_result(report):
     before, after = report['surrogate_plot']['export_before'], report['surrogate_plot']['export_after']
-    assert before == {'button': 'disabled', 'text': "Run the analysis to export its result.", 'below_run': True}
-    assert after == {'button': 'normal', 'text': "Last run: dyads, seed 3.", 'below_run': True}
+    assert before == {'buttons': ('Export XLSX', 'disabled', 'Export PNG', 'disabled'),
+                      'text': "Run the analysis to export its result.", 'below_run': True, 'side_by_side': True}
+    assert after == {'buttons': ('Export XLSX', 'normal', 'Export PNG', 'normal'),
+                     'text': "Last run: dyads, seed 3.", 'below_run': True, 'side_by_side': True}
