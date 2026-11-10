@@ -152,7 +152,6 @@ def app(fake_state, dyads, tmp_path, monkeypatch):
     fake_state.val_surrogate_measure.set(MEAN_R)
     fake_state.val_rp_seed_input.set("")
     fake_state.val_random_pair_input_folder.set(str(dyads))
-    fake_state.val_random_pair_output_file.set(str(tmp_path / "rp.xlsx"))
     fake_state.timer = FakeTimer()
     monkeypatch.setitem(callbacks._tabview, "tabview", fake_state.timer)
     monkeypatch.setattr(callbacks, "_analysis_params", lambda: batch_params(dyads, tmp_path))
@@ -160,14 +159,25 @@ def app(fake_state, dyads, tmp_path, monkeypatch):
     for kind in ("showinfo", "showerror"):
         monkeypatch.setattr(callbacks.messagebox, kind, lambda title, text: fake_state.dialogs.append((title, text)))
     fake_state.output = tmp_path / "rp.xlsx"
+    monkeypatch.setattr(callbacks.filedialog, "asksaveasfilename", lambda **kwargs: str(fake_state.output))
     return fake_state
 
 
-def _run_and_read(app):
+def _run(app):
+    """Runs the analysis, and exports its result as a user would."""
     callbacks.handle_run_surrogate_button()
     app.timer.run_until_idle(60)
+    callbacks.export_surrogate_results()
+
+
+def _rows(app):
     sheet = openpyxl.load_workbook(app.output).worksheets[0]
     return {row[0]: row[1] for row in sheet.iter_rows(max_col=2, values_only=True) if row[0]}
+
+
+def _run_and_read(app):
+    _run(app)
+    return _rows(app)
 
 
 def test_entered_seed_is_used_and_recorded(app):
@@ -206,8 +216,7 @@ EARLIER_ROWS = [
 
 def test_new_rows_come_after_the_existing_ones(app):
     app.val_rp_seed_input.set("1")
-    callbacks.handle_run_surrogate_button()
-    app.timer.run_until_idle(60)
+    _run(app)
     sheet = openpyxl.load_workbook(app.output).worksheets[0]
     names = [row[0] for row in sheet.iter_rows(max_col=1, values_only=True) if row[0]]
     assert names[:len(EARLIER_ROWS)] == EARLIER_ROWS
@@ -220,8 +229,8 @@ def test_seed_is_read_before_the_job_starts(app):
     callbacks.handle_run_surrogate_button()
     app.val_rp_seed_input.set("99")
     app.timer.run_until_idle(60)
-    metadata = {row[0]: row[1] for row in openpyxl.load_workbook(app.output).worksheets[0].iter_rows(max_col=2, values_only=True) if row[0]}
-    assert metadata['Random seed'] == 1234
+    callbacks.export_surrogate_results()
+    assert _rows(app)['Random seed'] == 1234
 
 
 def test_group_to_dyads_copies_end_to_end(tmp_path, monkeypatch):
@@ -272,7 +281,7 @@ def test_too_small_n_does_not_start(app, n, monkeypatch):
     callbacks.handle_run_surrogate_button()
     assert app.val_job_running.get() is False
     assert "at least 2" in warnings[0]
-    assert not app.output.exists()
+    assert app.dat_surrogate_run['result'] is None
 
 
 def test_failed_pairs_give_a_warning_and_are_recorded(app, dyads, monkeypatch):
@@ -285,9 +294,7 @@ def test_failed_pairs_give_a_warning_and_are_recorded(app, dyads, monkeypatch):
     monkeypatch.setattr(callbacks.messagebox, "showwarning", lambda title, text: warnings.append(text))
     app.val_rp_n.set(20)
     app.val_rp_seed_input.set("1")
-    callbacks.handle_run_surrogate_button()
-    app.timer.run_until_idle(60)
-    metadata = {row[0]: row[1] for row in openpyxl.load_workbook(app.output).worksheets[0].iter_rows(max_col=2, values_only=True) if row[0]}
+    metadata = _run_and_read(app)
     assert metadata['Random pairs requested'] == 20
     assert metadata['Random pairs used'] < 20
     assert metadata['Real dyads used'] == 2

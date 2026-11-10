@@ -116,7 +116,7 @@ def tab(fake_state, monkeypatch):
         'val_checkbox_lag_filter': False, 'val_lag_filter_min': -30, 'val_lag_filter_max': 30, 'val_max_lag_sxc': 150,
         'val_checkbox_absolute_corr_sxc': False, 'val_INPUT_DATA_VALID': True, 'val_CORRELATION_SETTINGS_VALID': True,
         'val_CORRELATION_SETTINGS_VALID_SXC': True, 'val_job_running': False, 'val_data_length': 4000,
-        'val_random_pair_input_folder': '', 'val_random_pair_output_file': '',
+        'val_random_pair_input_folder': '', 'val_exporting': '',
     }.items():
         getattr(fake_state, name).set(value)
     monkeypatch.setitem(callbacks._surrogates, 'method', REPAIRED)
@@ -188,12 +188,10 @@ def test_block_length_follows_the_window_size_until_it_is_changed(tab):
 def test_plan_and_readiness(tab, tmp_path):
     callbacks.update_surrogate_plan()
     assert tab.val_surrogate_plan.get().startswith("Compares mean r of the real dyads with 1000 sets")
-    assert tab.val_random_pair_is_ready.get() is False          # no folder and file yet
+    assert tab.val_random_pair_is_ready.get() is False          # no folder yet
     _folder(tmp_path / "in", [2] * 6)
     tab.val_random_pair_input_folder.set(str(tmp_path / "in"))
     callbacks.on_surrogate_folder_change()
-    tab.val_random_pair_output_file.set(str(tmp_path / "out.xlsx"))
-    callbacks.update_surrogate_plan()
     assert "the 6 real dyads" in tab.val_surrogate_plan.get()
     assert tab.val_surrogate_problem.get() == ''
     assert tab.val_random_pair_is_ready.get() is True
@@ -201,7 +199,6 @@ def test_plan_and_readiness(tab, tmp_path):
 
 def test_a_ruled_out_measure_stops_the_run(tab, tmp_path):
     tab.val_random_pair_input_folder.set("in")
-    tab.val_random_pair_output_file.set("out.xlsx")
     tab.val_surrogate_measure.set(R_AT_LAG_0)
     tab.val_checkbox_average_windows.set(True)
     callbacks.update_surrogate_plan()
@@ -292,7 +289,6 @@ def run(tab, tmp_path, monkeypatch):
     for index in range(3):
         write_dyad(tmp_path / "in" / f"dyad{index}", seed=index)
     tab.val_random_pair_input_folder.set(str(tmp_path / "in"))
-    tab.val_random_pair_output_file.set(str(tmp_path / "result.xlsx"))
     tab.val_rp_seed_input.set("7")
     tab.val_job_progress.set(0)
     tab.timer = FakeTimer()
@@ -302,6 +298,7 @@ def run(tab, tmp_path, monkeypatch):
     for kind in ("showinfo", "showwarning", "showerror"):
         monkeypatch.setattr(callbacks.messagebox, kind, lambda title, text, kind=kind: tab.dialogs.append((kind, title, text)))
     tab.output = tmp_path / "result.xlsx"
+    monkeypatch.setattr(callbacks.filedialog, "asksaveasfilename", lambda **kwargs: str(tab.output))
     return tab
 
 
@@ -313,6 +310,8 @@ def test_run_writes_the_chosen_test_and_says_what_it_found(run, method, block_le
         _set_block_length(run, str(block_length))
     callbacks.handle_run_surrogate_button()
     run.timer.run_until_idle(60)
+    assert not run.output.exists()          # running doesn't export
+    callbacks.export_surrogate_results()
     kind, title, text = run.dialogs[0]
     rows = {row[0]: row[1] for row in openpyxl.load_workbook(run.output).worksheets[0].iter_rows(max_col=2, values_only=True)}
     assert rows['Method'] == method and rows['Surrogate sets'] == 30 and rows['Random seed'] == 7
@@ -354,7 +353,7 @@ def test_a_problem_stops_the_run_before_it_starts(run, tmp_path, monkeypatch):
     assert run.val_job_running.get() is False
     assert run.dialogs == [("showwarning", "Can't run the surrogate analysis",
                             "Can't compare r at lag 0: it needs a correlation for each lag, and 'average windows' is on.")]
-    assert not run.output.exists()
+    assert run.dat_surrogate_run['result'] is None
 
 
 # ---------------------------------------------------------------------------
@@ -403,7 +402,6 @@ def test_finished_run_is_kept_and_shown(ran):
     (lambda run: _set_n(run, 21), True),
     (lambda run: run.val_random_pair_input_folder.set("elsewhere"), True),
     (lambda run: run.val_rp_seed_input.set("8"), False),                 # the next run, not this result
-    (lambda run: run.val_random_pair_output_file.set("other.xlsx"), False),
     (lambda run: run.params.update(sigmoid_correlations=True), False),   # only changes how heatmaps look
 ])
 def test_result_is_marked_when_its_settings_change(ran, change, stale):
@@ -451,3 +449,86 @@ def test_settings_changed_during_the_run_mark_the_result_at_once(run, tmp_path, 
     params.update(window_size=100)      # while the job runs
     run.timer.run_until_idle(60)
     assert run.dat_surrogate_run['stale'] is True
+
+
+# ---------------------------------------------------------------------------
+# EXPORT
+# ---------------------------------------------------------------------------
+
+def test_result_line_says_which_run_the_export_writes(ran):
+    assert ran.val_surrogate_result_text.get() == "Last run: in, seed 7."
+    ran.params.update(window_size=100)
+    callbacks.update_surrogate_plan()
+    assert ran.val_surrogate_result_text.get() == (
+        "Last run: in, seed 7. The settings have changed since. The export has the settings of that run."
+    )
+
+
+def test_export_has_the_settings_of_the_run_even_after_they_changed(ran):
+    ran.params.update(window_size=100)
+    _set_n(ran, 50)
+    callbacks.update_surrogate_plan()
+    callbacks.export_surrogate_results()
+    rows = {row[0]: row[1] for row in openpyxl.load_workbook(ran.output).worksheets[0].iter_rows(max_col=2, values_only=True)}
+    assert rows['Window size'] == 150 and rows['Surrogate sets'] == 20
+    assert os.path.exists(ran.output.with_suffix(".png"))
+
+
+def test_export_suggests_a_name_and_can_be_cancelled(ran, monkeypatch):
+    asked = []
+    monkeypatch.setattr(callbacks.filedialog, "asksaveasfilename", lambda **kwargs: asked.append(kwargs) or "")
+    callbacks.export_surrogate_results()
+    assert asked[0]['initialfile'] == "biosync_surrogates_in"
+    assert not ran.output.exists()
+
+
+def test_failed_export_shows_an_error(ran, monkeypatch):
+    monkeypatch.setattr(callbacks.filedialog, "asksaveasfilename", lambda **kwargs: "/nonexistent/folder/r.xlsx")
+    ran.dialogs.clear()
+    callbacks.export_surrogate_results()
+    assert ran.dialogs[0][:2] == ("showerror", "Export failed")
+    assert ran.val_exporting.get() == ''
+
+
+def test_nothing_to_export_before_a_run(run, monkeypatch):
+    monkeypatch.setattr(callbacks.filedialog, "asksaveasfilename", lambda **kwargs: pytest.fail("asked for a file"))
+    callbacks.export_surrogate_results()
+
+
+@pytest.fixture
+def export_widgets(tab, monkeypatch):
+    widgets = {'label_surrogate_result': FakeWidget(), 'button_export_surrogates': FakeWidget()}
+    monkeypatch.setattr(gui_updates, "_w", widgets)
+    return widgets
+
+
+@pytest.mark.parametrize("result_text, running, exporting, enabled", [
+    ("", False, "", False),
+    ("Last run: in, seed 7.", False, "", True),
+    ("Last run: in, seed 7.", True, "", False),             # a new result is on its way
+    ("Last run: in, seed 7.", False, "surrogates", False),
+])
+def test_export_button_needs_a_result(tab, export_widgets, result_text, running, exporting, enabled):
+    tab.val_surrogate_result_text.set(result_text)
+    tab.val_job_running.set(running)
+    tab.val_exporting.set(exporting)
+    gui_updates.update_surrogate_export()
+    assert export_widgets['button_export_surrogates'].state == ("normal" if enabled else "disabled")
+    assert export_widgets['label_surrogate_result'].text == (result_text or gui_updates.NO_SURROGATE_RESULT_TEXT)
+
+
+def test_export_button_is_busy_while_writing_and_back_afterwards(tab, monkeypatch):
+    buttons = {key: FakeWidget(toplevel=FakeWidget(), text=text) for key, text in (
+        ('button_export_data', 'Export XLSX'), ('button_export_plot', 'Export Plots'),
+        ('button_export_surrogates', 'Export results'),
+    )}
+    monkeypatch.setattr(gui_updates, "_w", {**buttons, 'label_surrogate_result': FakeWidget()})
+    monkeypatch.setattr(gui_updates, "_export_button_texts", {})
+    monkeypatch.setattr(gui_updates.validation, "check_export_ready", lambda: True)
+    tab.val_surrogate_result_text.set("Last run: in, seed 7.")
+    tab.val_exporting.set("surrogates")
+    gui_updates.update_export_busy()
+    assert (buttons['button_export_surrogates'].text, buttons['button_export_surrogates'].state) == ("Exporting...", "disabled")
+    tab.val_exporting.set("")
+    gui_updates.update_export_busy()
+    assert (buttons['button_export_surrogates'].text, buttons['button_export_surrogates'].state) == ("Export results", "normal")

@@ -198,14 +198,27 @@ import surrogates
 corr_plot.UPDATE()      # PARAMS_CHANGED schedules this in the app; app.py connects it, this script doesn't
 settle()
 surrogate_plot = {'before_run': [text.get_text() for text in corr_plot.canvas.figure.texts]}
+
+
+def export_state():
+    return {
+        'button': widgets['button_export_surrogates'].cget('state'),
+        'text': widgets['label_surrogate_result'].cget('text'),
+        'below_run': widgets['button_export_surrogates'].winfo_rooty() > widgets['button_random_pair'].winfo_rooty(),
+    }
+
+
+surrogate_plot['export_before'] = export_state()
 rng = np.random.default_rng(0)
 state.dat_surrogate_run.update(folder='/data/dyads', stale=False, result=surrogates.SurrogateResult(
     method=surrogates.REPAIRED, measure='mean r', side=surrogates.TWO_SIDED, seed=3, dyad_names=['d1', 'd2'],
     real_values=[0.2, 0.3], real_value=0.25, null_values=rng.normal(0.1, 0.03, 200), p_value=0.01,
     n_surrogates=200, n_sets_possible=1000, failures=[],
 ))
+callbacks._update_surrogate_result_text()
 corr_plot.UPDATE()
 settle()
+surrogate_plot['export_after'] = export_state()
 surrogate_plot['after_run'] = corr_plot.canvas.figure._suptitle.get_text() if corr_plot.canvas.figure._suptitle else None
 surrogate_plot['axes'] = len(corr_plot.canvas.figure.axes)
 tabview._segmented_button_callback("Correlation")

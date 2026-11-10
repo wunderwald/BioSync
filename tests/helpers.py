@@ -63,6 +63,9 @@ class FakeTimer:
         """Lets the timer stand in for the plot canvas, whose widget the app schedules on."""
         return self
 
+    def update_idletasks(self):
+        """Lets the timer stand in for the tabview, which shows a change before slow work."""
+
     def delays(self):
         return [delay for delay, _, _ in self.timers.values()]
 

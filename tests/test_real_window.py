@@ -109,3 +109,9 @@ def test_fixed_rate_shows_seconds_only_with_a_known_rate(report):
     assert unknown['window_seconds'] == ''
     assert entered['window_seconds'] == '75 s'      # 150 samples at 2 Hz
     assert entered['note'] == "Entered by hand."
+
+
+def test_export_comes_after_the_run_and_needs_a_result(report):
+    before, after = report['surrogate_plot']['export_before'], report['surrogate_plot']['export_after']
+    assert before == {'button': 'disabled', 'text': "Run the analysis to export its result.", 'below_run': True}
+    assert after == {'button': 'normal', 'text': "Last run: dyads, seed 3.", 'below_run': True}

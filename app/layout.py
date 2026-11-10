@@ -197,18 +197,25 @@ def _build_surrogates_tab(tab, validate_numeric_input):
                                 wraplength=TAB_WIDTH - 50, justify='left')
     # problem and warning are shown when they have text
 
-    button_output_file = _button_opening_a_dialog(group, cb.open_random_pair_output_file_picker, text='Select output file')
-    button_output_file.grid(row=17, column=0, columnspan=2, padx=10, pady=5, sticky='w')
-    label_output_file = tk.CTkLabel(group, text="No file selected.", wraplength=PATH_LABEL_WRAP, justify='left')
-    label_output_file.grid(row=17, column=2, columnspan=2, padx=10, sticky='w')
-
     button_run = _button_opening_a_dialog(group, cb.handle_run_surrogate_button, text='Run surrogate analysis',
                                           state="disabled")
-    button_run.grid(row=18, column=0, columnspan=2, padx=10, pady=10, sticky='w')
+    button_run.grid(row=17, column=0, columnspan=2, padx=10, pady=10, sticky='w')
+
+    # below the progress of a run (row 10 of the tab, see gui_updates.JOB_PROGRESS_ROW)
+    group_export = tk.CTkFrame(tab)
+    group_export.grid(row=11, column=0, sticky='ew', columnspan=2, padx=0, pady=(10, 0))
+    label_export = tk.CTkLabel(group_export, text="Export", font=("Arial", 20, "bold"))
+    label_export.grid(row=0, column=0, sticky='w', padx=10, pady=(10, 0))
+    label_result = tk.CTkLabel(group_export, text="", wraplength=TAB_WIDTH - 30, justify='left', font=("Arial", 12))
+    label_result.grid(row=1, column=0, sticky='w', padx=10, pady=(0, 4))
+    button_export = _button_opening_a_dialog(group_export, cb.export_surrogate_results, text='Export results',
+                                             state="disabled")
+    button_export.grid(row=2, column=0, padx=10, pady=10, sticky='w')
 
     return {
         'label_random_pair_input_folder':    label_input_folder,
-        'label_random_pair_output_file':     label_output_file,
+        'label_surrogate_result':            label_result,
+        'button_export_surrogates':          button_export,
         'button_random_pair':                button_run,
         'segmented_surrogate_method':        segmented_method,
         'label_surrogate_method_explanation': label_method_explanation,

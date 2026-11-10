@@ -75,8 +75,8 @@ val_rp_n_input                       = None
 val_rp_n                             = None
 val_rp_seed_input                    = None
 val_random_pair_input_folder         = None
-val_random_pair_output_file          = None
 val_random_pair_is_ready             = None
+val_surrogate_result_text            = None   # which result the Surrogates tab's export writes, '' for none
 val_surrogate_method                 = None   # surrogates.REPAIRED or BLOCKS
 val_surrogate_test                   = None   # SURROGATE_DISTRIBUTION, or WELCH with re-paired people
 val_surrogate_measure                = None   # one of measures.MEASURES
@@ -102,7 +102,7 @@ dat_workbook_data     = {}
 dat_physiological_data = {}
 dat_correlation_data  = {}
 # the last surrogate analysis: its result, the settings it ran with, and whether they have changed since
-dat_surrogate_run     = {'result': None, 'settings': None, 'folder': '', 'stale': False}
+dat_surrogate_run     = {'result': None, 'settings': None, 'params': None, 'folder': '', 'stale': False}
 
 
 # whether the update requested last should wait for typing to pause
@@ -156,7 +156,7 @@ def init_state(retina):
     global val_selected_sheet, val_selected_column
     global val_checkbox_data_has_headers, val_batch_input_folder, val_batch_output_folder
     global val_batch_processing_is_ready, val_rp_n_input, val_rp_n, val_rp_seed_input
-    global val_random_pair_input_folder, val_random_pair_output_file, val_random_pair_is_ready
+    global val_random_pair_input_folder, val_random_pair_is_ready, val_surrogate_result_text
     global val_surrogate_method, val_surrogate_test, val_surrogate_measure, val_block_length_input
     global val_block_length, val_surrogate_plan, val_surrogate_problem, val_surrogate_warning
     global val_sampling_rate_input, val_sampling_rate, val_sampling_rate_note
@@ -216,7 +216,7 @@ def init_state(retina):
     val_rp_n                               = tk.IntVar(value=DEFAULT_SURROGATES[INIT_SURROGATE_METHOD])
     val_rp_seed_input                      = tk.StringVar(value='')
     val_random_pair_input_folder           = tk.StringVar(value='')
-    val_random_pair_output_file            = tk.StringVar(value='')
+    val_surrogate_result_text              = tk.StringVar(value='')   # which result an export writes, '' for none
     val_random_pair_is_ready               = tk.BooleanVar(value=False)
     val_surrogate_method                   = tk.StringVar(value=INIT_SURROGATE_METHOD)
     val_surrogate_test                     = tk.StringVar(value=SURROGATE_DISTRIBUTION)

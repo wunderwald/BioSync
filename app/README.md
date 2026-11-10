@@ -119,7 +119,7 @@ The app decides this from the measure and settings, so it can't be chosen after 
 
 ### Results
 
-Before a run, the tab says in one sentence what will be tested, in red what stops the run, and in orange what will limit the result. After a run, the plot area of the tab shows the result until the next run. If settings change, the result stays and is marked as coming from the earlier settings. The export is an xlsx file with the summary, the settings and each dyad's values, and the figure as a PNG next to it. Report the method, the measure, the sides, the number of surrogates, the seed, the block length for shuffled blocks, and p: the export's "Summary" row has them in one sentence.
+Before a run, the tab says in one sentence what will be tested, in red what stops the run, and in orange what will limit the result. A run doesn't write anything: the plot area of the tab shows the result until the next run. If settings change, the result stays and is marked as coming from the earlier settings. **Export results**, below the run, then writes the last result with the settings it was run with: an xlsx file with the summary, the settings and each dyad's values, and the figure as a PNG next to it. Report the method, the measure, the sides, the number of surrogates, the seed, the block length for shuffled blocks, and p: the export's "Summary" row has them in one sentence.
 
 ---
 

@@ -196,7 +196,7 @@ def test_summary_reports_failed_and_incomplete_dyads(batch_dirs):
     (callbacks.handle_run_batch_button, "run_batch_process", "val_batch_processing_is_ready",
      "val_batch_input_folder", "val_batch_output_folder"),
     (callbacks.handle_run_surrogate_button, "run_surrogate_analysis", "val_random_pair_is_ready",
-     "val_random_pair_input_folder", "val_random_pair_output_file"),
+     "val_random_pair_input_folder", None),
 ])
 def test_button_is_enabled_again_and_error_shown_after_a_crash(
     fake_state, monkeypatch, handler, runner, ready_var, input_var, output_var
@@ -204,7 +204,8 @@ def test_button_is_enabled_again_and_error_shown_after_a_crash(
     for name in ("val_INPUT_DATA_VALID", "val_CORRELATION_SETTINGS_VALID", "val_CORRELATION_SETTINGS_VALID_SXC"):
         getattr(fake_state, name).set(True)
     getattr(fake_state, input_var).set("in")
-    getattr(fake_state, output_var).set("out")
+    if output_var:
+        getattr(fake_state, output_var).set("out")
     fake_state.val_rp_n.set(5)
     fake_state.val_surrogate_method.set(surrogates.REPAIRED)
     fake_state.val_surrogate_test.set(surrogates.WELCH)

@@ -411,8 +411,21 @@ def _update_surrogate_staleness():
                                                   state.val_random_pair_input_folder.get())
     if stale != run['stale']:
         run['stale'] = stale
+        _update_surrogate_result_text()
         if state.val_CURRENT_TAB.get() == SURROGATES_TAB:
             state.PARAMS_CHANGED()
+
+
+def _update_surrogate_result_text():
+    """Says which result the export button writes."""
+    run = state.dat_surrogate_run
+    if run['result'] is None:
+        state.val_surrogate_result_text.set('')
+        return
+    text = f"Last run: {os.path.basename(run['folder'])}, seed {run['result'].seed}."
+    if run['stale']:
+        text += " The settings have changed since. The export has the settings of that run."
+    state.val_surrogate_result_text.set(text)
 
 
 # ---------------------------------------------------------------------------
@@ -452,7 +465,7 @@ def setup_traces():
         state.val_INPUT_DATA_VALID, state.val_CORRELATION_SETTINGS_VALID, state.val_CORRELATION_SETTINGS_VALID_SXC,
         state.val_checkbox_windowed_xcorr, state.val_checkbox_average_windows, state.val_checkbox_lag_filter,
         state.val_lag_filter_min, state.val_lag_filter_max, state.val_max_lag, state.val_checkbox_absolute_corr,
-        state.val_checkbox_absolute_corr_sxc, state.val_random_pair_output_file,
+        state.val_checkbox_absolute_corr_sxc,
         # these only matter for whether the shown result is out of date
         state.val_window_size, state.val_step_size, state.val_max_lag_sxc, state.val_checkbox_standardise,
         state.val_selected_sheet, state.val_selected_column, state.val_checkbox_data_has_headers,
@@ -664,17 +677,6 @@ def open_random_pair_input_dir_picker():
     if not dir_path:
         return
     state.val_random_pair_input_folder.set(dir_path)
-
-
-def open_random_pair_output_file_picker():
-    file_path = filedialog.asksaveasfilename(
-        title="Save As",
-        defaultextension=".xlsx",
-        filetypes=(("XLSX files", "*.xlsx"),)
-    )
-    if not file_path:
-        return
-    state.val_random_pair_output_file.set(file_path)
 
 
 # ---------------------------------------------------------------------------
@@ -989,20 +991,16 @@ def _surrogates_are_ready(*args):
         state.val_INPUT_DATA_VALID.get() and validation.check_active_settings_valid() and
         not state.val_job_running.get()
     )
-    io_is_ready = (
-        state.val_random_pair_input_folder.get() != '' and
-        state.val_random_pair_output_file.get() != ''
-    )
-    state.val_random_pair_is_ready.set(bool(data_is_valid and io_is_ready and not state.val_surrogate_problem.get()))
+    folder_is_chosen = state.val_random_pair_input_folder.get() != ''
+    state.val_random_pair_is_ready.set(bool(data_is_valid and folder_is_chosen and not state.val_surrogate_problem.get()))
 
 
-def run_surrogate_analysis(params, choice, input_dir, output_file, seed, progress):
+def run_surrogate_analysis(params, choice, input_dir, seed, progress):
+    """Runs the test. Exporting is a separate step, so that a result can be looked at first."""
     result = surrogate_analysis(
         choice.method, params, input_dir, choice.n_surrogates, seed, choice.measure,
         block_length=choice.block_length, progress=progress,
     )
-    progress(1, 1, "Writing results")
-    export_surrogate_result(output_file, params, input_dir, result)
     return {
         'result': result,
         'method': result.method,
@@ -1076,21 +1074,43 @@ def handle_run_surrogate_button():
         messagebox.showwarning("Can't run the surrogate analysis", problem)
         return
     input_dir = state.val_random_pair_input_folder.get()
-    output_file = state.val_random_pair_output_file.get()
     seed_input = state.val_rp_seed_input.get()
     seed = int(seed_input) if seed_input else random.randrange(MAX_RANDOM_SEED)
     settings = surrogate_settings(params, choice, input_dir)
     _start_job(
         "Surrogate analysis",
-        lambda progress: run_surrogate_analysis(params, choice, input_dir, output_file, seed, progress),
-        lambda summary: _surrogate_run_finished(summary, settings, input_dir),
+        lambda progress: run_surrogate_analysis(params, choice, input_dir, seed, progress),
+        lambda summary: _surrogate_run_finished(summary, settings, params, input_dir),
     )
 
 
-def _surrogate_run_finished(summary, settings, input_dir):
-    """Keeps the result for the Surrogates tab's plot, shows it there, and says what was found."""
-    state.dat_surrogate_run.update(result=summary['result'], settings=settings, folder=input_dir, stale=False)
+def _surrogate_run_finished(summary, settings, params, input_dir):
+    """Keeps the result for the Surrogates tab's plot and export, shows it there, and says what was found."""
+    state.dat_surrogate_run.update(result=summary['result'], settings=settings, params=params, folder=input_dir,
+                                   stale=False)
+    _update_surrogate_result_text()
     _update_surrogate_staleness()       # settings changed during the run make it out of date at once
     if state.val_CURRENT_TAB.get() == SURROGATES_TAB:
         state.PARAMS_CHANGED()
     _show_surrogate_summary(summary)
+
+
+def export_surrogate_results():
+    """Writes the last result, with the settings it was run with, and its figure next to it."""
+    run = state.dat_surrogate_run
+    if run['result'] is None:
+        return
+    file_path = filedialog.asksaveasfilename(
+        title="Save As",
+        defaultextension=".xlsx",
+        initialfile=f"biosync_surrogates_{os.path.basename(run['folder'])}",
+        filetypes=(("XLSX files", "*.xlsx"),)
+    )
+    if not file_path:
+        return
+    try:
+        _while_exporting(
+            "surrogates", lambda: export_surrogate_result(file_path, run['params'], run['folder'], run['result'])
+        )
+    except Exception as e:
+        messagebox.showerror("Export failed", str(e))

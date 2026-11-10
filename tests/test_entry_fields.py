@@ -127,14 +127,17 @@ def export_buttons(fake_state, monkeypatch):
     buttons = {
         'button_export_data': FakeWidget(toplevel=window, text='Export XLSX', state='normal'),
         'button_export_plot': FakeWidget(toplevel=window, text='Export Plots', state='normal'),
+        'button_export_surrogates': FakeWidget(toplevel=window, text='Export results', state='normal'),
     }
-    monkeypatch.setattr(gui_updates, "_w", buttons)
+    monkeypatch.setattr(gui_updates, "_w", {**buttons, 'label_surrogate_result': FakeWidget()})
     monkeypatch.setattr(gui_updates, "_export_button_texts", {})
     monkeypatch.setitem(callbacks._tabview, "tabview", window)
     fake_state.val_exporting.set('')
     fake_state.val_INPUT_DATA_VALID.set(True)
     fake_state.val_checkbox_windowed_xcorr.set(True)
     fake_state.val_CORRELATION_SETTINGS_VALID.set(True)
+    fake_state.val_surrogate_result_text.set("Last run: dyads, seed 1.")
+    fake_state.val_job_running.set(False)
     original_set = fake_state.val_exporting.set
 
     def set_and_update(value):
@@ -145,7 +148,9 @@ def export_buttons(fake_state, monkeypatch):
     return fake_state
 
 
-@pytest.mark.parametrize("kind, busy_button", [("data", "button_export_data"), ("plot", "button_export_plot")])
+@pytest.mark.parametrize("kind, busy_button", [
+    ("data", "button_export_data"), ("plot", "button_export_plot"), ("surrogates", "button_export_surrogates"),
+])
 def test_window_shows_it_is_busy_while_exporting(export_buttons, kind, busy_button):
     seen = {}
 
@@ -155,11 +160,14 @@ def test_window_shows_it_is_busy_while_exporting(export_buttons, kind, busy_butt
         seen['text'] = export_buttons.buttons[busy_button].cget('text')
 
     callbacks._while_exporting(kind, write)
-    assert seen == {'cursor': 'watch', 'states': {'button_export_data': 'disabled', 'button_export_plot': 'disabled'}, 'text': 'Exporting...'}
+    assert seen == {'cursor': 'watch', 'text': 'Exporting...', 'states': {
+        'button_export_data': 'disabled', 'button_export_plot': 'disabled', 'button_export_surrogates': 'disabled',
+    }}
     assert export_buttons.window.cursor == ""
     assert {key: button.options for key, button in export_buttons.buttons.items()} == {
         'button_export_data': {'text': 'Export XLSX', 'state': 'normal'},
         'button_export_plot': {'text': 'Export Plots', 'state': 'normal'},
+        'button_export_surrogates': {'text': 'Export results', 'state': 'normal'},
     }
 
 

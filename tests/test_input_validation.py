@@ -170,7 +170,6 @@ def test_batch_and_random_pairs_only_need_the_active_settings(settings, windowed
     settings.val_batch_input_folder.set("in")
     settings.val_batch_output_folder.set("out")
     settings.val_random_pair_input_folder.set("in")
-    settings.val_random_pair_output_file.set("out.xlsx")
 
     callbacks._batch_processing_is_ready()
     callbacks._surrogates_are_ready()

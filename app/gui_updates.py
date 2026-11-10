@@ -86,16 +86,6 @@ def setup_traces():
             )
         )
     )
-    state.val_random_pair_output_file.trace_add(
-        'write',
-        lambda *a: _w['label_random_pair_output_file'].configure(
-            text=(
-                f"Selected: {os.path.basename(state.val_random_pair_output_file.get())}"
-                if state.val_random_pair_output_file.get()
-                else "No file selected."
-            )
-        )
-    )
     state.val_random_pair_is_ready.trace_add('write', update_active_state_random_pair_button)
 
     state.val_surrogate_method.trace_add('write', update_surrogate_method_widgets)
@@ -103,6 +93,9 @@ def setup_traces():
     update_surrogate_method_widgets()
     state.val_surrogate_measure.trace_add('write', update_measure_explanation)
     update_measure_explanation()
+    state.val_surrogate_result_text.trace_add('write', update_surrogate_export)
+    state.val_job_running.trace_add('write', update_surrogate_export)
+    update_surrogate_export()
     state.val_surrogate_problem.trace_add('write', update_surrogate_messages)
     state.val_surrogate_warning.trace_add('write', update_surrogate_messages)
     update_surrogate_messages()
@@ -271,7 +264,7 @@ def update_active_state_export_button(*args):
     _w['button_export_plot'].configure(state=state_str)
 
 
-_EXPORT_BUTTONS = {'data': 'button_export_data', 'plot': 'button_export_plot'}
+_EXPORT_BUTTONS = {'data': 'button_export_data', 'plot': 'button_export_plot', 'surrogates': 'button_export_surrogates'}
 _export_button_texts = {}
 
 
@@ -288,6 +281,7 @@ def update_export_busy(*args):
             _w[key].configure(state="disabled")
     else:
         update_active_state_export_button()
+        update_surrogate_export()
 
 
 def update_xcorr_parameter_groups(*args):
@@ -408,3 +402,14 @@ def update_surrogate_messages(*args):
     _w['entry_block_length'].configure(
         border_color='red' if 'block length' in state.val_surrogate_problem.get() else '#777777'
     )
+
+
+NO_SURROGATE_RESULT_TEXT = "Run the analysis to export its result."
+
+
+def update_surrogate_export(*args):
+    """The export writes the last result, so it needs one, and waits while a new one is being made."""
+    text = state.val_surrogate_result_text.get()
+    _w['label_surrogate_result'].configure(text=text or NO_SURROGATE_RESULT_TEXT)
+    can_export = bool(text) and not state.val_job_running.get() and not state.val_exporting.get()
+    _w['button_export_surrogates'].configure(state="normal" if can_export else "disabled")

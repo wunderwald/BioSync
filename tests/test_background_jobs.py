@@ -27,7 +27,7 @@ def app(fake_state, monkeypatch):
     fake_state.val_surrogate_method.set(surrogates.REPAIRED)
     fake_state.val_surrogate_test.set(surrogates.WELCH)
     fake_state.val_surrogate_measure.set(MEAN_R)
-    for name in ("val_batch_input_folder", "val_batch_output_folder", "val_random_pair_input_folder", "val_random_pair_output_file"):
+    for name in ("val_batch_input_folder", "val_batch_output_folder", "val_random_pair_input_folder"):
         getattr(fake_state, name).set("selected")
     fake_state.timer = FakeTimer()
     monkeypatch.setitem(callbacks._tabview, "tabview", fake_state.timer)
@@ -162,7 +162,6 @@ def test_random_pairs_do_not_touch_state_on_their_thread(app, tmp_path, monkeypa
     write_dyad(tmp_path / "in" / "dyad1", seed=1)
     timer = app.timer
     app.val_random_pair_input_folder.set(str(tmp_path / "in"))
-    app.val_random_pair_output_file.set(str(tmp_path / "rp.xlsx"))
     violations = _guard_all_vars(monkeypatch)
     _guard_settings(monkeypatch, violations, batch_params(tmp_path / "in", tmp_path))
 
@@ -171,7 +170,7 @@ def test_random_pairs_do_not_touch_state_on_their_thread(app, tmp_path, monkeypa
 
     assert violations == []
     assert app.dialogs and app.dialogs[0][:2] == ("showinfo", "Surrogate analysis finished")
-    assert (tmp_path / "rp.xlsx").exists()
+    assert app.dat_surrogate_run['result'] is not None
 
 
 def test_settings_changed_during_a_run_do_not_affect_it(app, tmp_path, monkeypatch):
@@ -343,29 +342,27 @@ def test_cancelled_batch_keeps_finished_dyads_and_skips_the_group_average(app, t
     assert app.dialogs[0][1] == "Batch processing cancelled"
 
 
-@pytest.mark.parametrize("cancel_at", ["Random pairs", "dyad1", "Writing results"])
+@pytest.mark.parametrize("cancel_at", ["Random pairs", "dyad1"])
 def test_cancelled_random_pairs_write_no_results(app, tmp_path, monkeypatch, cancel_at):
     for index in range(2):
         write_dyad(tmp_path / "in" / f"dyad{index}", seed=index)
-    output = tmp_path / "rp.xlsx"
     real = callbacks.run_surrogate_analysis
 
-    def cancelling(params, choice, input_dir, output_file, seed, progress):
+    def cancelling(params, choice, input_dir, seed, progress):
         def reporting(done, total, text):
             if text == cancel_at:
                 callbacks._job_cancel_event.set()
             progress(done, total, text)
-        return real(params, choice, input_dir, output_file, seed, reporting)
+        return real(params, choice, input_dir, seed, reporting)
 
     monkeypatch.setattr(callbacks, "run_surrogate_analysis", cancelling)
     monkeypatch.setattr(callbacks, "_analysis_params", lambda: batch_params(tmp_path / "in", tmp_path))
     app.val_random_pair_input_folder.set(str(tmp_path / "in"))
-    app.val_random_pair_output_file.set(str(output))
 
     callbacks.handle_run_surrogate_button()
     app.timer.run_until_idle(60)
 
-    assert not output.exists()
+    assert app.dat_surrogate_run['result'] is None
     assert app.dialogs[0][1] == "Surrogate analysis cancelled"
 
 
