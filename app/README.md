@@ -86,6 +86,43 @@ Pull the newest version, for example with **Fetch origin** and **Pull origin** i
 
 ---
 
+## Surrogate analysis
+
+The **Surrogates** tab tests whether the real dyads in a folder are more coupled than surrogates, in which coupling can't exist. It uses the settings of the Input Data and Correlation tabs. Each surrogate gives the same number as a real dyad, and p is the share of surrogates at least as extreme as the real value, counting the real value as one of them: `p = (1 + surrogates at least as extreme) / (surrogates + 1)`. So p is never 0, and with 1000 surrogates it can't go below 0.001 (0.002 two-sided).
+
+### Methods
+
+| Method | Surrogates | Question | Result |
+|---|---|---|---|
+| **Re-paired people** | Sets of pairs of people from different dyads, each as large as the real group | Are partners more in sync than strangers recorded in the same setting? | p for the group |
+| **Shuffled blocks** | Partner B's signal cut into blocks of the block length (default: the window size) and put in a random order. Leftover samples stay at the end. | Does the moment-to-moment timing between these two people matter? | p for each dyad, and for the group |
+| **Welch's t-test (earlier versions)** | Random pairs drawn with replacement, compared with the real dyads by a t-test | As in earlier versions | p for the group |
+
+- **Re-paired people** don't count what all participants share as coupling, such as reactions to the same task at the same moments, or the same slow drift. With few dyads only few different sets exist, and the app warns when that limits p.
+- **Shuffled blocks** break that shared time course, so they count it as coupling. Longer blocks keep more of it and make the test stricter: the block length changes the result and has to be reported. A dyad needs at least 5 blocks. The p-values of single dyads aren't corrected for testing many dyads: with 33 dyads, 1 or 2 are expected below 0.05 by chance.
+- **Welch's t-test** is only there to repeat results of earlier versions. It treats every random pair as independent, but the same people appear again and again, so p comes out too small.
+
+### Measures
+
+One number per dyad, pair or surrogate:
+
+- **mean r**: the average correlation over all windows and lags.
+- **mean |r_max|**: the strongest correlation at any lag in each window, without its sign, averaged over the windows. It is high even for strangers, which the surrogates share, so the comparison is fair, but it can be less sensitive. Not available with "average windows".
+- **r at lag 0**: the correlation without delay, averaged over the windows. Not available with "average windows", or when the lag filter leaves out lag 0.
+
+### One-sided or two-sided
+
+The app decides this from the measure and settings, so it can't be chosen after seeing the result:
+
+- **One-sided (real higher):** mean |r_max|, and every measure when "absolute correlation values" is on, because coupling can only make these values higher.
+- **Two-sided:** mean r and r at lag 0 of signed correlations, because coupling can also be negative. p is twice the smaller one-sided p, at most 1. Welch's t-test is always two-sided.
+
+### Results
+
+Before a run, the tab says in one sentence what will be tested, in red what stops the run, and in orange what will limit the result. After a run, the plot area of the tab shows the result until the next run. If settings change, the result stays and is marked as coming from the earlier settings. The export is an xlsx file with the summary, the settings and each dyad's values, and the figure as a PNG next to it. Report the method, the measure, the sides, the number of surrogates, the seed, the block length for shuffled blocks, and p: the export's "Summary" row has them in one sentence.
+
+---
+
 ## Developer reference
 
 ### Tests
@@ -96,6 +133,8 @@ From the repository root, with the virtual environment active:
 pip install -r app/requirements-dev.txt
 pytest
 ```
+
+`tests/surrogate_simulation.py` checks the surrogate tests on simulated dyads with known coupling. The test suite runs a small version; the full run takes about half an hour: `python tests/surrogate_simulation.py --groups 200`.
 
 ### Entry point
 
