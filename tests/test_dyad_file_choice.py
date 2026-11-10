@@ -8,6 +8,7 @@ import pytest
 from openpyxl import Workbook
 
 import batch_processing
+import surrogates
 import callbacks
 import utils
 import xlsx
@@ -104,15 +105,15 @@ def test_random_pairs_use_the_matching_pair_for_real_dyads(tmp_path, monkeypatch
     _write_mismatched_dyad(tmp_path / "in" / "dyad0")
     write_dyad(tmp_path / "in" / "dyad1", seed=1)
     used = []
-    real = batch_processing._process_dyad
+    real = surrogates._analysed_pair
 
-    def recording(file_path_a, file_path_b, *args, **kwargs):
+    def recording(recordings, file_path_a, file_path_b, *args):
         used.append((os.path.basename(file_path_a), os.path.basename(file_path_b)))
-        return real(file_path_a, file_path_b, *args, **kwargs)
+        return real(recordings, file_path_a, file_path_b, *args)
 
-    monkeypatch.setattr(batch_processing, "_process_dyad", recording)
-    monkeypatch.setattr(batch_processing, "ttest_ind", lambda *args, **kwargs: (0, 1))
-    batch_processing.random_pair_analysis(batch_params(tmp_path / "in", tmp_path), str(tmp_path / "in"), random_pair_count=0)
+    monkeypatch.setattr(surrogates, "_analysed_pair", recording)
+    monkeypatch.setattr(surrogates, "ttest_ind", lambda *args, **kwargs: (0, 1))
+    surrogates.welch_random_pair_test(batch_params(tmp_path / "in", tmp_path), str(tmp_path / "in"), 0)
     assert used == [("P1.xlsx", "P2.xlsx"), ("P1.xlsx", "P2.xlsx")]
 
 

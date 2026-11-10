@@ -6,9 +6,8 @@ import io
 
 import numpy as np
 import pytest
-from scipy.stats import ttest_ind
 
-import batch_processing
+import surrogates
 import plot
 from analysis import AnalysisConfig
 from cross_correlation import average_wxcorr_matrices, windowed_cross_correlation
@@ -88,16 +87,17 @@ def test_group_average_of_only_flat_windows_is_nan(signal, recwarn):
     assert not recwarn.list
 
 
-def test_random_pair_averages_leave_out_flat_windows(recwarn):
+def test_pair_with_only_flat_windows_has_no_value(signal, recwarn):
     config = AnalysisConfig(
-        signal_type='fixed-rate', windowed=False, standardised=False, window_size=WINDOW, step_size=STEP,
-        max_lag=MAX_LAG, absolute=False, average_windows=False, use_lag_filter=False, lag_filter_min=0,
-        lag_filter_max=0, max_lag_sxc=1, absolute_sxc=False,
+        signal_type='fixed-rate', windowed=True, standardised=False, window_size=WINDOW, step_size=STEP,
+        max_lag=MAX_LAG, absolute=False, average_windows=False, use_lag_filter=False, lag_filter_min=-MAX_LAG,
+        lag_filter_max=MAX_LAG, max_lag_sxc=1, absolute_sxc=False,
     )
-    results = [{'corr': [0.2, np.nan, 0.4]}, {'corr': [np.nan, np.nan]}, {'corr': [0.1, 0.3]}]
-    averages = batch_processing._measured_values(results, config, MEAN_R)
-    assert averages == pytest.approx([0.3, 0.2])
-    assert not np.isnan(ttest_ind(averages, [0.1, 0.2, 0.15], equal_var=False)[1])
+    assert surrogates._measure_of(_wxcorr(_with_flat_start(signal), signal), config, MEAN_R) == pytest.approx(
+        np.nanmean([w['correlations'] for w in _wxcorr(_with_flat_start(signal), signal)])
+    )
+    with pytest.raises(ValueError, match="doesn't change in any window"):
+        surrogates._measure_of(_wxcorr(np.full_like(signal, 0.1), signal), config, MEAN_R)
     assert not recwarn.list
 
 

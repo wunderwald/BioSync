@@ -5,7 +5,7 @@ correlation code, for example Pearson r with numpy.
 import numpy as np
 import pytest
 
-import batch_processing
+import surrogates
 from analysis import AnalysisConfig, correlate_signals
 from cross_correlation import standard_cross_correlation, windowed_cross_correlation
 from helpers import batch_params, write_dyad
@@ -150,17 +150,15 @@ def dyads(tmp_path):
 
 def test_random_pair_analysis_compares_the_chosen_measure(dyads):
     params = batch_params(dyads, dyads)
-    mean_r = batch_processing.random_pair_analysis(params, str(dyads), random_pair_count=4, seed=2)
-    r_max = batch_processing.random_pair_analysis(
-        params, str(dyads), random_pair_count=4, seed=2, measure=MEAN_ABS_R_MAX
-    )
-    for mean_r_values, r_max_values in ((mean_r[2], r_max[2]), (mean_r[3], r_max[3])):
+    mean_r = surrogates.welch_random_pair_test(params, str(dyads), 4, seed=2)
+    r_max = surrogates.welch_random_pair_test(params, str(dyads), 4, seed=2, measure=MEAN_ABS_R_MAX)
+    for mean_r_values, r_max_values in ((mean_r.null_values, r_max.null_values), (mean_r.real_values, r_max.real_values)):
         assert len(mean_r_values) == len(r_max_values)
         assert all(r > abs(m) for m, r in zip(mean_r_values, r_max_values))
 
 
 def test_random_pair_analysis_refuses_a_measure_before_analysing(dyads, monkeypatch):
-    monkeypatch.setattr(batch_processing, "_process_dyad", lambda *a, **k: pytest.fail("analysed a pair"))
+    monkeypatch.setattr(surrogates, "_analysed_pair", lambda *a, **k: pytest.fail("analysed a pair"))
     params = batch_params(dyads, dyads, checkbox_average_windows=True)
     with pytest.raises(ValueError, match="Can't compare r at lag 0"):
-        batch_processing.random_pair_analysis(params, str(dyads), random_pair_count=4, measure=R_AT_LAG_0)
+        surrogates.welch_random_pair_test(params, str(dyads), 4, measure=R_AT_LAG_0)

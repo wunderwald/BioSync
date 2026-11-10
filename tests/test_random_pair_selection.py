@@ -4,12 +4,13 @@ Random pairs must not contain real pairs or the same person twice, and a seed mu
 import os
 import shutil
 
+import numpy as np
 import openpyxl
 import pytest
 
-import batch_processing
 import callbacks
-from batch_processing import _eligible_random_pairs
+import surrogates
+from surrogates import _eligible_random_pairs
 from helpers import FakeTimer, batch_params, write_dyad
 
 
@@ -73,7 +74,7 @@ def test_group_to_dyads_folders_of_one_group_have_no_random_pairs(tmp_path):
 def test_analysis_refuses_when_no_random_pair_is_possible(tmp_path):
     _dyad(tmp_path, "d0", {"a.xlsx": "A", "b.xlsx": "B"})
     with pytest.raises(ValueError, match="No random pairs are possible"):
-        batch_processing.random_pair_analysis(batch_params(tmp_path, tmp_path), str(tmp_path), random_pair_count=3)
+        surrogates.welch_random_pair_test(batch_params(tmp_path, tmp_path), str(tmp_path), 3)
 
 
 @pytest.fixture
@@ -84,21 +85,27 @@ def dyads(tmp_path):
 
 
 def _recorded_pairs(monkeypatch):
-    """Records which files are analysed, and stops the slow analysis from running."""
+    """Records which random pairs are drawn, as (file A, file B), and stops the slow analysis from running."""
     used = []
+    draw = surrogates._draw_random_pairs
 
-    def fake_process(file_path_a, file_path_b, *args, **kwargs):
-        used.append((file_path_a, file_path_b))
-        return None
+    def recording(*args):
+        pairs = draw(*args)
+        used.extend(tuple(pair) for pair in pairs)
+        return pairs
 
-    monkeypatch.setattr(batch_processing, "_process_dyad", fake_process)
-    monkeypatch.setattr(batch_processing, "ttest_ind", lambda *args, **kwargs: (0, 1))
+    def no_analysis(*args):
+        raise ValueError("not analysed in this test")
+
+    monkeypatch.setattr(surrogates, "_draw_random_pairs", recording)
+    monkeypatch.setattr(surrogates, "_analysed_pair", no_analysis)
+    monkeypatch.setattr(surrogates, "ttest_ind", lambda *args, **kwargs: (0, 1))
     return used
 
 
 def test_drawn_pairs_are_always_from_different_folders(dyads, monkeypatch):
     used = _recorded_pairs(monkeypatch)
-    batch_processing.random_pair_analysis(batch_params(dyads, dyads), str(dyads), random_pair_count=300, seed=1)
+    surrogates.welch_random_pair_test(batch_params(dyads, dyads), str(dyads), 300, seed=1)
     random_pairs = used[:300]
     assert all(os.path.dirname(a) != os.path.dirname(b) for a, b in random_pairs)
     assert len({frozenset(pair) for pair in random_pairs}) == 12     # every possible pair turns up
@@ -106,7 +113,7 @@ def test_drawn_pairs_are_always_from_different_folders(dyads, monkeypatch):
 
 def test_both_people_can_be_person_a(dyads, monkeypatch):
     used = _recorded_pairs(monkeypatch)
-    batch_processing.random_pair_analysis(batch_params(dyads, dyads), str(dyads), random_pair_count=300, seed=1)
+    surrogates.welch_random_pair_test(batch_params(dyads, dyads), str(dyads), 300, seed=1)
     assert len(set(used[:300])) == 24
 
 
@@ -115,7 +122,7 @@ def test_same_seed_repeats_the_pairs_and_another_seed_does_not(dyads, monkeypatc
 
     def draw(seed):
         used.clear()
-        batch_processing.random_pair_analysis(batch_params(dyads, dyads), str(dyads), random_pair_count=30, seed=seed)
+        surrogates.welch_random_pair_test(batch_params(dyads, dyads), str(dyads), 30, seed=seed)
         return list(used[:30])
 
     assert draw(7) == draw(7)
@@ -124,11 +131,11 @@ def test_same_seed_repeats_the_pairs_and_another_seed_does_not(dyads, monkeypatc
 
 def test_same_seed_repeats_the_whole_result(dyads):
     params = batch_params(dyads, dyads)
-    first = batch_processing.random_pair_analysis(params, str(dyads), random_pair_count=5, seed=7)
-    second = batch_processing.random_pair_analysis(params, str(dyads), random_pair_count=5, seed=7)
-    assert first[:2] == second[:2]
-    assert first[2] == second[2]
-    assert first[7] == second[7] == 12
+    first = surrogates.welch_random_pair_test(params, str(dyads), 5, seed=7)
+    second = surrogates.welch_random_pair_test(params, str(dyads), 5, seed=7)
+    assert (first.t_statistic, first.p_value) == (second.t_statistic, second.p_value)
+    assert np.array_equal(first.null_values, second.null_values)
+    assert first.n_pairs_possible == second.n_pairs_possible == 12
 
 
 @pytest.fixture
@@ -191,9 +198,9 @@ def test_new_rows_come_after_the_existing_ones(app):
     sheet = openpyxl.load_workbook(app.output).worksheets[0]
     names = [row[0] for row in sheet.iter_rows(max_col=1, values_only=True) if row[0]]
     assert names[:2] == ['t-statistic', 'p-value']
-    assert names[-6:] == [
+    assert names[-7:] == [
         'Input dyad directory', 'Random seed', 'Different random pairs possible',
-        'Random pairs requested', 'Random pairs used', 'Real dyads used',
+        'Random pairs requested', 'Random pairs used', 'Real dyads used', 'Files not used for random pairs',
     ]
 
 
@@ -213,9 +220,9 @@ def test_group_to_dyads_copies_end_to_end(tmp_path, monkeypatch):
         write_dyad(root / name, seed=seed)
     shutil.copy(root / "dyad_1_2" / "P1.xlsx", root / "dyad_3_4" / "P3.xlsx")
     used = _recorded_pairs(monkeypatch)
-    batch_processing.random_pair_analysis(batch_params(root, root), str(root), random_pair_count=100, seed=1)
+    surrogates.welch_random_pair_test(batch_params(root, root), str(root), 100, seed=1)
     pairs = used[:100]
-    hashes = [(batch_processing._file_hash(a), batch_processing._file_hash(b)) for a, b in pairs]
+    hashes = [(surrogates._file_hash(a), surrogates._file_hash(b)) for a, b in pairs]
     assert all(a != b for a, b in hashes)
     assert all(os.path.dirname(a) != os.path.dirname(b) for a, b in pairs)
 
@@ -274,3 +281,132 @@ def test_failed_pairs_give_a_warning_and_are_recorded(app, dyads, monkeypatch):
     assert metadata['Random pairs used'] < 20
     assert metadata['Real dyads used'] == 2
     assert warnings and "random pairs were skipped" in warnings[0]
+
+
+# ---------------------------------------------------------------------------
+# RECORDINGS THAT CAN'T BE IN A RANDOM PAIR
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def dyads_with_stray_files(dyads):
+    """A result file without the data sheet in one dyad folder, as left by a batch run, and an unreadable file."""
+    workbook = openpyxl.Workbook()
+    workbook.active.title = "Results"
+    workbook.save(dyads / "dyad1" / "wx_dyad1_wxcorr.xlsx")
+    (dyads / "dyad2" / "broken.xlsx").write_text("not a spreadsheet")
+    return dyads
+
+
+def _left_out_names(result):
+    return sorted((os.path.basename(path), reason) for path, reason in result.left_out_files)
+
+
+EXPECTED_LEFT_OUT = [("broken.xlsx", "can't be read"), ("wx_dyad1_wxcorr.xlsx", "no sheet 'Sheet'")]
+
+
+def test_files_without_the_sheet_are_not_drawn(dyads_with_stray_files, monkeypatch):
+    used = _recorded_pairs(monkeypatch)
+    result = surrogates.welch_random_pair_test(
+        batch_params(dyads_with_stray_files, dyads_with_stray_files), str(dyads_with_stray_files), 300, seed=1
+    )
+    drawn_files = {os.path.basename(path) for pair in used for path in pair}
+    assert drawn_files == {"P1.xlsx", "P2.xlsx"}
+    assert result.n_pairs_possible == 12
+    assert _left_out_names(result) == EXPECTED_LEFT_OUT
+
+
+def test_files_without_the_sheet_are_named_but_not_failures(dyads_with_stray_files):
+    params = batch_params(dyads_with_stray_files, dyads_with_stray_files)
+    for result in (
+        surrogates.welch_random_pair_test(params, str(dyads_with_stray_files), 20, seed=1),
+        surrogates.repaired_pair_test(params, str(dyads_with_stray_files), 20, seed=1),
+    ):
+        assert _left_out_names(result) == EXPECTED_LEFT_OUT
+        assert result.failures == []
+        assert result.dyad_names == ["dyad0", "dyad1", "dyad2"]
+
+
+def test_no_random_pair_because_of_left_out_files_says_so(tmp_path):
+    write_dyad(tmp_path / "in" / "dyad0")
+    workbook = openpyxl.Workbook()
+    workbook.active.title = "Results"
+    os.makedirs(tmp_path / "in" / "dyad1")
+    workbook.save(tmp_path / "in" / "dyad1" / "result.xlsx")
+    with pytest.raises(ValueError, match="don't have the sheet 'Sheet'"):
+        surrogates.welch_random_pair_test(batch_params(tmp_path / "in", tmp_path), str(tmp_path / "in"), 3)
+
+
+def test_left_out_files_are_shown_and_recorded(app, dyads_with_stray_files, monkeypatch):
+    shown = []
+    for kind in ("showinfo", "showwarning"):
+        monkeypatch.setattr(callbacks.messagebox, kind, lambda title, text: shown.append(text))
+    app.val_rp_seed_input.set("1")
+    metadata = _run_and_read(app)
+    expected = [os.path.join("dyad1", "wx_dyad1_wxcorr.xlsx") + " (no sheet 'Sheet')",
+                os.path.join("dyad2", "broken.xlsx") + " (can't be read)"]
+    assert metadata['Files not used for random pairs'] == "; ".join(expected)
+    assert "Not used for random pairs:\n" + "\n".join(expected) in shown[0]
+
+
+def test_without_left_out_files_the_row_has_a_dash(app):
+    assert _run_and_read(app)['Files not used for random pairs'] == '-'
+
+
+# ---------------------------------------------------------------------------
+# ONE ENTRY POINT FOR ALL METHODS
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("method, extra", [
+    (surrogates.REPAIRED, {}),
+    (surrogates.BLOCKS, {'block_length': 150}),
+    (surrogates.WELCH, {}),
+])
+def test_every_method_runs_through_one_function(dyads, method, extra):
+    result = surrogates.surrogate_analysis(
+        method, batch_params(dyads, dyads), str(dyads), 5, 1, surrogates.MEAN_R, **extra
+    )
+    assert result.method == method
+    assert result.seed == 1
+    assert result.dyad_names == ["dyad0", "dyad1", "dyad2"]
+
+
+def test_shuffled_blocks_need_a_block_length(dyads):
+    with pytest.raises(ValueError, match="block length"):
+        surrogates.surrogate_analysis(surrogates.BLOCKS, batch_params(dyads, dyads), str(dyads), 5, 1, surrogates.MEAN_R)
+
+
+def test_unknown_method(dyads):
+    with pytest.raises(ValueError, match="Unknown method"):
+        surrogates.surrogate_analysis("coin flip", batch_params(dyads, dyads), str(dyads), 5, 1, surrogates.MEAN_R)
+
+
+def test_a_pair_drawn_again_is_analysed_once(dyads, monkeypatch):
+    analysed = []
+    original = surrogates._analysed_pair
+
+    def recording(recordings, file_path_a, file_path_b, *args):
+        analysed.append((file_path_a, file_path_b))
+        return original(recordings, file_path_a, file_path_b, *args)
+
+    monkeypatch.setattr(surrogates, "_analysed_pair", recording)
+    result = surrogates.welch_random_pair_test(batch_params(dyads, dyads), str(dyads), 100, seed=1)
+    assert len(analysed) == len(set(analysed)) <= 24 + 3
+    assert len(result.null_values) == 100
+
+
+# Results of the version before the surrogate tests were added (commit b76a0dd), for 4 dyads, 12 random pairs and
+# seed 3. A seed must keep repeating results of earlier versions.
+EARLIER_VERSION_RESULTS = {   # settings: (t, p)
+    'windowed': ({}, (-9.499747520785395, 0.0011676895666690478)),
+    'standard': ({'checkbox_windowed_xcorr': False}, (-3.951765366455192, 0.022070650988482526)),
+}
+
+
+@pytest.mark.parametrize("variant", EARLIER_VERSION_RESULTS)
+def test_seed_repeats_the_result_of_earlier_versions(tmp_path, variant):
+    settings, t_and_p = EARLIER_VERSION_RESULTS[variant]
+    for index in range(4):
+        write_dyad(tmp_path / "in" / f"dyad{index}", seed=index)
+    params = batch_params(tmp_path / "in", tmp_path / "in", **settings)
+    result = surrogates.welch_random_pair_test(params, str(tmp_path / "in"), 12, seed=3)
+    assert (result.t_statistic, result.p_value) == pytest.approx(t_and_p, rel=1e-12)

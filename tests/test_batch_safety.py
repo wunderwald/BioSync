@@ -10,6 +10,7 @@ import pytest
 
 import analysis
 import batch_processing
+import surrogates
 import callbacks
 import state
 import validation
@@ -105,10 +106,10 @@ def test_random_pairs_skip_pairs_that_dont_fit(tmp_path):
     for index in range(2):
         write_dyad(tmp_path / "in" / f"long{index}", seed=index)
     _write_short_dyad(tmp_path / "in" / "short")
-    result = batch_processing.random_pair_analysis(batch_params(tmp_path / "in", tmp_path), str(tmp_path / "in"), random_pair_count=30, seed=1)
-    failures = result[6]
+    result = surrogates.welch_random_pair_test(batch_params(tmp_path / "in", tmp_path), str(tmp_path / "in"), 30, seed=1)
+    failures = result.failures
     assert failures and all("Doesn't fit the settings" in reason for _, reason in failures)
-    assert len(result[3]) == 2      # the two long real dyads
+    assert len(result.real_values) == 2      # the two long real dyads
 
 
 def test_failure_while_plotting_leaves_no_files(tmp_path, monkeypatch):

@@ -8,6 +8,7 @@ import time
 import pytest
 
 import batch_processing
+import surrogates
 import callbacks
 import gui_updates
 import state
@@ -204,8 +205,8 @@ def test_random_pairs_report_every_step(tmp_path):
     for index in range(2):
         write_dyad(tmp_path / "in" / f"dyad{index}", seed=index)
     steps = []
-    batch_processing.random_pair_analysis(
-        batch_params(tmp_path / "in", tmp_path), str(tmp_path / "in"), random_pair_count=3,
+    surrogates.welch_random_pair_test(
+        batch_params(tmp_path / "in", tmp_path), str(tmp_path / "in"), 3,
         progress=lambda *step: steps.append(step),
     )
     assert [step[:2] for step in steps] == [(0, 5), (1, 5), (2, 5), (3, 5), (4, 5)]

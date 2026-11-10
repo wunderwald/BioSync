@@ -14,6 +14,7 @@ import openpyxl
 import pytest
 
 import batch_processing
+import surrogates
 import callbacks
 import export
 import utils
@@ -93,8 +94,8 @@ def test_grand_average_without_filter_keeps_all_lags(batch_dirs):
 def test_random_pairs_apply_the_lag_filter(batch_dirs):
     input_dir, output_dir = batch_dirs
     params = batch_params(input_dir, output_dir, use_lag_filter=True, lag_filter_min=10, lag_filter_max=30)
-    result = batch_processing.random_pair_analysis(params, str(input_dir), random_pair_count=4)
-    avg_wxcorr_real, avg_wxcorr_rp = result[4], result[5]
+    result = surrogates.welch_random_pair_test(params, str(input_dir), 4)
+    avg_wxcorr_real, avg_wxcorr_rp = result.avg_wxcorr_real, result.avg_wxcorr_surrogates
     for averaged in (avg_wxcorr_real, avg_wxcorr_rp):
         assert all(len(w['correlations']) == 21 for w in averaged)
 
