@@ -86,6 +86,17 @@ Pull the newest version, for example with **Fetch origin** and **Pull origin** i
 
 ---
 
+## Signal properties
+
+The **Signal Properties** section of the Correlation tab describes each person's signal: DFA, and a KPSS test of stationarity.
+
+**KPSS** tests whether a signal varies around a constant mean. Its null hypothesis is "stationary", so p < 0.05 says a signal isn't. It tests the signal as it is correlated (resampled for event-based data):
+
+- **Windowed cross-correlation:** each window, as the correlation cuts it. The tab shows how many windows of each person have p ≥ 0.05, so that window sizes can be compared: windows short enough to be stationary are what windowed cross-correlation assumes.
+- **Standard cross-correlation:** the whole signal, which standard cross-correlation assumes to be stationary.
+
+p is read from the table of Kwiatkowski et al. (1992), so it lies between 0.01 and 0.10, and the number of lags is chosen from the data; the values are those of `statsmodels.tsa.stattools.kpss(x, regression='c', nlags='auto')`. Two limits: p ≥ 0.05 doesn't show that a window is stationary, only that the test found no evidence against it, and very smooth signals such as EDA fail more often than they should. In simulations of stationary signals that each keep 95% of the previous sample, only about half of the windows pass. The exports add the shares of stationary windows, or the p of each whole signal, after the DFA rows.
+
 ## Surrogate analysis
 
 The **Surrogates** tab tests whether the real dyads in a folder are more coupled than surrogates, in which coupling can't exist. It uses the settings of the Input Data and Correlation tabs. Each surrogate gives the same number as a real dyad, and p is the share of surrogates at least as extreme as the real value, counting the real value as one of them: `p = (1 + surrogates at least as extreme) / (surrogates + 1)`. So p is never 0, and with 1000 surrogates it can't go below 0.001 (0.002 two-sided).
@@ -151,7 +162,7 @@ pytest
 | `callbacks.py` | All user-event handlers: entry/checkbox/dropdown `on_*` callbacks, file pickers, XLSX data loading, signal pre-processing, export handlers, batch processing, and random-pair analysis. Widget references needed for dropdown updates are injected via `register_dropdowns()` / `register_tabview()` after the layout is built. |
 | `layout.py` | Builds every widget across the four tabs (Input Data, Correlation, Export & Batch, Surrogates) inside a single `build_layout()` call. Returns a dict of widget references consumed by `gui_updates` and `corr_plot`. |
 | `gui_updates.py` | Reactive layer — functions that update widget appearance (border colours, error labels, show/hide panels, button enable/disable) in response to state-variable changes. Registered as `trace_add` callbacks via `setup_traces()`. Widget references are injected via `register_widgets()`. |
-| `corr_plot.py` | Runs windowed or standard cross-correlation + DFA when `PARAMS_CHANGED` events change their settings, updates the matplotlib figure (on the Surrogates tab: the last surrogate result, marked when its settings have changed since), and refreshes the canvas. Separated into `_update_wxcorr_data`, `_update_sxcorr_data`, `update_plot`, `update_canvas`, and the top-level `UPDATE()` loop, which `schedule_update()` runs and `flush_update()` runs early. |
+| `corr_plot.py` | Runs windowed or standard cross-correlation + DFA + KPSS when `PARAMS_CHANGED` events change their settings, updates the matplotlib figure (on the Surrogates tab: the last surrogate result, marked when its settings have changed since), and refreshes the canvas. Separated into `_update_wxcorr_data`, `_update_sxcorr_data`, `update_plot`, `update_canvas`, and the top-level `UPDATE()` loop, which `schedule_update()` runs and `flush_update()` runs early. |
 
 ### Processing modules
 
@@ -160,8 +171,9 @@ pytest
 | `analysis.py` | `AnalysisConfig` and `analyze_dyad`: the pipeline shared by the GUI, batch and surrogate tests, so that they can't give different results. |
 | `signal_processing.py` | Resampling and alignment of raw IBI / EDA signals (`preprocess_dyad`). |
 | `cross_correlation.py` | `windowed_cross_correlation` and `standard_cross_correlation` algorithms. The windowed one computes many windows at once, and a test checks that it matches the original window-by-window computation exactly. |
-| `measures.py` | The number each dyad contributes to a random-pair or surrogate test: mean r, mean \|r_max\| or r at lag 0 (`dyad_measure`), and which settings rule one out (`measure_problem`). |
+| `measures.py` | The number each dyad contributes to a random-pair or surrogate test: mean r, mean \|r\|, mean \|r_max\| or r at lag 0 (`dyad_measure`), and which settings rule one out (`measure_problem`). |
 | `surrogates.py` | Tests that compare real dyads with surrogates, in which coupling can't exist. `surrogate_analysis` runs any of the three methods and returns a `SurrogateResult`: re-paired people (`repaired_pair_test`), shuffled blocks of partner B's signal (`block_shuffle_test`, which also gives a p-value for each dyad), and random pairs with Welch's t-test (`welch_random_pair_test`, the test of earlier versions, which draws pairs exactly as they did). Each reads every recording once, and leaves files without the selected sheet out of random pairs. It also has what the Surrogates tab shows before a run (`plan_summary`, `choice_problem`, `folder_overview`). |
+| `stationarity.py` | KPSS test of level stationarity (`kpss_p_values`, `window_p_values`), and what the Correlation tab shows (`signal_stationarity`, `format_stationarity`). Vectorised over windows; the same values as statsmodels, which isn't a dependency. |
 | `dfa.py` | Detrended Fluctuation Analysis — `dfa`, `dfa_wxcorr`, `dfa_wxcorr_window_averages`. `analysis.py` decides which series it runs on. |
 | `plot.py` | Matplotlib figure factories for preprocessing preview, windowed xcorr, and standard xcorr plots, and for surrogate test results (`plot_surrogate_result`). |
 | `export.py` | Writes XLSX result files for wxcorr, sxcorr, and surrogate tests (`export_surrogate_result`; `export_surrogate_figure` saves the result figure as PNG). The Welch export keeps the first sheet of earlier versions and adds rows at its end. Always exports raw (non-sigmoid) correlation values. |
