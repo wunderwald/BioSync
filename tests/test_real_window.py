@@ -138,9 +138,10 @@ def test_correlation_tab_shows_signal_properties_above_the_lag_hint(report):
         assert tab['hint_shown'] is (kind == 'windowed') and tab['lag_info_shown'] is (kind == 'standard')
         texts = tab['texts']
         properties = texts.index("Signal Properties")
-        assert texts[properties + 1].startswith("KPSS")
-        assert texts[properties + 2].startswith("DFA")
-        assert any(text.startswith(hint) for text in texts[properties + 3:])
+        assert texts[properties + 1:properties + 5:2] == ["Stationarity", "Persistence"]
+        assert texts[properties + 2].startswith("KPSS")
+        assert texts[properties + 4].startswith("DFA")
+        assert any(text.startswith(hint) for text in texts[properties + 5:])
 
 
 def test_correlation_tab_sections_are_separate_outlined_cards(report):

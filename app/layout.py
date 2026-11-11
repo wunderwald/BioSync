@@ -515,18 +515,21 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     label_signal_properties = tk.CTkLabel(
         subgroup_signal_properties, text="Signal Properties", font=("Arial", 20, "bold")
     )
-    label_signal_properties.grid(row=0, column=0, columnspan=2, pady=20, padx=10, sticky='w')
+    label_signal_properties.grid(row=0, column=0, columnspan=2, pady=(20, 0), padx=10, sticky='w')
 
+    _heading(subgroup_signal_properties, 1, "Stationarity")
     label_stationarity = tk.CTkLabel(
         subgroup_signal_properties, textvariable=state.val_stationarity_text, justify='left',
         wraplength=TAB_WIDTH - 40
     )
-    label_stationarity.grid(row=1, column=0, sticky="w", padx=10, pady=(0, 6))
+    label_stationarity.grid(row=2, column=0, sticky="w", padx=10, pady=(0, 4))
+
+    _heading(subgroup_signal_properties, 3, "Persistence")
 
     label_dfa = tk.CTkLabel(
         subgroup_signal_properties, textvariable=state.val_dfa_text, justify='left', wraplength=TAB_WIDTH - 40
     )
-    label_dfa.grid(row=2, column=0, sticky="w", padx=10, pady=(0, 14))
+    label_dfa.grid(row=4, column=0, sticky="w", padx=10, pady=(0, 14))
 
     # below the signal properties: how to read tau_max (windowed) or the lag (standard), one at a time, see gui_updates
     subgroup_hints = _section(tab_correlation, 2)

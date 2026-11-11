@@ -125,19 +125,43 @@ def windowed_dfa(wxcorr, config):
     return result
 
 
+# What a DFA alpha says about a series (Hardstone et al., 2012). An estimate is never exactly 0.5, so values
+# near it count as no memory. Above 1 a series is no longer stationary: it drifts.
+NO_MEMORY_RANGE = (0.4, 0.6)
+DRIFT_ABOVE = 1.0
+
+
+def dfa_category(alpha):
+    if alpha < NO_MEMORY_RANGE[0]:
+        return "anti-persistent"
+    if alpha < NO_MEMORY_RANGE[1]:
+        return "no memory, like white noise"
+    if alpha <= DRIFT_ABOVE:
+        return "persistent"
+    return "drift, like a random walk"
+
+
+def _alpha_text(alpha):
+    return f"{alpha:.2f} ({dfa_category(alpha)})"
+
+
 def format_dfa(dfa_signals, dfa_windows):
-    """The DFA results as text for the window. dfa_windows is None for standard cross-correlation."""
+    """
+    The DFA results as text for the window: of each person's input signal, and of the windowed correlations over
+    time. dfa_windows is None for standard cross-correlation.
+    """
     if dfa_signals is None:
         return "DFA: no data"
     if dfa_signals['alpha_a'] is None or dfa_signals['alpha_b'] is None:
-        lines = [f"DFA per person: not available. {dfa_signals['note']}"]
+        lines = [f"DFA α of the input data: not available. {dfa_signals['note']}"]
     else:
-        lines = [f"DFA α per person: A {dfa_signals['alpha_a']:.2f}, B {dfa_signals['alpha_b']:.2f}"]
+        lines = [f"DFA α of the input data: A {_alpha_text(dfa_signals['alpha_a'])}, "
+                 f"B {_alpha_text(dfa_signals['alpha_b'])}"]
     if dfa_windows is not None:
         if dfa_windows['alpha_window_averages'] is None:
-            lines.append(f"DFA over time: not available. {dfa_windows['note']}")
+            lines.append(f"DFA α of the correlations over time: not available. {dfa_windows['note']}")
         else:
-            lines.append(f"DFA α over time: {dfa_windows['alpha_window_averages']:.2f}")
+            lines.append(f"DFA α of the correlations over time: {_alpha_text(dfa_windows['alpha_window_averages'])}")
     return "\n".join(lines)
 
 

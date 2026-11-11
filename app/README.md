@@ -88,7 +88,7 @@ Pull the newest version, for example with **Fetch origin** and **Pull origin** i
 
 ## Signal properties
 
-The **Signal Properties** section of the Correlation tab describes each person's signal: DFA, and a KPSS test of stationarity.
+The **Signal Properties** section of the Correlation tab describes the signals, under two headings: **Stationarity** (a KPSS test) and **Persistence** (DFA).
 
 **KPSS** tests whether a signal varies around a constant mean. Its null hypothesis is "stationary", so p < 0.05 says a signal isn't. It tests the signal as it is correlated (resampled for event-based data):
 
@@ -96,6 +96,13 @@ The **Signal Properties** section of the Correlation tab describes each person's
 - **Standard cross-correlation:** the whole signal, which standard cross-correlation assumes to be stationary.
 
 p is read from the table of Kwiatkowski et al. (1992), so it lies between 0.01 and 0.10, and the number of lags is chosen from the data; the values are those of `statsmodels.tsa.stattools.kpss(x, regression='c', nlags='auto')`. Two limits: p ≥ 0.05 doesn't show that a window is stationary, only that the test found no evidence against it, and very smooth signals such as EDA fail more often than they should. In simulations of stationary signals that each keep 95% of the previous sample, only about half of the windows pass. The exports add the shares of stationary windows, or the p of each whole signal, after the DFA rows.
+
+**DFA** (detrended fluctuation analysis) measures how long fluctuations persist, as an exponent α:
+
+- **DFA α of the input data:** each person's signal. For event-based data, the original intervals, as resampling raises α.
+- **DFA α of the correlations over time:** the series of windowed correlations, which is about the dyad. It needs windows that don't overlap, and long recordings.
+
+Each α is named after what it says (Hardstone et al., 2012): below 0.4 *anti-persistent*, 0.4 to 0.6 *no memory, like white noise*, 0.6 to 1 *persistent*, above 1 *drift, like a random walk* (no longer stationary). An estimate is never exactly 0.5, so the band around it is a choice; the limits are `NO_MEMORY_RANGE` and `DRIFT_ABOVE` in `analysis.py`. On the test data, all 66 EDA signals drift (α 1.19 to 2.02); of 60 IBI signals, 48 are persistent, 6 have no memory and 6 drift (α 0.42 to 1.18).
 
 ## Surrogate analysis
 

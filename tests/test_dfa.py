@@ -9,7 +9,7 @@ import analysis
 import corr_plot
 import export
 import state
-from analysis import AnalysisConfig, format_dfa, signal_dfa, windowed_dfa
+from analysis import AnalysisConfig, dfa_category, format_dfa, signal_dfa, windowed_dfa
 from cross_correlation import windowed_cross_correlation
 from dfa import MIN_DFA_VALUES, dfa, dfa_wxcorr, dfa_wxcorr_window_averages
 
@@ -165,18 +165,22 @@ SIGNALS = {'alpha_a': 1.0349, 'alpha_b': 0.98, 'note': None}
 
 def test_text_shows_both_people_and_time():
     windows = {'alpha_window_averages': 0.512, 'alpha_per_lag': [], 'note': None}
-    assert format_dfa(SIGNALS, windows) == "DFA α per person: A 1.03, B 0.98\nDFA α over time: 0.51"
+    assert format_dfa(SIGNALS, windows) == (
+        "DFA α of the input data: A 1.03 (drift, like a random walk), B 0.98 (persistent)\n"
+        "DFA α of the correlations over time: 0.51 (no memory, like white noise)"
+    )
 
 
 def test_text_gives_the_reason_when_not_available():
     windows = {'alpha_window_averages': None, 'alpha_per_lag': None, 'note': "Reason."}
     text = format_dfa({'alpha_a': None, 'alpha_b': 1.0, 'note': "Too short."}, windows)
-    assert text == "DFA per person: not available. Too short.\nDFA over time: not available. Reason."
+    assert text == ("DFA α of the input data: not available. Too short.\n"
+                    "DFA α of the correlations over time: not available. Reason.")
 
 
 def test_text_without_data_and_in_standard_mode():
     assert format_dfa(None, None) == "DFA: no data"
-    assert format_dfa(SIGNALS, None) == "DFA α per person: A 1.03, B 0.98"
+    assert format_dfa(SIGNALS, None) == "DFA α of the input data: A 1.03 (drift, like a random walk), B 0.98 (persistent)"
 
 
 @pytest.mark.parametrize("windowed, expected_second_line", [(True, "No valid results yet."), (False, None)])
@@ -187,7 +191,7 @@ def test_window_text_follows_the_correlation_type(fake_state, monkeypatch, windo
     monkeypatch.setitem(state.dat_correlation_data, "dfa_windows", None)
     corr_plot.update_dfa_text()
     text = fake_state.val_dfa_text.get()
-    assert ("over time" in text) == windowed
+    assert ("correlations over time" in text) == windowed
     if expected_second_line:
         assert expected_second_line in text
 
@@ -247,3 +251,21 @@ def test_standard_export_keeps_the_old_row_empty_and_adds_the_new_ones(tmp_path)
     metadata = [(row[0], row[1]) for row in _sheet(tmp_path / "f.xlsx") if row[0]]
     assert metadata[8] == ('Alpha (DFA scaling exponent)', '-')
     assert metadata[9:12] == [('DFA alpha, signal A', 1.0349), ('DFA alpha, signal B', 0.98), ('DFA note', '-')]
+
+
+@pytest.mark.parametrize("alpha, category", [
+    (0.1, "anti-persistent"), (0.399, "anti-persistent"), (0.4, "no memory, like white noise"),
+    (0.5, "no memory, like white noise"), (0.599, "no memory, like white noise"), (0.6, "persistent"),
+    (1.0, "persistent"), (1.001, "drift, like a random walk"), (1.5, "drift, like a random walk"),
+])
+def test_dfa_category(alpha, category):
+    assert dfa_category(alpha) == category
+
+
+@pytest.mark.parametrize("make, category", [
+    (lambda rng: rng.normal(size=4000), "no memory, like white noise"),
+    (lambda rng: np.cumsum(rng.normal(size=4000)), "drift, like a random walk"),
+])
+def test_categories_of_known_signals(make, category):
+    alpha = dfa(make(np.random.default_rng(0)), order=1)[0][0]
+    assert dfa_category(alpha) == category
