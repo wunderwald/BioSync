@@ -374,7 +374,7 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     label_standardise.grid(row=9, column=0, columnspan=2, sticky="w", padx=10, pady=5)
 
     # ---------------------------
-    # TAB: CORRELATION & VISUALISATION
+    # TAB: CORRELATION
     # ---------------------------
 
     subgroup_corr_settings = tk.CTkFrame(tab_correlation)
@@ -488,28 +488,35 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     checkbox_absolute_corr_sxc.grid(row=3, column=0, columnspan=4, sticky="w", padx=10, pady=5)
 
     # ---------------------------
-    # TAB: CORRELATION — Visualisation subgroup
+    # TAB: CORRELATION — Signal properties, then how to read the lag
     # ---------------------------
 
-    subgroup_visualisation = tk.CTkFrame(tab_correlation)
-    subgroup_visualisation.grid(row=1, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
-
-    label_visualisation = tk.CTkLabel(subgroup_visualisation, text="Visualisation", font=("Arial", 20, "bold"))
-    label_visualisation.grid(row=0, column=0, columnspan=2, pady=20, padx=10, sticky='w')
-
+    # Sigmoid scaling is hidden for now: its checkbox is built but never placed, so the plot shows raw values.
+    # The option still works everywhere else; placing subgroup_sigmoid with .grid() brings it back.
+    subgroup_sigmoid = tk.CTkFrame(tab_correlation)
     checkbox_show_sigmoid_correlations = tk.CTkCheckBox(
-        subgroup_visualisation, text='Sigmoid-Scaled Correlation Values',
+        subgroup_sigmoid, text='Sigmoid-Scaled Correlation Values',
         variable=state.val_checkbox_show_sigmoid_correlations,
         command=cb.on_show_sigmoid_correlations_change
     )
-    checkbox_show_sigmoid_correlations.grid(row=1, column=0, sticky="w", padx=10, pady=5)
+    checkbox_show_sigmoid_correlations.grid(row=0, column=0, sticky="w", padx=10, pady=5)
+    label_sigmoid_info = tk.CTkLabel(subgroup_sigmoid, text="Applies sigmoid scaling to displayed values only.")
+    label_sigmoid_info.grid(row=1, column=0, columnspan=2, sticky="w", padx=10, pady=5)
 
-    label_sigmoid_info = tk.CTkLabel(
-        subgroup_visualisation,
-        text="Applies sigmoid scaling to displayed values only."
+    subgroup_signal_properties = tk.CTkFrame(tab_correlation)
+    subgroup_signal_properties.grid(row=1, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
+
+    label_signal_properties = tk.CTkLabel(
+        subgroup_signal_properties, text="Signal Properties", font=("Arial", 20, "bold")
     )
-    label_sigmoid_info.grid(row=2, column=0, columnspan=2, sticky="w", padx=10, pady=5)
+    label_signal_properties.grid(row=0, column=0, columnspan=2, pady=20, padx=10, sticky='w')
 
+    label_dfa = tk.CTkLabel(
+        subgroup_signal_properties, textvariable=state.val_dfa_text, justify='left', wraplength=TAB_WIDTH - 20
+    )
+    label_dfa.grid(row=1, column=0, sticky="w", padx=10, pady=(0, 12))
+
+    # below the signal properties: how to read tau_max (windowed) or the lag (standard), see gui_updates
     subgroup_lag_hint = tk.CTkFrame(tab_correlation)
     subgroup_lag_hint.grid(row=2, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
 
@@ -520,14 +527,6 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
         font=("Arial", 12),
     )
     label_lag_hint.grid(row=0, column=0, sticky="w", padx=10, pady=12)
-
-    subgroup_dfa = tk.CTkFrame(tab_correlation)
-    subgroup_dfa.grid(row=3, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
-
-    label_dfa = tk.CTkLabel(
-        subgroup_dfa, textvariable=state.val_dfa_text, justify='left', wraplength=TAB_WIDTH - 20
-    )
-    label_dfa.grid(row=0, column=0, sticky="w", padx=10, pady=12)
 
     subgroup_lag_info = tk.CTkFrame(tab_correlation)
     # initially hidden — shown when standard xcorr is selected
@@ -638,7 +637,9 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
         'subgroup_standard_xcorr_parameters':  subgroup_standard_xcorr_parameters,
         'subgroup_lag_hint':                   subgroup_lag_hint,
         'subgroup_lag_info':                   subgroup_lag_info,
-        'subgroup_visualisation':              subgroup_visualisation,
+        'subgroup_signal_properties':          subgroup_signal_properties,
+        'label_dfa':                           label_dfa,
+        'subgroup_sigmoid':                    subgroup_sigmoid,
         'label_batch_input_folder':            label_batch_input_folder,
         'label_output_dir':                    label_output_dir,
         'label_batch_input_num_subdirs':       label_batch_input_num_subdirs,

@@ -129,3 +129,19 @@ def test_export_comes_after_the_run_and_needs_a_result(report):
                       'text': "Run the analysis to export its result.", 'below_run': True, 'side_by_side': True}
     assert after == {'buttons': ['Export XLSX', 'normal', 'Export PNG', 'normal'],
                      'text': "Last run: dyads, seed 3.", 'below_run': True, 'side_by_side': True}
+
+
+def test_correlation_tab_shows_signal_properties_above_the_lag_hint(report):
+    for kind, hint in (('windowed', 'How to read tau_max'), ('standard', 'How to read lag')):
+        tab = report['correlation_tab'][kind]
+        assert tab['order'] is True, kind
+        assert tab['hint_shown'] is (kind == 'windowed') and tab['lag_info_shown'] is (kind == 'standard')
+        texts = tab['texts']
+        properties = texts.index("Signal Properties")
+        assert texts[properties + 1].startswith("DFA")
+        assert any(text.startswith(hint) for text in texts[properties + 2:])
+
+
+def test_sigmoid_scaling_is_hidden(report):
+    for tab in report['correlation_tab'].values():
+        assert not [text for text in tab['texts'] if 'igmoid' in text or text == "Visualisation"]

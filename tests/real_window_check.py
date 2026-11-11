@@ -125,6 +125,41 @@ state.val_sampling_rate_input.set("2")
 settle()
 report['sampling_rate']['entered'] = rate_display()
 
+# the Correlation tab: settings, then signal properties, then how to read the lag; sigmoid scaling hidden
+def correlation_tab():
+    def mapped_texts(widget):
+        texts = []
+        for child in widget.winfo_children():
+            if child.winfo_ismapped():
+                if isinstance(child, (tk.CTkLabel, tk.CTkCheckBox)):
+                    variable = str(child.cget('textvariable') or '') if isinstance(child, tk.CTkLabel) else ''
+                    texts.append(app.globalgetvar(variable) if variable else child.cget('text'))
+                texts += mapped_texts(child)
+        return texts
+    properties, hint, info = (widgets[key] for key in ('subgroup_signal_properties', 'subgroup_lag_hint', 'subgroup_lag_info'))
+    shown_hint = hint if hint.winfo_ismapped() else info
+    return {
+        'texts': mapped_texts(tabview.tab("Correlation")),
+        'hint_shown': bool(hint.winfo_ismapped()), 'lag_info_shown': bool(info.winfo_ismapped()),
+        'order': widgets['entry_max_lag_sxc'].winfo_rooty() < properties.winfo_rooty() < shown_hint.winfo_rooty()
+        if not hint.winfo_ismapped() else
+        widgets['subgroup_windowed_xcorr_parameters'].winfo_rooty() < properties.winfo_rooty() < shown_hint.winfo_rooty(),
+    }
+
+
+tabview._segmented_button_callback("Correlation")
+settle()
+report['correlation_tab'] = {'windowed': correlation_tab()}
+state.val_checkbox_windowed_xcorr.set(False)
+callbacks.on_windowed_xcorr_change()
+corr_plot.flush_update()
+settle()
+report['correlation_tab']['standard'] = correlation_tab()
+state.val_checkbox_windowed_xcorr.set(True)
+callbacks.on_windowed_xcorr_change()
+corr_plot.flush_update()
+settle()
+
 state.val_checkbox_lag_filter.set(True)       # the tallest content: lag filter rows and the job panel
 state.val_job_running.set(True)
 settle()
