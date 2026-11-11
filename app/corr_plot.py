@@ -4,6 +4,7 @@ from plot import (
     plot_init, plot_message, plot_surrogate_result, update_sxcorr_plots, update_wxcorr_plots, update_preproc_plots,
 )
 from analysis import correlate_signals, format_dfa, windowed_dfa
+from stationarity import format_stationarity, signal_stationarity
 
 import state
 
@@ -67,6 +68,7 @@ def _update_wxcorr_data():
     _computed_wx_settings = config.windowed_settings
 
     state.dat_correlation_data['dfa_windows'] = windowed_dfa(state.dat_correlation_data['wxcorr'], config)
+    state.dat_correlation_data['stationarity_windows'] = signal_stationarity(_signals(), config)
 
 
 def _update_sxcorr_data():
@@ -80,6 +82,7 @@ def _update_sxcorr_data():
 
     state.dat_correlation_data['sxcorr'] = correlate_signals(_signals(), config)
     _computed_sx_settings = config.standard_settings
+    state.dat_correlation_data['stationarity_signal'] = signal_stationarity(_signals(), config)
 
 
 def update_corr():
@@ -220,11 +223,22 @@ def update_dfa_text():
     state.val_dfa_text.set(format_dfa(state.dat_correlation_data.get('dfa_signals'), dfa_windows if windowed else None))
 
 
+def update_stationarity_text():
+    windowed = state.val_checkbox_windowed_xcorr.get()
+    settings_valid = (state.val_CORRELATION_SETTINGS_VALID if windowed else state.val_CORRELATION_SETTINGS_VALID_SXC).get()
+    if state.val_INPUT_DATA_VALID.get() and not settings_valid:
+        state.val_stationarity_text.set("KPSS: check the correlation settings.")
+        return
+    key = 'stationarity_windows' if windowed else 'stationarity_signal'
+    state.val_stationarity_text.set(format_stationarity(state.dat_correlation_data.get(key)))
+
+
 def UPDATE(*args):
     global _pending_update
     _pending_update = None
     update_corr()
     update_dfa_text()
+    update_stationarity_text()
     update_plot()
     update_canvas()
 

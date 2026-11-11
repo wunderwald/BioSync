@@ -3,6 +3,7 @@ import re
 import xlsx
 import utils
 from analysis import AnalysisConfig, analyze_dyad, signal_dfa, windowed_dfa
+from stationarity import signal_stationarity
 from export import export_sxcorr_data, export_wxcorr_data, export_avg_wxcorr_data
 from cross_correlation import average_wxcorr_matrices
 from datetime import datetime
@@ -86,6 +87,7 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
                 'is_standardised': use_standardised_data,
                 'dfa_signals': signal_dfa(raw_signal_a, raw_signal_b, config) if export else None,
                 'dfa_windows': windowed_dfa(corr_data, config) if export else None,
+                'stationarity': signal_stationarity(signals, config) if export else None,
             }
             
             # export data and plot, making the plot first so that a failure leaves no files
@@ -125,6 +127,7 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
                 'sxcorr': corr_data,
                 'is_standardised': use_standardised_data,
                 'dfa_signals': signal_dfa(raw_signal_a, raw_signal_b, config) if export else None,
+                'stationarity': signal_stationarity(signals, config) if export else None,
             }
             
             # export data and plot, making the plot first so that a failure leaves no files

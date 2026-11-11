@@ -583,6 +583,8 @@ def clear_correlation_data():
     state.dat_correlation_data["wxcorr"] = []
     state.dat_correlation_data["sxcorr"] = []
     state.dat_correlation_data["dfa_windows"] = None
+    state.dat_correlation_data["stationarity_windows"] = None
+    state.dat_correlation_data["stationarity_signal"] = None
 
 
 # ---------------------------------------------------------------------------
@@ -708,6 +710,7 @@ def _export_wxcorr_data(file_path):
         'wxcorr':                         state.dat_correlation_data["wxcorr"],
         'dfa_signals':                    state.dat_correlation_data['dfa_signals'],
         'dfa_windows':                    state.dat_correlation_data['dfa_windows'],
+        'stationarity':                   state.dat_correlation_data['stationarity_windows'],
     }
     export_wxcorr_data(file_path, params)
 
@@ -728,6 +731,7 @@ def _export_sxcorr_data(file_path):
         'is_standardised':        state.val_checkbox_standardise.get(),
         'sxcorr':                 state.dat_correlation_data["sxcorr"],
         'dfa_signals':            state.dat_correlation_data['dfa_signals'],
+        'stationarity':           state.dat_correlation_data['stationarity_signal'],
     }
     export_sxcorr_data(file_path, params)
 

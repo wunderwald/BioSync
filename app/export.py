@@ -4,6 +4,7 @@ import numpy as np
 
 import xlsx
 from plot import plot_surrogate_result, plot_windowed_cross_correlation, save_figure_to_png
+from stationarity import ALPHA as KPSS_ALPHA, stationary_share
 from surrogates import BLOCKS, REPAIRED, SIGNIFICANCE_LEVEL, WELCH, result_summary
 
 FIRST_VECTOR_COLUMN = 4  # see xlsx.write_xlsx
@@ -24,6 +25,24 @@ def _dfa_metadata(dfa_signals, dfa_windows=None):
         notes.append(dfa_windows.get('note'))
     metadata['DFA note'] = ' '.join(note for note in notes if note) or '-'
     return metadata
+
+def _stationarity_metadata(stationarity, windowed):
+    """KPSS rows for the end of the metadata, after the DFA rows. stationarity is from signal_stationarity."""
+    if not windowed:
+        p_a, p_b = (stationarity['p_a'], stationarity['p_b']) if stationarity else (None, None)
+        return {
+            'KPSS p, signal A': _value_or_dash(None if p_a is None or np.isnan(p_a) else p_a),
+            'KPSS p, signal B': _value_or_dash(None if p_b is None or np.isnan(p_b) else p_b),
+            'KPSS note': f"KPSS test of level stationarity of the whole signal. p < {KPSS_ALPHA}: not stationary. "
+                         "p is read from a table, so 0.01 means 0.01 or less and 0.1 means 0.1 or more.",
+        }
+    shares, counts = {}, []
+    for person in ('A', 'B'):
+        stationary, tested = stationary_share(stationarity[f'p_{person.lower()}']) if stationarity else (0, 0)
+        shares[f'KPSS share of stationary windows, signal {person}'] = stationary / tested if tested else '-'
+        counts.append(f"{person} {stationary} of {tested}")
+    return {**shares, 'KPSS note': f"Windows with KPSS p >= {KPSS_ALPHA}, in which level stationarity isn't "
+                                   f"rejected: {', '.join(counts)}. Flat windows can't be tested."}
 
 def _correlation_matrix(wxcorr, min_lag):
     """Real numbers with one row per window and one column per lag, labelled with the lag in samples."""
@@ -89,6 +108,7 @@ def export_wxcorr_data(file_path, params):
         vectors['dfa_alpha'] = ['-']
 
     metadata.update(_dfa_metadata(params.get('dfa_signals'), dfa_windows))
+    metadata.update(_stationarity_metadata(params.get('stationarity'), windowed=True))
     min_lag = (
         min(params['lag_filter_min'], params['lag_filter_max'])
         if params['checkbox_lag_filter'] else -params['max_lag']
@@ -157,6 +177,7 @@ def export_sxcorr_data(file_path, params):
         'Absolute correlation values': params['checkbox_absolute_corr'],
         'Alpha (DFA scaling exponent)': '-',  # kept for existing pipelines: DFA across lags measures nothing useful
         **_dfa_metadata(params.get('dfa_signals')),
+        **_stationarity_metadata(params.get('stationarity'), windowed=False),
     }
     vectors = {
         'signal_a': params['signal_a_std'] if params['is_standardised'] else params['signal_a'],
