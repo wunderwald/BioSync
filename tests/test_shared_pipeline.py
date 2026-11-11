@@ -99,6 +99,8 @@ def gui(fake_state, dyad_files, monkeypatch):
         monkeypatch.setitem(state.dat_correlation_data, "sxcorr", [])
         monkeypatch.setitem(state.dat_correlation_data, "dfa_signals", None)
         monkeypatch.setitem(state.dat_correlation_data, "dfa_windows", None)
+        monkeypatch.setitem(state.dat_correlation_data, "stationarity_windows", None)
+        monkeypatch.setitem(state.dat_correlation_data, "stationarity_signal", None)
         monkeypatch.setattr(corr_plot, "_computed_wx_settings", None)
         monkeypatch.setattr(corr_plot, "_computed_sx_settings", None)
         monkeypatch.setattr(callbacks.validation, "check_all_settings", lambda: None)
@@ -154,6 +156,8 @@ def test_gui_and_batch_write_identical_files(gui, dyad_files, tmp_path, settings
     name = f"wx_{dyad_files[0].parent.name}_wxcorr.xlsx" if windowed else f"{dyad_files[0].parent.name}_sxcorr.xlsx"
 
     assert _sheets(gui_file) == _sheets(output_dir / name)
+    kpss = {row[0]: row[1] for row in _sheets(gui_file)[next(iter(_sheets(gui_file)))] if row[0] and 'KPSS' in row[0]}
+    assert len(kpss) == 3 and all(isinstance(value, (int, float)) for key, value in kpss.items() if key != 'KPSS note')
 
 
 def _windows(n):

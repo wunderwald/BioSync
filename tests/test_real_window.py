@@ -139,7 +139,8 @@ def test_correlation_tab_shows_signal_properties_above_the_lag_hint(report):
         texts = tab['texts']
         properties = texts.index("Signal Properties")
         assert texts[properties + 1].startswith("DFA")
-        assert any(text.startswith(hint) for text in texts[properties + 2:])
+        assert texts[properties + 2].startswith("KPSS")
+        assert any(text.startswith(hint) for text in texts[properties + 3:])
 
 
 def test_sigmoid_scaling_is_hidden(report):

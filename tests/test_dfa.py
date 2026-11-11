@@ -217,7 +217,7 @@ def test_export_adds_dfa_after_the_existing_metadata_and_fills_the_existing_colu
     rows = _sheet(tmp_path / "f.xlsx")
     metadata = [(row[0], row[1]) for row in rows if row[0]]
     assert metadata[13][0] == 'Lag filter maximum'
-    assert metadata[14:] == [
+    assert metadata[14:18] == [
         ('DFA alpha, signal A', 1.0349), ('DFA alpha, signal B', 0.98),
         ('DFA alpha, over time (average across lags)', 0.5), ('DFA note', '-'),
     ]
@@ -246,4 +246,4 @@ def test_standard_export_keeps_the_old_row_empty_and_adds_the_new_ones(tmp_path)
     })
     metadata = [(row[0], row[1]) for row in _sheet(tmp_path / "f.xlsx") if row[0]]
     assert metadata[8] == ('Alpha (DFA scaling exponent)', '-')
-    assert metadata[9:] == [('DFA alpha, signal A', 1.0349), ('DFA alpha, signal B', 0.98), ('DFA note', '-')]
+    assert metadata[9:12] == [('DFA alpha, signal A', 1.0349), ('DFA alpha, signal B', 0.98), ('DFA note', '-')]
