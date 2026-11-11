@@ -17,7 +17,7 @@ PARAMETER_ENTRY_WIDTH = 80
 PARAMETER_SECONDS_WIDTH = 60  # room for values like -19.8 s, so that the panel keeps its width
 
 # what the Surrogates tab shows for each choice
-SURROGATE_METHOD_LABELS = {"Re-paired people": REPAIRED, "Shuffled blocks": BLOCKS}
+SURROGATE_METHOD_LABELS = {"Shuffled blocks": BLOCKS, "Re-paired people": REPAIRED}
 SURROGATE_TEST_LABELS = {"Surrogate distribution": SURROGATE_DISTRIBUTION, "Welch's t-test": WELCH}
 
 

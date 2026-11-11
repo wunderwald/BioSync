@@ -7,9 +7,10 @@ import numpy as np
 from cross_correlation import mean_ignoring_flat_windows
 
 MEAN_R = 'mean r'
+MEAN_ABS_R = 'mean |r|'
 MEAN_ABS_R_MAX = 'mean |r_max|'
 R_AT_LAG_0 = 'r at lag 0'
-MEASURES = (MEAN_R, MEAN_ABS_R_MAX, R_AT_LAG_0)
+MEASURES = (MEAN_R, MEAN_ABS_R, MEAN_ABS_R_MAX, R_AT_LAG_0)
 
 
 def _windowed_lag_range(config):
@@ -39,6 +40,7 @@ def dyad_measure(corr_data, config, measure):
     The measure of one dyad: the result of windowed_cross_correlation or standard_cross_correlation, whichever the
     config chose. Flat windows are left out. NaN if every window is flat.
         mean r:       the mean of every correlation, over all windows and lags
+        mean |r|:     the mean of every correlation without its sign, over all windows and lags
         mean |r_max|: the mean over windows of the strongest correlation at any lag, without its sign
         r at lag 0:   the mean over windows of the correlation without delay
     Raises ValueError if measure_problem names a problem.
@@ -51,6 +53,8 @@ def dyad_measure(corr_data, config, measure):
         correlations = np.array([window['correlations'] for window in corr_data], dtype=float)
         if measure == MEAN_R:
             return float(mean_ignoring_flat_windows(correlations))
+        if measure == MEAN_ABS_R:
+            return float(mean_ignoring_flat_windows(np.abs(correlations)))
         if measure == MEAN_ABS_R_MAX:
             return float(mean_ignoring_flat_windows(np.abs([window['r_max'] for window in corr_data])))
         low, _high = _windowed_lag_range(config)
@@ -59,6 +63,8 @@ def dyad_measure(corr_data, config, measure):
     correlations = np.asarray(corr_data['corr'], dtype=float)
     if measure == MEAN_R:
         return float(mean_ignoring_flat_windows(correlations))
+    if measure == MEAN_ABS_R:
+        return float(mean_ignoring_flat_windows(np.abs(correlations)))
     if measure == MEAN_ABS_R_MAX:
         return float(np.max(np.abs(correlations))) if not np.all(np.isnan(correlations)) else np.nan
     return float(correlations[list(corr_data['lags']).index(0)])

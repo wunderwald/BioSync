@@ -12,7 +12,7 @@ import surrogates
 import xlsx
 from analysis import AnalysisConfig
 from helpers import N_BEATS, batch_params, write_dyad, write_person
-from measures import MEAN_ABS_R_MAX, MEAN_R, R_AT_LAG_0
+from measures import MEAN_ABS_R, MEAN_ABS_R_MAX, MEAN_R, R_AT_LAG_0
 from surrogates import (
     GREATER, REPAIRED, TWO_SIDED, comparison_side, repaired_null_distribution, repaired_pair_test,
     surrogate_p_value,
@@ -52,6 +52,8 @@ def _config(**overrides):
 
 @pytest.mark.parametrize("measure, config, side", [
     (MEAN_ABS_R_MAX, _config(), GREATER),
+    (MEAN_ABS_R, _config(), GREATER),
+    (MEAN_ABS_R, _config(windowed=False), GREATER),
     (MEAN_R, _config(), TWO_SIDED),
     (R_AT_LAG_0, _config(), TWO_SIDED),
     (MEAN_R, _config(absolute=True), GREATER),

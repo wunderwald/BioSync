@@ -94,12 +94,12 @@ The **Surrogates** tab tests whether the real dyads in a folder are more coupled
 
 | Method | Surrogates | Question | Result |
 |---|---|---|---|
-| **Re-paired people** | Sets of pairs of people from different dyads, each as large as the real group | Are partners more in sync than strangers recorded in the same setting? | p for the group |
 | **Shuffled blocks** (default) | Partner B's signal cut into blocks of the block length (default: the window size) and put in a random order. Leftover samples stay at the end. | Does the moment-to-moment timing between these two people matter? | p for each dyad, and for the group |
+| **Re-paired people** | Sets of pairs of people from different dyads, each as large as the real group | Are partners more in sync than strangers recorded in the same setting? | p for the group |
 | **Welch's t-test** | Random pairs drawn with replacement, compared with the real dyads by a t-test | As in earlier versions | p for the group |
 
-- **Re-paired people** don't count what all participants share as coupling, such as reactions to the same task at the same moments, or the same slow drift. With few dyads only few different sets exist, and the app warns when that limits p.
-- **Shuffled blocks** break that shared time course, so they count it as coupling. Longer blocks keep more of it and make the test stricter: the block length changes the result and has to be reported. A dyad needs at least 5 blocks. The p-values of single dyads aren't corrected for testing many dyads: with 33 dyads, 1 or 2 are expected below 0.05 by chance.
+- **Shuffled blocks** break the time course that all participants share, such as reactions to the same task at the same moments, or the same slow drift, so they count it as coupling. Longer blocks keep more of it and make the test stricter: the block length changes the result and has to be reported. A dyad needs at least 5 blocks. The p-values of single dyads aren't corrected for testing many dyads: with 33 dyads, 1 or 2 are expected below 0.05 by chance.
+- **Re-paired people** keep that shared time course in the surrogates, so they don't count it as coupling. With few dyads only few different sets exist, and the app warns when that limits p.
 - **Welch's t-test** is only there to repeat results of earlier versions. It treats every random pair as independent, but the same people appear again and again, so its p isn't exact: in simulations it found coupling in 2% to 8% of groups without any, depending on the data.
 
 ### Measures
@@ -107,6 +107,7 @@ The **Surrogates** tab tests whether the real dyads in a folder are more coupled
 One number per dyad, pair or surrogate:
 
 - **mean r** (default): the average correlation over all windows and lags.
+- **mean |r|**: the average correlation over all windows and lags, without its sign, so that positive and negative coupling don't cancel out. Strangers also have a mean |r| above 0, which the surrogates share. Not available with "average windows", which averages the signed correlations first.
 - **mean |r_max|**: the strongest correlation at any lag in each window, without its sign, averaged over the windows. It is high even for strangers, which the surrogates share, so the comparison is fair, but it can be less sensitive. Not available with "average windows".
 - **r at lag 0**: the correlation without delay, averaged over the windows. Not available with "average windows", or when the lag filter leaves out lag 0.
 
@@ -114,7 +115,7 @@ One number per dyad, pair or surrogate:
 
 The app decides this from the measure and settings, so it can't be chosen after seeing the result:
 
-- **One-sided (real higher):** mean |r_max|, and every measure when "absolute correlation values" is on, because coupling can only make these values higher.
+- **One-sided (real higher):** mean |r| and mean |r_max|, and every measure when "absolute correlation values" is on, because coupling can only make these values higher.
 - **Two-sided:** mean r and r at lag 0 of signed correlations, because coupling can also be negative. p is twice the smaller one-sided p, at most 1. Welch's t-test is always two-sided.
 
 ### Results

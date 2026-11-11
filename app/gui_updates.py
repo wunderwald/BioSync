@@ -2,7 +2,7 @@ import os
 import utils
 import state
 import validation
-from measures import MEAN_ABS_R_MAX, MEAN_R, R_AT_LAG_0
+from measures import MEAN_ABS_R, MEAN_ABS_R_MAX, MEAN_R, R_AT_LAG_0
 from signal_processing import EVENT_BASED_SAMPLING_RATE_HZ
 from surrogates import BLOCKS, REPAIRED, WELCH
 
@@ -365,6 +365,8 @@ METHOD_EXPLANATIONS = {
 }
 MEASURE_EXPLANATIONS = {
     MEAN_R: "The average correlation over all windows and lags.",
+    MEAN_ABS_R: "The average correlation over all windows and lags, without its sign, so that negative and "
+                "positive coupling don't cancel out.",
     MEAN_ABS_R_MAX: "The strongest correlation at any lag, without its sign, averaged over the windows.",
     R_AT_LAG_0: "The correlation without delay, averaged over the windows.",
 }

@@ -9,7 +9,7 @@ import surrogates
 from analysis import AnalysisConfig, correlate_signals
 from cross_correlation import standard_cross_correlation, windowed_cross_correlation
 from helpers import batch_params, write_dyad
-from measures import MEAN_ABS_R_MAX, MEAN_R, MEASURES, R_AT_LAG_0, dyad_measure, measure_problem
+from measures import MEAN_ABS_R, MEAN_ABS_R_MAX, MEAN_R, MEASURES, R_AT_LAG_0, dyad_measure, measure_problem
 
 WINDOW, STEP, MAX_LAG = 100, 50, 10
 
@@ -50,6 +50,18 @@ def test_mean_r_is_the_mean_over_windows_and_lags():
     assert dyad_measure(windows, _config(max_lag=1), MEAN_R) == pytest.approx(1.5 / 6)
 
 
+def test_mean_abs_r_is_the_mean_over_windows_and_lags_without_signs():
+    windows = [_window([0.1, 0.5, -0.3], 0.5), _window([0.2, -0.2, 0.8], 0.8)]
+    assert dyad_measure(windows, _config(max_lag=1), MEAN_ABS_R) == pytest.approx(2.1 / 6)
+
+
+def test_mean_abs_r_is_between_mean_r_and_mean_abs_r_max(signals):
+    config = _config()
+    windows = _correlate(signals, config)
+    values = [dyad_measure(windows, config, measure) for measure in (MEAN_R, MEAN_ABS_R, MEAN_ABS_R_MAX)]
+    assert abs(values[0]) <= values[1] <= values[2]
+
+
 def test_mean_abs_r_max_ignores_the_sign_of_each_peak():
     windows = [_window([0.1, -0.8, 0.3], -0.8), _window([0.4, 0.2, 0.1], 0.4)]
     assert dyad_measure(windows, _config(max_lag=1), MEAN_ABS_R_MAX) == pytest.approx(0.6)
@@ -85,6 +97,7 @@ def test_standard_correlation_measures(signals):
     assert dyad_measure(result, config, R_AT_LAG_0) == pytest.approx(np.corrcoef(x, y)[0, 1])
     assert dyad_measure(result, config, MEAN_ABS_R_MAX) == pytest.approx(np.max(np.abs(result['corr'])))
     assert dyad_measure(result, config, MEAN_R) == pytest.approx(np.mean(result['corr']))
+    assert dyad_measure(result, config, MEAN_ABS_R) == pytest.approx(np.mean(np.abs(result['corr'])))
 
 
 def test_flat_windows_are_left_out(signals):
@@ -115,6 +128,9 @@ def test_only_flat_windows_give_nan(signals, recwarn):
 @pytest.mark.parametrize("measure, config, expected", [
     (MEAN_R, _config(average_windows=True), None),
     (MEAN_ABS_R_MAX, _config(average_windows=True), "average windows"),
+    (MEAN_ABS_R, _config(average_windows=True), "average windows"),     # it would be |mean r| of each window
+    (MEAN_ABS_R, _config(windowed=False, average_windows=True), None),
+    (MEAN_ABS_R, _config(use_lag_filter=True, lag_filter_min=1, lag_filter_max=5), None),
     (R_AT_LAG_0, _config(average_windows=True), "average windows"),
     (R_AT_LAG_0, _config(use_lag_filter=True, lag_filter_min=1, lag_filter_max=5), "leaves out lag 0"),
     (R_AT_LAG_0, _config(use_lag_filter=True, lag_filter_min=-5, lag_filter_max=-1), "leaves out lag 0"),
@@ -162,3 +178,13 @@ def test_random_pair_analysis_refuses_a_measure_before_analysing(dyads, monkeypa
     params = batch_params(dyads, dyads, checkbox_average_windows=True)
     with pytest.raises(ValueError, match="Can't compare r at lag 0"):
         surrogates.welch_random_pair_test(params, str(dyads), 4, measure=R_AT_LAG_0)
+
+
+@pytest.mark.parametrize("method", [surrogates.BLOCKS, surrogates.REPAIRED])
+def test_surrogate_tests_compare_mean_abs_r_one_sided(dyads, method):
+    params = batch_params(dyads, dyads)
+    result = surrogates.surrogate_analysis(method, params, str(dyads), 20, 3, MEAN_ABS_R, block_length=300)
+    signed = surrogates.surrogate_analysis(method, params, str(dyads), 20, 3, MEAN_R, block_length=300)
+    assert (result.measure, result.side) == (MEAN_ABS_R, surrogates.GREATER)
+    assert all(a >= abs(r) for a, r in zip(result.real_values, signed.real_values))
+    assert all(a > 0 for a in result.null_values)

@@ -29,7 +29,7 @@ import utils
 import xlsx
 from analysis import AnalysisConfig, analyze_dyad, correlate_signals
 from cross_correlation import average_wxcorr_matrices
-from measures import MEAN_ABS_R_MAX, MEAN_R, dyad_measure, measure_problem
+from measures import MEAN_ABS_R, MEAN_ABS_R_MAX, MEAN_R, dyad_measure, measure_problem
 
 REPAIRED = 're-paired people'
 BLOCKS = 'shuffled blocks'
@@ -177,11 +177,11 @@ def result_summary(result):
 
 def comparison_side(measure, config):
     """
-    Real coupling can only make |r_max| and absolute correlations higher. A signed correlation can also be
+    Real coupling can only make |r|, |r_max| and absolute correlations higher. A signed correlation can also be
     negative, for example when one person calms down as the other gets stressed, so it is tested both ways.
     """
     absolute = config.absolute if config.windowed else config.absolute_sxc
-    return GREATER if measure == MEAN_ABS_R_MAX or absolute else TWO_SIDED
+    return GREATER if measure in (MEAN_ABS_R, MEAN_ABS_R_MAX) or absolute else TWO_SIDED
 
 
 def surrogate_p_value(real_value, null_values, side):
