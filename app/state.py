@@ -93,6 +93,7 @@ val_job_progress                     = None
 val_job_progress_text                = None
 val_job_cancel_requested             = None
 val_dfa_text                         = None
+val_stationarity_text                = None
 val_input_error                      = None
 val_exporting                        = None
 
@@ -161,7 +162,7 @@ def init_state(retina):
     global val_block_length, val_surrogate_plan, val_surrogate_problem, val_surrogate_warning
     global val_sampling_rate_input, val_sampling_rate, val_sampling_rate_note
     global val_job_running, val_job_progress, val_job_progress_text, val_job_cancel_requested
-    global val_dfa_text, val_input_error, val_exporting
+    global val_dfa_text, val_stationarity_text, val_input_error, val_exporting
     global dat_plot_data, dat_workbook_data, dat_physiological_data, dat_correlation_data
 
     RETINA        = retina
@@ -234,6 +235,7 @@ def init_state(retina):
     val_job_progress_text                  = tk.StringVar(value='')
     val_job_cancel_requested               = tk.BooleanVar(value=False)
     val_dfa_text                           = tk.StringVar(value='DFA: no data')
+    val_stationarity_text                  = tk.StringVar(value='KPSS: no data')
     val_input_error                        = tk.StringVar(value='')  # why the loaded data can't be used, if it can't
     val_exporting                          = tk.StringVar(value='')  # 'data' or 'plot' while an export runs
 
@@ -264,4 +266,6 @@ def init_state(retina):
         'sxcorr': [],
         'dfa_signals': None,
         'dfa_windows': None,
+        'stationarity_windows': None,   # stationarity.signal_stationarity of the windows of wxcorr
+        'stationarity_signal': None,    # and of the whole signals, for sxcorr
     })
