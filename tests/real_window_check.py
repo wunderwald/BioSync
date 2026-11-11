@@ -166,6 +166,8 @@ def surrogate_state():
 
 
 surrogates_report = {'start': surrogate_state()}
+surrogates_report['buttons'] = {key: list(widgets[key].cget('values'))
+                                for key in ('segmented_surrogate_method', 'segmented_surrogate_measure')}
 widgets['segmented_surrogate_method']._buttons_dict["Re-paired people"].invoke()
 settle()
 surrogates_report['repaired'] = surrogate_state()

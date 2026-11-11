@@ -65,6 +65,13 @@ def test_surrogates_tab_shows_what_the_choices_need(report):
     assert "blocks of 150 samples" in blocks['plan']
 
 
+def test_surrogate_choices_in_order(report):
+    assert report['surrogates']['buttons'] == {
+        'segmented_surrogate_method': ["Shuffled blocks", "Re-paired people"],
+        'segmented_surrogate_measure': ["mean r", "mean |r|", "mean |r_max|", "r at lag 0"],
+    }
+
+
 def test_block_length_follows_the_window_size(report):
     assert report['surrogates']['block_length_follows_window'][0] == "100"
 
