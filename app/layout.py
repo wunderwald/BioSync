@@ -100,6 +100,14 @@ def _job_progress_panel(parent):
     return {'frame': frame, 'progress_bar': progress_bar, 'button_cancel': button_cancel}
 
 
+def _section(parent, row):
+    """An outlined container for one section of a tab, with space around it, so that sections stand apart."""
+    frame = tk.CTkFrame(parent, border_width=1, corner_radius=8)
+    frame.grid(row=row, column=0, sticky='ew', columnspan=2, padx=4, pady=(4, 8))
+    frame.grid_columnconfigure(0, weight=1)
+    return frame
+
+
 def _heading(parent, row, text):
     label = tk.CTkLabel(parent, text=text, font=("Arial", 14, "bold"))
     label.grid(row=row, column=0, columnspan=4, sticky='w', padx=10, pady=(12, 2))
@@ -377,8 +385,7 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     # TAB: CORRELATION
     # ---------------------------
 
-    subgroup_corr_settings = tk.CTkFrame(tab_correlation)
-    subgroup_corr_settings.grid(row=0, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
+    subgroup_corr_settings = _section(tab_correlation, 0)
 
     label_corr_settings = tk.CTkLabel(
         subgroup_corr_settings, text="Correlation Settings", font=("Arial", 20, "bold")
@@ -393,7 +400,7 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
 
     # Windowed xcorr parameters subgroup
     subgroup_windowed_xcorr_parameters = tk.CTkFrame(subgroup_corr_settings)
-    subgroup_windowed_xcorr_parameters.grid(row=2, sticky='ew', column=0, columnspan=2, padx=0, pady=0)
+    subgroup_windowed_xcorr_parameters.grid(row=2, sticky='ew', column=0, columnspan=2, padx=8, pady=(0, 8))
 
     label_wxp = tk.CTkLabel(
         subgroup_windowed_xcorr_parameters, text='Windowed cross-correlation parameters'
@@ -503,28 +510,29 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     label_sigmoid_info = tk.CTkLabel(subgroup_sigmoid, text="Applies sigmoid scaling to displayed values only.")
     label_sigmoid_info.grid(row=1, column=0, columnspan=2, sticky="w", padx=10, pady=5)
 
-    subgroup_signal_properties = tk.CTkFrame(tab_correlation)
-    subgroup_signal_properties.grid(row=1, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
+    subgroup_signal_properties = _section(tab_correlation, 1)
 
     label_signal_properties = tk.CTkLabel(
         subgroup_signal_properties, text="Signal Properties", font=("Arial", 20, "bold")
     )
     label_signal_properties.grid(row=0, column=0, columnspan=2, pady=20, padx=10, sticky='w')
 
-    label_dfa = tk.CTkLabel(
-        subgroup_signal_properties, textvariable=state.val_dfa_text, justify='left', wraplength=TAB_WIDTH - 20
-    )
-    label_dfa.grid(row=1, column=0, sticky="w", padx=10, pady=(0, 6))
-
     label_stationarity = tk.CTkLabel(
         subgroup_signal_properties, textvariable=state.val_stationarity_text, justify='left',
-        wraplength=TAB_WIDTH - 20
+        wraplength=TAB_WIDTH - 40
     )
-    label_stationarity.grid(row=2, column=0, sticky="w", padx=10, pady=(0, 12))
+    label_stationarity.grid(row=1, column=0, sticky="w", padx=10, pady=(0, 6))
 
-    # below the signal properties: how to read tau_max (windowed) or the lag (standard), see gui_updates
-    subgroup_lag_hint = tk.CTkFrame(tab_correlation)
-    subgroup_lag_hint.grid(row=2, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
+    label_dfa = tk.CTkLabel(
+        subgroup_signal_properties, textvariable=state.val_dfa_text, justify='left', wraplength=TAB_WIDTH - 40
+    )
+    label_dfa.grid(row=2, column=0, sticky="w", padx=10, pady=(0, 14))
+
+    # below the signal properties: how to read tau_max (windowed) or the lag (standard), one at a time, see gui_updates
+    subgroup_hints = _section(tab_correlation, 2)
+
+    subgroup_lag_hint = tk.CTkFrame(subgroup_hints, fg_color='transparent')
+    subgroup_lag_hint.grid(row=0, column=0, sticky='ew', padx=2, pady=2)
 
     label_lag_hint = tk.CTkLabel(
         subgroup_lag_hint,
@@ -534,7 +542,7 @@ def build_layout(app, validate_numeric_input, validate_signed_numeric_input):
     )
     label_lag_hint.grid(row=0, column=0, sticky="w", padx=10, pady=12)
 
-    subgroup_lag_info = tk.CTkFrame(tab_correlation)
+    subgroup_lag_info = tk.CTkFrame(subgroup_hints, fg_color='transparent')
     # initially hidden — shown when standard xcorr is selected
 
     label_lag_info = tk.CTkLabel(

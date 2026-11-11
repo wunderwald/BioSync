@@ -138,7 +138,22 @@ def correlation_tab():
         return texts
     properties, hint, info = (widgets[key] for key in ('subgroup_signal_properties', 'subgroup_lag_hint', 'subgroup_lag_info'))
     shown_hint = hint if hint.winfo_ismapped() else info
+    settings = (widgets['subgroup_windowed_xcorr_parameters'] if hint.winfo_ismapped()
+                else widgets['subgroup_standard_xcorr_parameters'])
+    cards = [settings.master, properties, shown_hint.master]
+
+    def box(widget):
+        return (widget.winfo_rootx(), widget.winfo_rooty(),
+                widget.winfo_rootx() + widget.winfo_width(), widget.winfo_rooty() + widget.winfo_height())
+
+    boxes = [box(card) for card in cards]
+    panel = box(settings)
     return {
+        'outlined': [card.cget('border_width') > 0 for card in cards],
+        'gaps_between_cards': [lower[1] - upper[3] for upper, lower in zip(boxes, boxes[1:])],
+        'panel_inset': [panel[0] - boxes[0][0], boxes[0][2] - panel[2], boxes[0][3] - panel[3]],
+        'cards_in_view': all(b[2] <= tabview.tab("Correlation").winfo_rootx() + tabview.tab("Correlation").winfo_width()
+                             for b in boxes),
         'texts': mapped_texts(tabview.tab("Correlation")),
         'hint_shown': bool(hint.winfo_ismapped()), 'lag_info_shown': bool(info.winfo_ismapped()),
         'order': widgets['entry_max_lag_sxc'].winfo_rooty() < properties.winfo_rooty() < shown_hint.winfo_rooty()

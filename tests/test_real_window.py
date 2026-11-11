@@ -138,9 +138,17 @@ def test_correlation_tab_shows_signal_properties_above_the_lag_hint(report):
         assert tab['hint_shown'] is (kind == 'windowed') and tab['lag_info_shown'] is (kind == 'standard')
         texts = tab['texts']
         properties = texts.index("Signal Properties")
-        assert texts[properties + 1].startswith("DFA")
-        assert texts[properties + 2].startswith("KPSS")
+        assert texts[properties + 1].startswith("KPSS")
+        assert texts[properties + 2].startswith("DFA")
         assert any(text.startswith(hint) for text in texts[properties + 3:])
+
+
+def test_correlation_tab_sections_are_separate_outlined_cards(report):
+    for kind, tab in report['correlation_tab'].items():
+        assert tab['outlined'] == [True, True, True], kind
+        assert all(gap > 0 for gap in tab['gaps_between_cards']), kind
+        assert all(inset > 1 for inset in tab['panel_inset']), kind     # the parameter panel doesn't cover the outline
+        assert tab['cards_in_view'], kind
 
 
 def test_sigmoid_scaling_is_hidden(report):

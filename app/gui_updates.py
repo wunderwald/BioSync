@@ -290,18 +290,18 @@ def update_export_busy(*args):
 def update_xcorr_parameter_groups(*args):
     if state.val_checkbox_windowed_xcorr.get():
         _w['subgroup_windowed_xcorr_parameters'].grid(
-            row=2, column=0, sticky='ew', columnspan=2, padx=0, pady=0
+            row=2, column=0, sticky='ew', columnspan=2, padx=8, pady=(0, 8)
         )
         _w['subgroup_standard_xcorr_parameters'].grid_forget()
-        _w['subgroup_lag_hint'].grid(row=2, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
+        _w['subgroup_lag_hint'].grid(row=0, column=0, sticky='ew', padx=2, pady=2)
         _w['subgroup_lag_info'].grid_forget()
     else:
         _w['subgroup_windowed_xcorr_parameters'].grid_forget()
         _w['subgroup_standard_xcorr_parameters'].grid(
-            row=2, column=0, sticky='ew', columnspan=2, padx=0, pady=0
+            row=2, column=0, sticky='ew', columnspan=2, padx=8, pady=(0, 8)
         )
         _w['subgroup_lag_hint'].grid_forget()
-        _w['subgroup_lag_info'].grid(row=2, column=0, sticky='ew', columnspan=2, padx=0, pady=0)
+        _w['subgroup_lag_info'].grid(row=0, column=0, sticky='ew', padx=2, pady=2)
 
 
 def update_batch_input_num_subdirs(*args):
