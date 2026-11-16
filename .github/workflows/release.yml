@@ -20,7 +20,7 @@ env:
 jobs:
   test:
     name: Tests (macOS)
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Install Python from python.org
@@ -41,14 +41,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # GitHub retires runner images every year or two (macos-14 in November 2026), and a run then fails with
+          # "The configuration ... is not supported". Pinned images keep builds the same until then.
           - name: macOS-AppleSilicon
-            os: macos-14
+            os: macos-15
             python: python3.11
           - name: Windows-x64
             os: windows-2022
             python: python
           - name: Linux-x64
-            os: ubuntu-22.04      # an older Linux, so that the build runs on more distributions
+            # an older Linux, so that the build runs on more distributions. Deprecated; retired around April 2027,
+            # then use ubuntu-24.04
+            os: ubuntu-22.04
             python: python
     runs-on: ${{ matrix.os }}
     defaults:
