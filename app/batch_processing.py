@@ -70,33 +70,31 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
         signal_a = _signal_a_z_scored if use_standardised_data else _signal_a
         signal_b = _signal_b_z_scored if use_standardised_data else _signal_b
 
+        # what the export of either correlation needs, as callbacks._export_params gives it in the app
+        base_params = {
+            'config': config,
+            'selected_dyad_dir': dyad_dir,
+            'input_file_a': file_path_a,
+            'input_file_b': file_path_b,
+            'selected_sheet': params['selected_sheet'],
+            'selected_column': params['selected_column_a'],
+            'sampling_rate': params.get('sampling_rate', 0),
+            'signal_a': _signal_a,
+            'signal_b': _signal_b,
+            'signal_a_std': _signal_a_z_scored,
+            'signal_b_std': _signal_b_z_scored,
+            'dfa_signals': signal_dfa(raw_signal_a, raw_signal_b, config) if export else None,
+            'stationarity': signal_stationarity(signals, config) if export else None,
+        }
+
         # make and export correlation data
         if params['checkbox_windowed_xcorr']:
             # WXCorr
             # export
             export_params = {
-                'selected_dyad_dir': dyad_dir,
-                'input_file_a': file_path_a,
-                'input_file_b': file_path_b,
-                'checkbox_fr': params['checkbox_fr'],
-                'window_size': params['window_size'],
-                'max_lag': params['max_lag'],
-                'step_size': params['step_size'],
-                'checkbox_absolute_corr': params['checkbox_absolute_corr'],
-                'checkbox_average_windows': params['checkbox_average_windows'],
-                'checkbox_eb': params['checkbox_eb'],
-                'signal_a': _signal_a,
-                'signal_b': _signal_b,
-                'signal_a_std': _signal_a_z_scored,
-                'signal_b_std': _signal_b_z_scored,
+                **base_params,
                 'wxcorr': corr_data,
-                'checkbox_lag_filter': params['use_lag_filter'],
-                'lag_filter_min': params['lag_filter_min'],
-                'lag_filter_max': params['lag_filter_max'],
-                'is_standardised': use_standardised_data,
-                'dfa_signals': signal_dfa(raw_signal_a, raw_signal_b, config) if export else None,
                 'dfa_windows': windowed_dfa(corr_data, config) if export else None,
-                'stationarity': signal_stationarity(signals, config) if export else None,
             }
             
             # export data and plot, making the plot first so that a failure leaves no files
@@ -121,23 +119,7 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
         else:
             # Standard XCorr
             # export
-            export_params = {
-                'selected_dyad_dir': dyad_dir,
-                'input_file_a': file_path_a,
-                'input_file_b': file_path_b,
-                'checkbox_fr': params['checkbox_fr'],
-                'max_lag': params['max_lag_sxc'],
-                'checkbox_absolute_corr': params['checkbox_absolute_corr_sxc'],
-                'checkbox_eb': params['checkbox_eb'],
-                'signal_a': _signal_a,
-                'signal_b': _signal_b,
-                'signal_a_std': _signal_a_z_scored,
-                'signal_b_std': _signal_b_z_scored,
-                'sxcorr': corr_data,
-                'is_standardised': use_standardised_data,
-                'dfa_signals': signal_dfa(raw_signal_a, raw_signal_b, config) if export else None,
-                'stationarity': signal_stationarity(signals, config) if export else None,
-            }
+            export_params = {**base_params, 'sxcorr': corr_data}
             
             # export data and plot, making the plot first so that a failure leaves no files
             if export:

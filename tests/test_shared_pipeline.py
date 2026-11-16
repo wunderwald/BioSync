@@ -1,6 +1,8 @@
 """
 The GUI, batch and random pairs must give identical results, and existing pipelines must keep working on exports.
 """
+import dataclasses
+
 import matplotlib
 import numpy as np
 from matplotlib.backends.backend_agg import FigureCanvasAgg
@@ -17,7 +19,7 @@ import gui_updates
 import plot
 import state
 import xlsx
-from helpers import FakeWidget
+from helpers import EXPORT_WINDOW, FakeWidget, export_params, read_column, read_metadata, read_notes, read_table
 
 SHEET = "Sheet"
 SETTINGS = [
@@ -145,6 +147,7 @@ def test_gui_and_batch_give_identical_results(gui, dyad_files, settings):
 @pytest.mark.parametrize("settings", FILE_SETTINGS)
 def test_gui_and_batch_write_identical_files(gui, dyad_files, tmp_path, settings):
     gui(settings)
+    state.val_sampling_rate.set(2.5)       # as if entered; it is used for fixed-rate data only
     windowed = state.val_checkbox_windowed_xcorr.get()
     gui_file = tmp_path / "gui.xlsx"
     (callbacks._export_wxcorr_data if windowed else callbacks._export_sxcorr_data)(str(gui_file))
@@ -156,108 +159,112 @@ def test_gui_and_batch_write_identical_files(gui, dyad_files, tmp_path, settings
     name = f"BioSync_{'wcc' if windowed else 'scc'}_{dyad_files[0].parent.name}.xlsx"
 
     assert _sheets(gui_file) == _sheets(output_dir / name)
-    kpss = {row[0]: row[1] for row in _sheets(gui_file)[next(iter(_sheets(gui_file)))] if row[0] and 'KPSS' in row[0]}
-    assert len(kpss) == 3 and all(isinstance(value, (int, float)) for key, value in kpss.items() if key != 'KPSS note')
+    metadata = read_metadata(gui_file)
+    kpss = [value for key, value in metadata.items() if key.startswith('kpss_')]
+    assert len(kpss) == 2 and all(isinstance(value, float) for value in kpss)
+    assert (metadata['sheet'], metadata['column'], metadata['file_a']) == (SHEET, "IBI", dyad_files[0].name)
+    assert metadata['sampling_rate_hz'] == (5 if settings.get('checkbox_eb', True) else 2.5)
 
 
 def _windows(n):
-    return [
-        {
-            'start_idx': i, 'center_idx': i + 75, 'correlations': [0.5, -0.25, 0.125], 'r_max': 0.5, 'tau_max': -1,
-            'avg_z_transformed_corr': 0.25, 'var_z_transformed_corr': 0.75,
-        }
-        for i in range(n)
-    ]
+    return [dict(EXPORT_WINDOW, start_idx=75 * i, center_idx=75 * i + 75) for i in range(n)]
 
 
-def _export(path, wxcorr, **overrides):
-    export.export_wxcorr_data(str(path), {
-        'selected_dyad_dir': 'dyad', 'input_file_a': 'a.xlsx', 'input_file_b': 'b.xlsx', 'checkbox_fr': False,
-        'is_standardised': False, 'window_size': 150, 'max_lag': 1, 'step_size': 75, 'checkbox_absolute_corr': False,
-        'checkbox_average_windows': False, 'checkbox_lag_filter': False, 'lag_filter_min': -1, 'lag_filter_max': 1,
-        'signal_a': np.array([1.5, 2.5]), 'signal_a_std': [], 'signal_b': np.array([3.5, 4.5]), 'signal_b_std': [],
-        'wxcorr': wxcorr, **overrides,
-    })
+def _export(path, wxcorr=None, **overrides):
+    export.export_wxcorr_data(str(path), export_params(wxcorr=wxcorr or _windows(2), **overrides))
 
 
-def test_first_sheet_keeps_the_layout_pipelines_rely_on(tmp_path):
-    _export(tmp_path / "f.xlsx", _windows(2))
+def _config(**overrides):
+    return dataclasses.replace(export_params()['config'], **overrides)
+
+
+def test_windowed_file_is_a_set_of_tables(tmp_path):
+    _export(tmp_path / "f.xlsx")
     workbook = openpyxl.load_workbook(tmp_path / "f.xlsx")
-    assert workbook.sheetnames[0] == workbook.active.title == "xcorr data"
-    rows = list(workbook.active.iter_rows(values_only=True))
-    assert [(row[0], row[1]) for row in rows[:14]] == [
-        ('xcorr type', 'windowed cross-correlation'), ('Input dyad directory', 'dyad'), ('Input file A', 'a.xlsx'),
-        ('Input file B', 'b.xlsx'), ('Data type', 'event-based (resampled to 5hz)'), ('Standardised (z-score)', 'False'),
-        ('Window size', 150), ('Max lag', 1), ('Step size', 75), ('Absolute correlation values', 'False'),
-        ('Per-window averages', 'False'), ('Lag filter used', 'False'), ('Lag filter minimum', '-'), ('Lag filter maximum', '-'),
-    ]
-    assert rows[0][2] is None
-    assert list(rows[0][3:]) == [
-        'signal_a', 'signal_b', 'window start index', 'peak correlation (r_max)', 'lag of peak correlation (tau_max)',
-        'avg_z_transformed_corr', 'var_z_transformed_corr', 'w_0_correlations', 'w_0_meta', 'w_1_correlations',
-        'w_1_meta', 'dfa_lags', 'dfa_alpha',
-    ]
-    assert list(rows[1][3:]) == [
-        1.5, 3.5, 0, 0.5, -1, 0.25, 0.75, 0.5, 'start_idx=0', 0.5, 'start_idx=1', '-', '-',
-    ]
+    assert workbook.sheetnames == ["metadata", "windows", "correlations", "signals", "dfa_per_lag"]
+    assert read_table(tmp_path / "f.xlsx", "windows") == (
+        ['window', 'start_index', 'center_index', 'r_max', 'tau_max', 'avg_z_transformed_corr',
+         'var_z_transformed_corr', 'kpss_p_a', 'kpss_p_b'],
+        [[1, 0, 75, 0.5, -1, 0.25, 0.75, None, None], [2, 75, 150, 0.5, -1, 0.25, 0.75, None, None]],
+    )
+    assert read_table(tmp_path / "f.xlsx", "signals") == (['sample', 'signal_a', 'signal_b'], [[0, 1.5, 3.5], [1, 2.5, 4.5]])
 
 
-def test_correlation_sheet_has_numbers_and_lag_labels(tmp_path):
-    _export(tmp_path / "f.xlsx", [_windows(1)[0], {**_windows(1)[0], 'start_idx': 75, 'correlations': [np.nan] * 3}])
-    rows = _sheets(tmp_path / "f.xlsx")["correlations"]
-    assert rows == [
+def test_metadata_has_typed_values_and_empty_cells_with_a_reason(tmp_path):
+    _export(tmp_path / "f.xlsx")
+    columns, rows = read_table(tmp_path / "f.xlsx", "metadata")
+    assert columns == ['name', 'value', 'note']
+    assert [(name, value) for name, value, _ in rows[:18]] == [
+        ('analysis', 'windowed cross-correlation'), ('dyad_folder', 'dyad'), ('file_a', 'a.xlsx'), ('file_b', 'b.xlsx'),
+        ('sheet', 'IBI'), ('column', 'ms'), ('data_type', 'event-based'), ('sampling_rate_hz', 5),
+        ('standardised', False), ('window_size_samples', 150), ('step_size_samples', 75), ('max_lag_samples', 1),
+        ('absolute_correlations', False), ('average_windows', False), ('lag_filter', False),
+        ('lag_filter_min_samples', None), ('lag_filter_max_samples', None), ('windows', 2),
+    ]
+    assert read_notes(tmp_path / "f.xlsx")['lag_filter_min_samples'] == "lag filter not used"
+    assert all(value != '-' and value not in ("True", "False", "nan") for _, value, _ in rows)
+
+
+def test_lag_filter_gives_its_range_and_the_lag_labels(tmp_path):
+    _export(tmp_path / "f.xlsx", _windows(1), config=_config(use_lag_filter=True, lag_filter_min=7, lag_filter_max=5))
+    metadata = read_metadata(tmp_path / "f.xlsx")
+    assert (metadata['lag_filter'], metadata['lag_filter_min_samples'], metadata['lag_filter_max_samples']) == (True, 5, 7)
+    assert read_table(tmp_path / "f.xlsx", "correlations")[0] == ['window start index / lag', 5, 6, 7]
+
+
+@pytest.mark.parametrize("signal_type, rate, value, note", [
+    ('event-based', 0, 5, "intervals resampled to this rate"),
+    ('fixed-rate', 2.5, 2.5, "from the sampling rate field of the Input Data tab"),
+    ('fixed-rate', 0, None, "not known: enter it on the Input Data tab to have it here"),
+])
+def test_sampling_rate(tmp_path, signal_type, rate, value, note):
+    _export(tmp_path / "f.xlsx", config=_config(signal_type=signal_type), sampling_rate=rate)
+    assert read_metadata(tmp_path / "f.xlsx")['sampling_rate_hz'] == value
+    assert read_notes(tmp_path / "f.xlsx")['sampling_rate_hz'] == note
+
+
+def test_standardised_signals_are_the_ones_correlated(tmp_path):
+    _export(tmp_path / "f.xlsx", config=_config(standardised=True))
+    assert read_table(tmp_path / "f.xlsx", "signals")[1] == [[0, -1.0, -1.0], [1, 1.0, 1.0]]
+    assert read_metadata(tmp_path / "f.xlsx")['standardised'] is True
+
+
+def test_correlation_sheet_has_numbers_and_empty_cells_for_flat_windows(tmp_path):
+    windows = _windows(2)
+    windows[1].update(correlations=[np.nan] * 3, r_max=np.nan, tau_max=np.nan)
+    _export(tmp_path / "f.xlsx", windows)
+    assert _sheets(tmp_path / "f.xlsx")["correlations"] == [
         ['window start index / lag', -1, 0, 1],
         [0, 0.5, -0.25, 0.125],
-        [75, 'nan', 'nan', 'nan'],
+        [75, None, None, None],
     ]
+    assert read_column(tmp_path / "f.xlsx", "windows", "r_max") == [0.5, None]
 
 
-def test_correlation_sheet_labels_follow_the_lag_filter(tmp_path):
-    _export(tmp_path / "f.xlsx", _windows(1), checkbox_lag_filter=True, lag_filter_min=5, lag_filter_max=7)
-    assert _sheets(tmp_path / "f.xlsx")["correlations"][0][1:] == [5, 6, 7]
-
-
-def test_grand_average_has_the_correlation_sheet(tmp_path):
-    averaged = [{**window, 'tau_max': 0} for window in _windows(1)]
-    export.export_avg_wxcorr_data(str(tmp_path / "f.xlsx"), averaged, 2, {'max_lag': 1, 'use_lag_filter': False})
-    sheets = _sheets(tmp_path / "f.xlsx")
-    assert list(sheets) == ["Grand Avg WXCorr", "correlations"]
-    assert sheets["correlations"][0] == ['window start index / lag', -1, 0, 1]
-
-
-def test_too_many_windows_for_the_first_sheet_still_export(tmp_path, monkeypatch):
+def test_many_windows_fit(tmp_path, monkeypatch):
+    """Earlier, each window had two columns on the first sheet, which ran out with long recordings."""
     monkeypatch.setattr(xlsx, "MAX_COLUMNS", 50)
-    windows = _windows(25)
-    _export(tmp_path / "f.xlsx", windows)
-    sheets = _sheets(tmp_path / "f.xlsx")
-    assert 'w_0_correlations' not in sheets["xcorr data"][0]
-    assert len(sheets["correlations"]) == len(windows) + 1
-    metadata = {row[0]: row[1] for row in sheets["xcorr data"]}
-    assert "left out" in metadata['Per-window columns']
+    _export(tmp_path / "f.xlsx", _windows(100))
+    assert len(read_table(tmp_path / "f.xlsx", "windows")[1]) == len(read_table(tmp_path / "f.xlsx", "correlations")[1]) == 100
 
 
-def test_most_windows_that_fit_keep_their_columns(monkeypatch):
-    monkeypatch.setattr(xlsx, "MAX_COLUMNS", 50)
-
-    def add(n_windows):
-        vectors, metadata = {name: [] for name in "abcdefg"}, {}
-        export._add_per_window_columns(vectors, metadata, _windows(n_windows), n_columns_after=2)
-        return vectors, metadata
-
-    # 3 columns of metadata, 7 summary columns and 2 columns after the windows leave 38 columns
-    vectors, metadata = add(19)
-    assert metadata == {} and 3 + len(vectors) + 2 == 50
-    vectors, metadata = add(20)
-    assert 'Per-window columns' in metadata and len(vectors) == 7
+def test_standard_file_is_a_set_of_tables(tmp_path):
+    path = tmp_path / "f.xlsx"
+    export.export_sxcorr_data(str(path), export_params(windowed=False))
+    assert openpyxl.load_workbook(path).sheetnames == ["metadata", "correlations", "signals"]
+    assert read_table(path, "correlations") == (['lag', 'correlation'], [[-1, 0.1], [0, 0.5], [1, 0.2]])
+    metadata = read_metadata(path)
+    assert (metadata['analysis'], metadata['max_lag_samples'], metadata['absolute_correlations']) == (
+        'standard cross-correlation', 1, False)
+    assert 'window_size_samples' not in metadata
 
 
-def test_flat_window_value_is_text_excel_can_open(tmp_path):
-    assert xlsx._cell_value(np.nan) == "nan"
-    assert xlsx._cell_value(np.inf) == "inf"
-    assert xlsx._cell_value(True) == "True" and xlsx._cell_value(np.True_) == "True"
-    assert xlsx._cell_value(None) == "None" and xlsx._cell_value("-") == "-"
-    assert xlsx._cell_value(np.float64(0.5)) == 0.5 and type(xlsx._cell_value(np.float64(0.5))) is float
-    assert type(xlsx._cell_value(np.int64(2))) is int
+@pytest.mark.parametrize("value, cell", [
+    (np.nan, None), (np.inf, None), (None, None), (True, True), (np.True_, True), (False, False), ("-", "-"),
+    (np.float64(0.5), 0.5), (np.int64(2), 2),
+])
+def test_typed_cells(value, cell):
+    assert xlsx.typed_cell(value) == cell and type(xlsx.typed_cell(value)) is type(cell)
 
 
 def test_failed_export_shows_an_error(gui, monkeypatch):
@@ -341,18 +348,18 @@ def test_batch_figure_has_room_for_its_text(retina, tmp_path, recwarn):
     assert not [w for w in recwarn.list if "constrained_layout" in str(w.message)]
 
 
-def _metadata(path):
-    return {row[0]: row[1] for row in openpyxl.load_workbook(path).worksheets[0].iter_rows(max_col=2, values_only=True) if row[0]}
-
-
-def test_group_average_says_how_many_windows_it_covers(tmp_path):
-    averaged = [{**window, 'start_idx': index} for index, window in enumerate(_windows(20))]
-    export.export_avg_wxcorr_data(str(tmp_path / "f.xlsx"), averaged, 3, {'max_lag': 1}, window_counts=[105, 20, 98])
-    metadata = _metadata(tmp_path / "f.xlsx")
-    assert metadata['Windows averaged'] == 20
-    assert metadata['Windows per dyad'] == "20 to 105"
-    assert "shortest dyad" in metadata['Window note']
-    assert list(metadata)[-3:] == ['Windows averaged', 'Windows per dyad', 'Window note']
+def test_group_average_is_a_set_of_tables_and_says_how_many_windows_it_covers(tmp_path):
+    from helpers import batch_params
+    path = tmp_path / "f.xlsx"
+    export.export_avg_wxcorr_data(str(path), _windows(20), 3, batch_params("", "", max_lag=1, use_lag_filter=False),
+                                  window_counts=[105, 20, 98])
+    assert openpyxl.load_workbook(path).sheetnames == ["metadata", "windows", "correlations"]
+    metadata = read_metadata(path)
+    assert (metadata['analysis'], metadata['dyads_averaged']) == ('windowed cross-correlation, group average', 3)
+    assert (metadata['windows_averaged'], metadata['windows_per_dyad_min'], metadata['windows_per_dyad_max']) == (20, 20, 105)
+    assert "shortest dyad" in read_notes(path)['windows_averaged']
+    assert read_table(path, "correlations")[0] == ['window start index / lag', -1, 0, 1]
+    assert 'kpss_p_a' not in read_table(path, "windows")[0]
 
 
 def test_batch_group_average_reports_the_window_counts(tmp_path):
@@ -371,7 +378,7 @@ def test_batch_group_average_reports_the_window_counts(tmp_path):
         return openpyxl.load_workbook(tmp_path / "out" / name)["correlations"].max_row - 1
 
     short, long = windows("BioSync_wcc_short.xlsx"), windows("BioSync_wcc_long.xlsx")
-    metadata = _metadata(tmp_path / "out" / "BioSync_wcc_group-average.xlsx")
+    metadata = read_metadata(tmp_path / "out" / "BioSync_wcc_group-average.xlsx")
     assert short < long
-    assert metadata['Windows averaged'] == windows("BioSync_wcc_group-average.xlsx") == short
-    assert metadata['Windows per dyad'] == f"{short} to {long}"
+    assert metadata['windows_averaged'] == windows("BioSync_wcc_group-average.xlsx") == short
+    assert (metadata['windows_per_dyad_min'], metadata['windows_per_dyad_max']) == (short, long)

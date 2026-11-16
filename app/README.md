@@ -95,7 +95,7 @@ The **Signal Properties** section of the Correlation tab describes the signals, 
 - **Windowed cross-correlation:** each window, as the correlation cuts it. The tab shows how many windows of each person have p ≥ 0.05, so that window sizes can be compared: windows short enough to be stationary are what windowed cross-correlation assumes.
 - **Standard cross-correlation:** the whole signal, which standard cross-correlation assumes to be stationary.
 
-p is read from the table of Kwiatkowski et al. (1992), so it lies between 0.01 and 0.10, and the number of lags is chosen from the data; the values are those of `statsmodels.tsa.stattools.kpss(x, regression='c', nlags='auto')`. Two limits: p ≥ 0.05 doesn't show that a window is stationary, only that the test found no evidence against it, and very smooth signals such as EDA fail more often than they should. In simulations of stationary signals that each keep 95% of the previous sample, only about half of the windows pass. The exports add the shares of stationary windows, or the p of each whole signal, after the DFA rows.
+p is read from the table of Kwiatkowski et al. (1992), so it lies between 0.01 and 0.10, and the number of lags is chosen from the data; the values are those of `statsmodels.tsa.stattools.kpss(x, regression='c', nlags='auto')`. Two limits: p ≥ 0.05 doesn't show that a window is stationary, only that the test found no evidence against it, and very smooth signals such as EDA fail more often than they should. In simulations of stationary signals that each keep 95% of the previous sample, only about half of the windows pass. The exports have the shares of stationary windows, or the p of each whole signal, in their `metadata` sheet, and the p of each window in `windows`.
 
 **DFA** (detrended fluctuation analysis) measures how long fluctuations persist, as an exponent α:
 
@@ -103,6 +103,22 @@ p is read from the table of Kwiatkowski et al. (1992), so it lies between 0.01 a
 - **DFA α of the correlations over time:** the series of windowed correlations, which is about the dyad. It needs windows that don't overlap, and long recordings.
 
 Each α is named after what it says (Hardstone et al., 2012): below 0.4 *anti-persistent*, 0.4 to 0.6 *no memory, like white noise*, 0.6 to 1 *persistent*, above 1 *drift, like a random walk* (no longer stationary). An estimate is never exactly 0.5, so the band around it is a choice; the limits are `NO_MEMORY_RANGE` and `DRIFT_ABOVE` in `analysis.py`. On the test data, all 66 EDA signals drift (α 1.19 to 2.02); of 60 IBI signals, 48 are persistent, 6 have no memory and 6 drift (α 0.42 to 1.18).
+
+## Output files
+
+Every file BioSync writes is called `BioSync_<analysis>_<dyad or folder>`: `wcc` for windowed and `scc` for standard cross-correlation, `surrogates` for the Surrogates tab. Batch writes an xlsx and a PNG for each dyad, and `BioSync_wcc_group-average` for windowed correlation. Files starting with `BioSync_` are never read as a person's recording.
+
+A correlation file has one table per sheet, with column names in the first row, so that each can be read in one call, e.g. `pandas.read_excel(path, sheet_name="windows")`:
+
+| Sheet | Content |
+|---|---|
+| `metadata` | `name`, `value` and `note` of each setting and single result: files, sheet, column, data type, sampling rate, settings in samples, DFA α (its category in `note`), KPSS |
+| `windows` | windowed: one row per window: `window`, `start_index`, `center_index`, `r_max`, `tau_max`, `avg_z_transformed_corr`, `var_z_transformed_corr`, `kpss_p_a`, `kpss_p_b` |
+| `correlations` | windowed: windows × lags, rows labelled with the window's start index and columns with the lag in samples. Standard: `lag`, `correlation` |
+| `signals` | `sample`, `signal_a`, `signal_b`, as they were correlated (z-scored if "standardise" is on) |
+| `dfa_per_lag` | windowed: `lag`, `alpha` of the correlations over time, empty when DFA over time isn't available |
+
+The group average has `metadata`, `windows` (without KPSS) and `correlations`. Numbers are numbers, settings are TRUE/FALSE, and a value that's missing is an empty cell, with the reason in `note`. Lags and windows are in samples; `sampling_rate_hz` converts them to seconds when it is known.
 
 ## Surrogate analysis
 
@@ -183,9 +199,9 @@ pytest
 | `stationarity.py` | KPSS test of level stationarity (`kpss_p_values`, `window_p_values`), and what the Correlation tab shows (`signal_stationarity`, `format_stationarity`). Vectorised over windows; the same values as statsmodels, which isn't a dependency. |
 | `dfa.py` | Detrended Fluctuation Analysis — `dfa`, `dfa_wxcorr`, `dfa_wxcorr_window_averages`. `analysis.py` decides which series it runs on. |
 | `plot.py` | Matplotlib figure factories for preprocessing preview, windowed xcorr, and standard xcorr plots, and for surrogate test results (`plot_surrogate_result`). |
-| `export.py` | Writes XLSX result files for wxcorr, sxcorr, and surrogate tests (`export_surrogate_result`; `export_surrogate_figure` saves the result figure as PNG). The Welch export keeps the first sheet of earlier versions and adds rows at its end. Always exports raw (non-sigmoid) correlation values. |
+| `export.py` | Writes XLSX result files: correlation results of a dyad and the group average as one table per sheet (`export_wxcorr_data`, `export_sxcorr_data`, `export_avg_wxcorr_data`, see "Output files"), and surrogate tests (`export_surrogate_result`; `export_surrogate_figure` saves the result figure as PNG). The Welch export keeps the first sheet of earlier versions and adds rows at its end. Always exports raw (non-sigmoid) correlation values. |
 | `batch_processing.py` | Iterates a folder of dyads, runs the full analysis pipeline on each, and saves per-dyad XLSX + PNG output (`BioSync_wcc_<dyad>`, `BioSync_scc_<dyad>`) and the group average (`BioSync_wcc_group-average`). Finds the results of earlier runs, also under the names of earlier versions. |
-| `xlsx.py` | Thin wrappers around openpyxl for reading and writing Excel files. `read_xlsx` returns the values of all sheets and closes the file. |
+| `xlsx.py` | Thin wrappers around openpyxl for reading and writing Excel files. `read_xlsx` returns the values of all sheets and closes the file. `write_tables` writes one table per sheet, with typed cells (`typed_cell`: numbers, TRUE/FALSE, text, and empty cells for missing values). |
 | `utils.py` | Small helpers (`is_numeric_array`, `count_subdirectories`, `resource_path`, …), and the names of output files: `output_name` gives `BioSync_<analysis>_<subject>`, and `list_dyad_files` skips such files in dyad folders. |
 
 ### Initialization order

@@ -145,3 +145,51 @@ def batch_params(input_dir, output_dir, column="Coupled", **overrides):
     }
     params.update(overrides)
     return params
+
+
+# ---------------------------------------------------------------------------
+# READING EXPORTS: tables written by xlsx.write_tables
+# ---------------------------------------------------------------------------
+
+def read_table(path, sheet):
+    """(column names, rows) of one sheet."""
+    import openpyxl
+    rows = list(openpyxl.load_workbook(path)[sheet].iter_rows(values_only=True))
+    return list(rows[0]), [list(row) for row in rows[1:]]
+
+
+def read_column(path, sheet, column):
+    columns, rows = read_table(path, sheet)
+    return [row[columns.index(column)] for row in rows]
+
+
+def read_metadata(path):
+    """{name: value} of the metadata sheet."""
+    return {name: value for name, value, _ in read_table(path, 'metadata')[1]}
+
+
+def read_notes(path):
+    """{name: note} of the metadata sheet."""
+    return {name: note for name, _, note in read_table(path, 'metadata')[1]}
+
+
+EXPORT_WINDOW = {'start_idx': 0, 'center_idx': 75, 'correlations': [0.5, -0.25, 0.125], 'r_max': 0.5, 'tau_max': -1,
+                 'avg_z_transformed_corr': 0.25, 'var_z_transformed_corr': 0.75}
+
+
+def export_params(windowed=True, config=None, **overrides):
+    """Parameters for export.export_wxcorr_data or export_sxcorr_data, as the app gives them, for one window."""
+    from analysis import AnalysisConfig
+    config = config or AnalysisConfig(
+        signal_type='event-based', windowed=windowed, standardised=False, window_size=150, step_size=75, max_lag=1,
+        absolute=False, average_windows=False, use_lag_filter=False, lag_filter_min=-1, lag_filter_max=1,
+        max_lag_sxc=1, absolute_sxc=False,
+    )
+    params = {
+        'config': config, 'selected_dyad_dir': '/data/dyad', 'input_file_a': '/data/dyad/a.xlsx',
+        'input_file_b': '/data/dyad/b.xlsx', 'selected_sheet': 'IBI', 'selected_column': 'ms', 'sampling_rate': 0,
+        'signal_a': [1.5, 2.5], 'signal_b': [3.5, 4.5], 'signal_a_std': [-1.0, 1.0], 'signal_b_std': [-1.0, 1.0],
+    }
+    params.update({'wxcorr': [dict(EXPORT_WINDOW)]} if windowed else {'sxcorr': {'lags': [-1, 0, 1], 'corr': [0.1, 0.5, 0.2]}})
+    params.update(overrides)
+    return params

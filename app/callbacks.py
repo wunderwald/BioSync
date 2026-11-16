@@ -687,53 +687,39 @@ def open_random_pair_input_dir_picker():
 # EXPORT HANDLERS
 # ---------------------------------------------------------------------------
 
-def _export_wxcorr_data(file_path):
-    params = {
-        'selected_dyad_dir':              state.val_selected_dyad_dir.get(),
-        'input_file_a':                   state.val_selected_file_a.get(),
-        'input_file_b':                   state.val_selected_file_b.get(),
-        'window_size':                    state.val_window_size.get(),
-        'max_lag':                        state.val_max_lag.get(),
-        'step_size':                      state.val_step_size.get(),
-        'checkbox_lag_filter':            state.val_checkbox_lag_filter.get(),
-        'lag_filter_min':                 state.val_lag_filter_min.get(),
-        'lag_filter_max':                 state.val_lag_filter_max.get(),
-        'checkbox_absolute_corr':         state.val_checkbox_absolute_corr.get(),
-        'checkbox_average_windows':       state.val_checkbox_average_windows.get(),
-        'checkbox_eb':                    state.val_checkbox_eb.get(),
-        'checkbox_fr':                    state.val_checkbox_fr.get(),
-        'signal_a':                       state.dat_physiological_data["signal_a"],
-        'signal_b':                       state.dat_physiological_data["signal_b"],
-        'signal_a_std':                   state.dat_physiological_data["signal_a_std"],
-        'signal_b_std':                   state.dat_physiological_data["signal_b_std"],
-        'is_standardised':                state.val_checkbox_standardise.get(),
-        'wxcorr':                         state.dat_correlation_data["wxcorr"],
-        'dfa_signals':                    state.dat_correlation_data['dfa_signals'],
-        'dfa_windows':                    state.dat_correlation_data['dfa_windows'],
-        'stationarity':                   state.dat_correlation_data['stationarity_windows'],
+def _export_params():
+    """What a correlation export of the loaded dyad needs, as batch_processing gives it for each dyad."""
+    return {
+        'config':            state.analysis_config(),
+        'selected_dyad_dir': state.val_selected_dyad_dir.get(),
+        'input_file_a':      state.val_selected_file_a.get(),
+        'input_file_b':      state.val_selected_file_b.get(),
+        'selected_sheet':    state.val_selected_sheet.get(),
+        'selected_column':   state.val_selected_column.get(),
+        'sampling_rate':     state.val_sampling_rate.get(),
+        'signal_a':          state.dat_physiological_data["signal_a"],
+        'signal_b':          state.dat_physiological_data["signal_b"],
+        'signal_a_std':      state.dat_physiological_data["signal_a_std"],
+        'signal_b_std':      state.dat_physiological_data["signal_b_std"],
+        'dfa_signals':       state.dat_correlation_data['dfa_signals'],
     }
-    export_wxcorr_data(file_path, params)
+
+
+def _export_wxcorr_data(file_path):
+    export_wxcorr_data(file_path, {
+        **_export_params(),
+        'wxcorr':       state.dat_correlation_data["wxcorr"],
+        'dfa_windows':  state.dat_correlation_data['dfa_windows'],
+        'stationarity': state.dat_correlation_data['stationarity_windows'],
+    })
 
 
 def _export_sxcorr_data(file_path):
-    params = {
-        'selected_dyad_dir':      state.val_selected_dyad_dir.get(),
-        'input_file_a':           state.val_selected_file_a.get(),
-        'input_file_b':           state.val_selected_file_b.get(),
-        'checkbox_fr':            state.val_checkbox_fr.get(),
-        'checkbox_eb':            state.val_checkbox_eb.get(),
-        'max_lag':                state.val_max_lag_sxc.get(),
-        'checkbox_absolute_corr': state.val_checkbox_absolute_corr_sxc.get(),
-        'signal_a':               state.dat_physiological_data["signal_a"],
-        'signal_b':               state.dat_physiological_data["signal_b"],
-        'signal_a_std':           state.dat_physiological_data["signal_a_std"],
-        'signal_b_std':           state.dat_physiological_data["signal_b_std"],
-        'is_standardised':        state.val_checkbox_standardise.get(),
-        'sxcorr':                 state.dat_correlation_data["sxcorr"],
-        'dfa_signals':            state.dat_correlation_data['dfa_signals'],
-        'stationarity':           state.dat_correlation_data['stationarity_signal'],
-    }
-    export_sxcorr_data(file_path, params)
+    export_sxcorr_data(file_path, {
+        **_export_params(),
+        'sxcorr':       state.dat_correlation_data["sxcorr"],
+        'stationarity': state.dat_correlation_data['stationarity_signal'],
+    })
 
 
 def _export_file_name():
@@ -898,6 +884,7 @@ def _analysis_params():
         'batch_input_folder':         state.val_batch_input_folder.get(),
         'output_dir':                 state.val_batch_output_folder.get(),
         'selected_sheet':             state.val_selected_sheet.get(),
+        'sampling_rate':              state.val_sampling_rate.get(),
         'has_headers':                state.val_checkbox_data_has_headers.get(),
         'selected_column_a':          state.val_selected_column.get(),
         'selected_column_b':          state.val_selected_column.get(),

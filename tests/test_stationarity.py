@@ -3,7 +3,6 @@ KPSS test of level stationarity, per window and for the whole signal: the same v
 as the correlation cuts them, and what the Correlation tab and the exports say.
 """
 import numpy as np
-import openpyxl
 import pytest
 
 import batch_processing
@@ -13,7 +12,7 @@ import export
 import state
 from analysis import AnalysisConfig
 from cross_correlation import windowed_cross_correlation
-from helpers import batch_params, write_dyad
+from helpers import EXPORT_WINDOW, batch_params, export_params, read_column, read_metadata, read_notes, write_dyad
 from stationarity import (
     ALPHA, LARGEST_P, SMALLEST_P, format_stationarity, kpss_p_values, signal_stationarity, stationary_share,
     window_p_values,
@@ -171,52 +170,39 @@ def test_new_data_clears_the_results(results):
 # EXPORT
 # ---------------------------------------------------------------------------
 
-def _metadata(path):
-    return [(row[0], row[1]) for row in openpyxl.load_workbook(path).worksheets[0].iter_rows(max_col=2, values_only=True)
-            if row[0]]
+def test_windowed_export_has_shares_and_the_p_of_each_window(tmp_path):
+    path = tmp_path / "f.xlsx"
+    windows = [dict(EXPORT_WINDOW, start_idx=start) for start in (0, 75, 150, 225)]
+    export.export_wxcorr_data(str(path), export_params(
+        wxcorr=windows, stationarity={'windowed': True, 'p_a': [0.1, 0.01, 0.06, np.nan], 'p_b': [0.01, 0.01, 0.01, 0.01]},
+    ))
+    metadata, notes = read_metadata(path), read_notes(path)
+    assert metadata['kpss_stationary_share_a'] == pytest.approx(2 / 3)
+    assert notes['kpss_stationary_share_a'] == "2 of 3 windows with KPSS p >= 0.05"
+    assert metadata['kpss_stationary_share_b'] == 0
+    assert read_column(path, "windows", "kpss_p_a") == [0.1, 0.01, 0.06, None]     # a flat window is empty
 
 
-def test_windowed_export_adds_shares_after_the_dfa_rows(tmp_path):
-    window = {'start_idx': 0, 'center_idx': 50, 'correlations': [0.5, 0.1, 0.2], 'r_max': 0.5, 'tau_max': -1,
-              'avg_z_transformed_corr': 0.25, 'var_z_transformed_corr': 0.75}
-    export.export_wxcorr_data(str(tmp_path / "f.xlsx"), {
-        'selected_dyad_dir': 'dyad', 'input_file_a': 'a.xlsx', 'input_file_b': 'b.xlsx', 'checkbox_fr': False,
-        'is_standardised': False, 'window_size': 100, 'max_lag': 1, 'step_size': 50, 'checkbox_absolute_corr': False,
-        'checkbox_average_windows': False, 'checkbox_lag_filter': False, 'lag_filter_min': -1, 'lag_filter_max': 1,
-        'signal_a': [1.5], 'signal_a_std': [], 'signal_b': [3.5], 'signal_b_std': [], 'wxcorr': [window],
-        'stationarity': {'windowed': True, 'p_a': [0.1, 0.01, 0.06, np.nan], 'p_b': [0.01, 0.01, 0.01, 0.01]},
-    })
-    metadata = _metadata(tmp_path / "f.xlsx")
-    assert metadata[17][0] == 'DFA note'
-    assert metadata[18:] == [
-        ('KPSS share of stationary windows, signal A', pytest.approx(2 / 3)),
-        ('KPSS share of stationary windows, signal B', 0),
-        ('KPSS note', "Windows with KPSS p >= 0.05, in which level stationarity isn't rejected: A 2 of 3, B 0 of 4. "
-                      "Flat windows can't be tested."),
-    ]
+def test_standard_export_has_the_p_of_each_whole_signal(tmp_path):
+    path = tmp_path / "f.xlsx"
+    export.export_sxcorr_data(str(path), export_params(
+        windowed=False, stationarity={'windowed': False, 'p_a': 0.0712, 'p_b': np.nan}))
+    metadata, notes = read_metadata(path), read_notes(path)
+    assert (metadata['kpss_p_a'], metadata['kpss_p_b']) == (0.0712, None)
+    assert notes['kpss_p_b'] == "flat signal, can't be tested"
+    assert notes['kpss_p_a'].startswith("KPSS of the whole signal; p < 0.05: not stationary.")
 
 
-def test_standard_export_adds_p_after_the_dfa_rows(tmp_path):
-    export.export_sxcorr_data(str(tmp_path / "f.xlsx"), {
-        'selected_dyad_dir': 'dyad', 'input_file_a': 'a.xlsx', 'input_file_b': 'b.xlsx', 'checkbox_fr': False,
-        'is_standardised': False, 'max_lag': 1, 'checkbox_absolute_corr': False, 'signal_a': [1.5], 'signal_b': [3.5],
-        'signal_a_std': [], 'signal_b_std': [], 'sxcorr': {'lags': [0], 'corr': [0.5]},
-        'stationarity': {'windowed': False, 'p_a': 0.0712, 'p_b': np.nan},
-    })
-    metadata = _metadata(tmp_path / "f.xlsx")
-    assert metadata[11][0] == 'DFA note'
-    assert metadata[12:14] == [('KPSS p, signal A', 0.0712), ('KPSS p, signal B', '-')]
-    assert metadata[14][0] == 'KPSS note'
-
-
-def test_export_without_a_result_has_dashes(tmp_path):
-    rows = dict(export._stationarity_metadata(None, windowed=True))
-    assert rows['KPSS share of stationary windows, signal A'] == '-'
+@pytest.mark.parametrize("windowed, name", [(True, 'kpss_stationary_share_a'), (False, 'kpss_p_a')])
+def test_export_without_a_result_has_empty_cells_and_says_why(tmp_path, windowed, name):
+    path = tmp_path / "f.xlsx"
+    (export.export_wxcorr_data if windowed else export.export_sxcorr_data)(str(path), export_params(windowed=windowed))
+    assert read_metadata(path)[name] is None and read_notes(path)[name]
 
 
 @pytest.mark.parametrize("windowed, name, key", [
-    (True, "BioSync_wcc_dyad0.xlsx", 'KPSS share of stationary windows, signal A'),
-    (False, "BioSync_scc_dyad0.xlsx", 'KPSS p, signal A'),
+    (True, "BioSync_wcc_dyad0.xlsx", 'kpss_stationary_share_a'),
+    (False, "BioSync_scc_dyad0.xlsx", 'kpss_p_a'),
 ])
 def test_batch_files_have_the_rows(tmp_path, windowed, name, key):
     input_dir, output_dir = tmp_path / "in", tmp_path / "out"
@@ -224,5 +210,4 @@ def test_batch_files_have_the_rows(tmp_path, windowed, name, key):
     write_dyad(input_dir / "dyad0", seed=0)
     summary = batch_processing.batch_process(batch_params(input_dir, output_dir, checkbox_windowed_xcorr=windowed))
     assert summary['failed'] == []
-    metadata = dict(_metadata(output_dir / name))
-    assert 0 <= metadata[key] <= 1
+    assert 0 <= read_metadata(output_dir / name)[key] <= 1

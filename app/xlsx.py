@@ -82,6 +82,48 @@ def write_xlsx(vectors: dict, single_values: dict, output_path: str, sheet_title
     # Save the workbook
     wb.save(output_path)
 
+def typed_cell(value):
+    """
+    The value to store in a cell of a table that programs read: numbers as numbers, booleans as TRUE/FALSE,
+    text as text, and nothing, NaN or infinity as an empty cell, which pandas and R read as missing.
+    """
+    if isinstance(value, np.generic):
+        value = value.item()
+    if value is None or isinstance(value, bool) or isinstance(value, str):
+        return value
+    if isinstance(value, (int, float)):
+        return value if math.isfinite(value) else None
+    return str(value)
+
+
+def matrix_table(matrix: dict):
+    """A matrix for write_matrix_sheet as a table for write_tables: its row labels become the first column."""
+    return {
+        'title': matrix['title'],
+        'columns': [matrix['corner'], *matrix['column_labels']],
+        'rows': [[label, *row] for label, row in zip(matrix['row_labels'], matrix['rows'])],
+    }
+
+
+def write_tables(output_path: str, sheets: list):
+    """
+    Write an Excel file of tables, one per sheet, so that each sheet can be read in one call, such as
+    pandas.read_excel(path, sheet_name=title). Each sheet is a dict with 'title', 'columns' (the first row) and
+    'rows'. Cells are written as typed_cell says.
+    """
+    wb = Workbook()
+    wb.remove(wb.active)
+    for table in sheets:
+        if len(table['rows']) + 1 > MAX_ROWS or len(table['columns']) > MAX_COLUMNS:
+            raise ValueError(f"Too much data for an Excel sheet: {len(table['rows'])} rows, "
+                             f"{len(table['columns'])} columns in '{table['title']}'.")
+        sheet = wb.create_sheet(table['title'])
+        sheet.append([typed_cell(column) for column in table['columns']])
+        for row in table['rows']:
+            sheet.append([typed_cell(value) for value in row])
+    wb.save(output_path)
+
+
 def read_xlsx(input_path: str):
     """
     Read the values of all sheets in an xlsx file. Cells with formulas give the value Excel last calculated.

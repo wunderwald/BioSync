@@ -20,7 +20,7 @@ from measures import MEAN_R
 import callbacks
 import export
 import utils
-from helpers import N_BEATS, FakeTimer, batch_params, ibi, write_dyad, write_person
+from helpers import N_BEATS, FakeTimer, batch_params, ibi, read_column, read_metadata, read_notes, write_dyad, write_person
 
 def _read_export(path):
     """Returns (metadata, columns) of an exported file."""
@@ -79,18 +79,18 @@ def test_grand_average_tau_stays_inside_the_lag_filter(batch_dirs):
     input_dir, output_dir = batch_dirs
     params = batch_params(input_dir, output_dir, use_lag_filter=True, lag_filter_min=10, lag_filter_max=30)
     batch_processing.batch_process(params)
-    _, columns = _read_export(output_dir / "BioSync_wcc_group-average.xlsx")
-    taus = [int(tau) for tau in columns['lag of peak correlation (tau_max)']]
+    taus = read_column(output_dir / "BioSync_wcc_group-average.xlsx", "windows", "tau_max")
     assert taus and all(10 <= tau <= 30 for tau in taus)
 
 
 def test_grand_average_without_filter_keeps_all_lags(batch_dirs):
     input_dir, output_dir = batch_dirs
     batch_processing.batch_process(batch_params(input_dir, output_dir))
-    _, columns = _read_export(output_dir / "BioSync_wcc_group-average.xlsx")
-    assert len(columns['w_0_correlations']) == 61
+    path = output_dir / "BioSync_wcc_group-average.xlsx"
+    assert read_column(path, "correlations", "window start index / lag") and \
+        len(openpyxl.load_workbook(path)["correlations"][1]) == 62     # the label column and 61 lags
     # The beat noise of each person adds up to about one sample of timing drift over the recording.
-    assert all(abs(int(tau)) <= 2 for tau in columns['lag of peak correlation (tau_max)'])
+    assert all(abs(tau) <= 2 for tau in read_column(path, "windows", "tau_max"))
 
 
 def test_random_pairs_apply_the_lag_filter(batch_dirs):
@@ -164,8 +164,8 @@ def test_extra_file_is_reported_and_first_two_are_used(tmp_path):
     summary = batch_processing.batch_process(batch_params(input_dir, output_dir))
     assert summary['processed'] == ["dyad0"]
     assert "P1.xlsx and P2.xlsx" in summary['warnings'][0]
-    metadata, _ = _read_export(output_dir / "BioSync_wcc_dyad0.xlsx")
-    assert (metadata['Input file A'], metadata['Input file B']) == ("P1.xlsx", "P2.xlsx")
+    metadata = read_metadata(output_dir / "BioSync_wcc_dyad0.xlsx")
+    assert (metadata['file_a'], metadata['file_b']) == ("P1.xlsx", "P2.xlsx")
 
 
 # ---------------------------------------------------------------------------
@@ -177,8 +177,10 @@ def test_standard_xcorr_with_short_lag_range_is_exported_without_dfa(batch_dirs)
     params = batch_params(input_dir, output_dir, checkbox_windowed_xcorr=False, max_lag_sxc=40)
     summary = batch_processing.batch_process(params)
     assert summary['failed'] == []
-    metadata, _ = _read_export(output_dir / "BioSync_scc_dyad0.xlsx")
-    assert metadata['Alpha (DFA scaling exponent)'] == '-'
+    path = output_dir / "BioSync_scc_dyad0.xlsx"
+    metadata = read_metadata(path)
+    assert metadata['dfa_alpha_a'] is not None and 'dfa_alpha_correlations_over_time' not in metadata
+    assert read_notes(path)['max_lag_samples'] is None and metadata['max_lag_samples'] == 40
 
 
 def test_random_pair_metadata_reports_standard_xcorr_settings(tmp_path):
@@ -271,5 +273,4 @@ def test_batch_group_average_of_averaged_windows_has_no_lag(batch_dirs):
     input_dir, output_dir = batch_dirs
     batch_processing.batch_process(batch_params(input_dir, output_dir, checkbox_average_windows=True))
     for name in ("BioSync_wcc_dyad0.xlsx", "BioSync_wcc_group-average.xlsx"):
-        _, columns = _read_export(output_dir / name)
-        assert set(columns['lag of peak correlation (tau_max)']) == {0}
+        assert set(read_column(output_dir / name, "windows", "tau_max")) == {0}

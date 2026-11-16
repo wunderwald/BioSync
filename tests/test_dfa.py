@@ -2,7 +2,6 @@
 DFA results must be right for signals with a known answer, and must be refused when they couldn't be trusted.
 """
 import numpy as np
-import openpyxl
 import pytest
 
 import analysis
@@ -11,6 +10,7 @@ import export
 import state
 from analysis import AnalysisConfig, dfa_category, format_dfa, signal_dfa, windowed_dfa
 from cross_correlation import windowed_cross_correlation
+from helpers import export_params, read_metadata, read_notes, read_table
 from dfa import MIN_DFA_VALUES, dfa, dfa_wxcorr, dfa_wxcorr_window_averages
 
 
@@ -196,61 +196,37 @@ def test_window_text_follows_the_correlation_type(fake_state, monkeypatch, windo
         assert expected_second_line in text
 
 
-def _sheet(path):
-    return list(openpyxl.load_workbook(path).worksheets[0].iter_rows(values_only=True))
-
-
-def _wx_params(**overrides):
-    window = {
-        'start_idx': 0, 'center_idx': 75, 'correlations': [0.5, -0.25, 0.125], 'r_max': 0.5, 'tau_max': -1,
-        'avg_z_transformed_corr': 0.25, 'var_z_transformed_corr': 0.75,
-    }
-    return {
-        'selected_dyad_dir': 'dyad', 'input_file_a': 'a.xlsx', 'input_file_b': 'b.xlsx', 'checkbox_fr': False,
-        'is_standardised': False, 'window_size': 150, 'max_lag': 1, 'step_size': 75, 'checkbox_absolute_corr': False,
-        'checkbox_average_windows': False, 'checkbox_lag_filter': False, 'lag_filter_min': -1, 'lag_filter_max': 1,
-        'signal_a': [1.5], 'signal_a_std': [], 'signal_b': [3.5], 'signal_b_std': [], 'wxcorr': [window], **overrides,
-    }
-
-
-def test_export_adds_dfa_after_the_existing_metadata_and_fills_the_existing_columns(tmp_path):
-    export.export_wxcorr_data(str(tmp_path / "f.xlsx"), _wx_params(
+def test_export_has_dfa_with_its_category_and_the_values_per_lag(tmp_path):
+    path = tmp_path / "f.xlsx"
+    export.export_wxcorr_data(str(path), export_params(
         dfa_signals=SIGNALS,
         dfa_windows={'alpha_window_averages': 0.5, 'note': None, 'alpha_per_lag': [{'lag': -1, 'alpha': 0.6}, {'lag': 0, 'alpha': 0.7}]},
     ))
-    rows = _sheet(tmp_path / "f.xlsx")
-    metadata = [(row[0], row[1]) for row in rows if row[0]]
-    assert metadata[13][0] == 'Lag filter maximum'
-    assert metadata[14:18] == [
-        ('DFA alpha, signal A', 1.0349), ('DFA alpha, signal B', 0.98),
-        ('DFA alpha, over time (average across lags)', 0.5), ('DFA note', '-'),
-    ]
-    header = rows[0]
-    assert [rows[1][header.index('dfa_lags')], rows[2][header.index('dfa_lags')]] == [-1, 0]
-    assert [rows[1][header.index('dfa_alpha')], rows[2][header.index('dfa_alpha')]] == [0.6, 0.7]
+    metadata, notes = read_metadata(path), read_notes(path)
+    assert (metadata['dfa_alpha_a'], metadata['dfa_alpha_b'], metadata['dfa_alpha_correlations_over_time']) == (1.0349, 0.98, 0.5)
+    assert (notes['dfa_alpha_a'], notes['dfa_alpha_b']) == ("drift, like a random walk", "persistent")
+    assert notes['dfa_alpha_correlations_over_time'] == "no memory, like white noise"
+    assert read_table(path, "dfa_per_lag") == (['lag', 'alpha'], [[-1, 0.6], [0, 0.7]])
 
 
-def test_export_shows_why_dfa_is_missing(tmp_path):
-    export.export_wxcorr_data(str(tmp_path / "f.xlsx"), _wx_params(
+def test_export_says_why_dfa_is_missing(tmp_path):
+    path = tmp_path / "f.xlsx"
+    export.export_wxcorr_data(str(path), export_params(
         dfa_signals={'alpha_a': None, 'alpha_b': None, 'note': "Too short."},
         dfa_windows={'alpha_window_averages': None, 'alpha_per_lag': None, 'note': "Overlap."},
     ))
-    rows = _sheet(tmp_path / "f.xlsx")
-    metadata = {row[0]: row[1] for row in rows if row[0]}
-    assert metadata['DFA alpha, signal A'] == '-'
-    assert metadata['DFA note'] == "Too short. Overlap."
-    assert rows[1][rows[0].index('dfa_alpha')] == '-'
+    metadata, notes = read_metadata(path), read_notes(path)
+    assert metadata['dfa_alpha_a'] is None and notes['dfa_alpha_a'] == "Too short."
+    assert metadata['dfa_alpha_correlations_over_time'] is None and notes['dfa_alpha_correlations_over_time'] == "Overlap."
+    assert read_table(path, "dfa_per_lag") == (['lag', 'alpha'], [])
 
 
-def test_standard_export_keeps_the_old_row_empty_and_adds_the_new_ones(tmp_path):
-    export.export_sxcorr_data(str(tmp_path / "f.xlsx"), {
-        'selected_dyad_dir': 'dyad', 'input_file_a': 'a.xlsx', 'input_file_b': 'b.xlsx', 'checkbox_fr': False,
-        'is_standardised': False, 'max_lag': 1, 'checkbox_absolute_corr': False, 'signal_a': [1.5], 'signal_b': [3.5],
-        'signal_a_std': [], 'signal_b_std': [], 'sxcorr': {'lags': [0], 'corr': [0.5]}, 'dfa_signals': SIGNALS,
-    })
-    metadata = [(row[0], row[1]) for row in _sheet(tmp_path / "f.xlsx") if row[0]]
-    assert metadata[8] == ('Alpha (DFA scaling exponent)', '-')
-    assert metadata[9:12] == [('DFA alpha, signal A', 1.0349), ('DFA alpha, signal B', 0.98), ('DFA note', '-')]
+def test_standard_export_has_dfa_per_person_only(tmp_path):
+    path = tmp_path / "f.xlsx"
+    export.export_sxcorr_data(str(path), export_params(windowed=False, dfa_signals=SIGNALS))
+    metadata = read_metadata(path)
+    assert (metadata['dfa_alpha_a'], metadata['dfa_alpha_b']) == (1.0349, 0.98)
+    assert 'dfa_alpha_correlations_over_time' not in metadata
 
 
 @pytest.mark.parametrize("alpha, category", [

@@ -3,189 +3,231 @@ import os
 import numpy as np
 
 import xlsx
+from analysis import AnalysisConfig, dfa_category
 from plot import plot_surrogate_result, plot_windowed_cross_correlation, save_figure_to_png
+from signal_processing import EVENT_BASED_SAMPLING_RATE_HZ
 from stationarity import ALPHA as KPSS_ALPHA, stationary_share
 from surrogates import BLOCKS, REPAIRED, SIGNIFICANCE_LEVEL, WELCH, result_summary
 
-FIRST_VECTOR_COLUMN = 4  # see xlsx.write_xlsx
+# ---------------------------------------------------------------------------
+# CORRELATION RESULTS
+# Each file is a set of tables, one per sheet, so that programs can read any of them in one call:
+#   metadata       name, value and note of each setting and single result
+#   windows        one row per window (windowed)
+#   correlations   windows × lags (windowed), or one row per lag (standard)
+#   signals        the signals as they were correlated
+#   dfa_per_lag    DFA alpha of the correlations over time at each lag (windowed, empty when not available)
+# A cell holds a number, TRUE/FALSE or text. A missing value is an empty cell, and its note says why.
+# ---------------------------------------------------------------------------
 
-def _value_or_dash(value):
-    return '-' if value is None else value
+WINDOWED_ANALYSIS = "windowed cross-correlation"
+STANDARD_ANALYSIS = "standard cross-correlation"
+GROUP_AVERAGE_ANALYSIS = "windowed cross-correlation, group average"
 
-def _dfa_metadata(dfa_signals, dfa_windows=None):
-    """Rows for the end of the metadata, so that the rows before them keep their place."""
+
+def _metadata_sheet(rows):
+    """rows are (name, value) or (name, value, note)."""
+    return {'title': 'metadata', 'columns': ['name', 'value', 'note'],
+            'rows': [[*row, None] if len(row) == 2 else list(row) for row in rows]}
+
+
+def _base_name(path):
+    return os.path.basename(path) if path else None
+
+
+def _input_rows(params):
+    return [
+        ('dyad_folder', _base_name(params.get('selected_dyad_dir'))),
+        ('file_a', _base_name(params.get('input_file_a'))),
+        ('file_b', _base_name(params.get('input_file_b'))),
+        ('sheet', params.get('selected_sheet') or None),
+        ('column', params.get('selected_column') or None),
+    ]
+
+
+def _signal_rows(config, sampling_rate):
+    """The data type and its sampling rate. sampling_rate is the fixed rate the app knows, 0 if it doesn't."""
+    if config.signal_type == 'event-based':
+        rate = (EVENT_BASED_SAMPLING_RATE_HZ, "intervals resampled to this rate")
+    elif sampling_rate:
+        rate = (sampling_rate, "from the sampling rate field of the Input Data tab")
+    else:
+        rate = (None, "not known: enter it on the Input Data tab to have it here")
+    return [
+        ('data_type', config.signal_type),
+        ('sampling_rate_hz', *rate),
+        ('standardised', config.standardised, "z-scored before correlating"),
+    ]
+
+
+def _windowed_settings_rows(config):
+    if config.use_lag_filter:
+        low, high = sorted((config.lag_filter_min, config.lag_filter_max))
+        lag_filter = [('lag_filter_min_samples', low), ('lag_filter_max_samples', high)]
+    else:
+        lag_filter = [('lag_filter_min_samples', None, "lag filter not used"),
+                      ('lag_filter_max_samples', None, "lag filter not used")]
+    return [
+        ('window_size_samples', config.window_size),
+        ('step_size_samples', config.step_size),
+        ('max_lag_samples', config.max_lag),
+        ('absolute_correlations', config.absolute),
+        ('average_windows', config.average_windows, "correlations averaged over the lags of each window"),
+        ('lag_filter', config.use_lag_filter),
+        *lag_filter,
+    ]
+
+
+def _min_lag(config):
+    return min(config.lag_filter_min, config.lag_filter_max) if config.use_lag_filter else -config.max_lag
+
+
+def _alpha_row(name, alpha, reason):
+    return (name, alpha, dfa_category(alpha)) if alpha is not None else (name, None, reason or "no data")
+
+
+def _dfa_rows(dfa_signals, dfa_windows=None):
     dfa_signals = dfa_signals or {}
-    metadata = {
-        'DFA alpha, signal A': _value_or_dash(dfa_signals.get('alpha_a')),
-        'DFA alpha, signal B': _value_or_dash(dfa_signals.get('alpha_b')),
-    }
-    notes = [dfa_signals.get('note')]
+    rows = [
+        _alpha_row('dfa_alpha_a', dfa_signals.get('alpha_a'), dfa_signals.get('note')),
+        _alpha_row('dfa_alpha_b', dfa_signals.get('alpha_b'), dfa_signals.get('note')),
+    ]
     if dfa_windows is not None:
-        metadata['DFA alpha, over time (average across lags)'] = _value_or_dash(dfa_windows.get('alpha_window_averages'))
-        notes.append(dfa_windows.get('note'))
-    metadata['DFA note'] = ' '.join(note for note in notes if note) or '-'
-    return metadata
+        rows.append(_alpha_row('dfa_alpha_correlations_over_time', dfa_windows.get('alpha_window_averages'),
+                               dfa_windows.get('note')))
+    return rows
 
-def _stationarity_metadata(stationarity, windowed):
-    """KPSS rows for the end of the metadata, after the DFA rows. stationarity is from signal_stationarity."""
-    if not windowed:
-        p_a, p_b = (stationarity['p_a'], stationarity['p_b']) if stationarity else (None, None)
-        return {
-            'KPSS p, signal A': _value_or_dash(None if p_a is None or np.isnan(p_a) else p_a),
-            'KPSS p, signal B': _value_or_dash(None if p_b is None or np.isnan(p_b) else p_b),
-            'KPSS note': f"KPSS test of level stationarity of the whole signal. p < {KPSS_ALPHA}: not stationary. "
-                         "p is read from a table, so 0.01 means 0.01 or less and 0.1 means 0.1 or more.",
-        }
-    shares, counts = {}, []
-    for person in ('A', 'B'):
-        stationary, tested = stationary_share(stationarity[f'p_{person.lower()}']) if stationarity else (0, 0)
-        shares[f'KPSS share of stationary windows, signal {person}'] = stationary / tested if tested else '-'
-        counts.append(f"{person} {stationary} of {tested}")
-    return {**shares, 'KPSS note': f"Windows with KPSS p >= {KPSS_ALPHA}, in which level stationarity isn't "
-                                   f"rejected: {', '.join(counts)}. Flat windows can't be tested."}
 
-def _correlation_matrix(wxcorr, min_lag):
-    """Real numbers with one row per window and one column per lag, labelled with the lag in samples."""
-    return {
+def _kpss_window_rows(stationarity):
+    rows = []
+    for person in ('a', 'b'):
+        stationary, tested = stationary_share(stationarity[f'p_{person}']) if stationarity else (0, 0)
+        if tested:
+            rows.append((f'kpss_stationary_share_{person}', stationary / tested,
+                         f"{stationary} of {tested} windows with KPSS p >= {KPSS_ALPHA}"))
+        else:
+            rows.append((f'kpss_stationary_share_{person}', None, "no window could be tested"))
+    return rows
+
+
+def _kpss_signal_rows(stationarity):
+    rows = []
+    for person in ('a', 'b'):
+        p = stationarity[f'p_{person}'] if stationarity else None
+        if p is None or np.isnan(p):
+            rows.append((f'kpss_p_{person}', None, "flat signal, can't be tested" if stationarity else "no data"))
+        else:
+            rows.append((f'kpss_p_{person}', p, f"KPSS of the whole signal; p < {KPSS_ALPHA}: not stationary. "
+                                                "Read from a table: 0.01 means 0.01 or less, 0.1 means 0.1 or more."))
+    return rows
+
+
+def _windows_sheet(wxcorr, stationarity=None):
+    columns = ['window', 'start_index', 'center_index', 'r_max', 'tau_max', 'avg_z_transformed_corr',
+               'var_z_transformed_corr']
+    rows = [[number, w['start_idx'], w['center_idx'], w['r_max'], w['tau_max'], w['avg_z_transformed_corr'],
+             w['var_z_transformed_corr']] for number, w in enumerate(wxcorr, start=1)]
+    if stationarity is not None:
+        columns += ['kpss_p_a', 'kpss_p_b']
+        for row, p_a, p_b in zip(rows, stationarity['p_a'], stationarity['p_b']):
+            row += [p_a, p_b]
+    return {'title': 'windows', 'columns': columns, 'rows': rows}
+
+
+def _correlations_sheet(wxcorr, min_lag):
+    """One row per window, labelled with its start index, and one column per lag, labelled in samples."""
+    return xlsx.matrix_table({
         'title': 'correlations',
         'corner': 'window start index / lag',
         'row_labels': [window['start_idx'] for window in wxcorr],
         'column_labels': list(range(min_lag, min_lag + len(wxcorr[0]['correlations']))) if wxcorr else [],
         'rows': [window['correlations'] for window in wxcorr],
-    }
+    })
 
-def _add_per_window_columns(vectors, metadata, wxcorr, n_columns_after=0):
-    """
-    Adds two columns per window to the first sheet. With too many windows for Excel they are left out,
-    and only the correlation matrix sheet has them.
-    """
-    if FIRST_VECTOR_COLUMN + len(vectors) + 2 * len(wxcorr) + n_columns_after - 1 > xlsx.MAX_COLUMNS:
-        metadata['Per-window columns'] = "left out: too many windows for one sheet, see sheet 'correlations'"
-        return
-    for window_index, window in enumerate(wxcorr):
-        vectors[f"w_{window_index}_correlations"] = window['correlations']
-        vectors[f"w_{window_index}_meta"] = [
-            f"start_idx={window['start_idx']}",
-            f"center_idx={window['center_idx']}",
-            f"r_max={window['r_max']}",
-            f"tau_max={window['tau_max']}",
-        ]
+
+def _signals_sheet(params, config):
+    signal_a = params['signal_a_std'] if config.standardised else params['signal_a']
+    signal_b = params['signal_b_std'] if config.standardised else params['signal_b']
+    return {'title': 'signals', 'columns': ['sample', 'signal_a', 'signal_b'],
+            'rows': [[sample, a, b] for sample, (a, b) in enumerate(zip(signal_a, signal_b))]}
+
+
+def _dfa_per_lag_sheet(dfa_windows):
+    per_lag = (dfa_windows or {}).get('alpha_per_lag') or []
+    return {'title': 'dfa_per_lag', 'columns': ['lag', 'alpha'], 'rows': [[d['lag'], d['alpha']] for d in per_lag]}
+
 
 def export_wxcorr_data(file_path, params):
-    metadata = {
-        'xcorr type': "windowed cross-correlation",
-        'Input dyad directory': f"{os.path.basename(params['selected_dyad_dir'])}",
-        'Input file A': f"{os.path.basename(params['input_file_a'])}",
-        'Input file B': f"{os.path.basename(params['input_file_b'])}",
-        'Data type': 'fixed-rate' if params['checkbox_fr'] else 'event-based (resampled to 5hz)',
-        'Standardised (z-score)': params['is_standardised'],
-        'Window size': params['window_size'],
-        'Max lag': params['max_lag'],
-        'Step size': params['step_size'],
-        'Absolute correlation values': params['checkbox_absolute_corr'],
-        'Per-window averages': params['checkbox_average_windows'],
-        'Lag filter used': params['checkbox_lag_filter'],
-        'Lag filter minimum': params['lag_filter_min'] if params['checkbox_lag_filter'] else '-',
-        'Lag filter maximum': params['lag_filter_max'] if params['checkbox_lag_filter'] else '-',
-    }
-    vectors = {
-        'signal_a': params['signal_a_std'] if params['is_standardised'] else params['signal_a'],
-        'signal_b': params['signal_b_std'] if params['is_standardised'] else params['signal_b'],
-        'window start index': [o['start_idx'] for o in params['wxcorr']],
-        'peak correlation (r_max)': [o['r_max'] for o in params['wxcorr']],
-        'lag of peak correlation (tau_max)': [o['tau_max'] for o in params['wxcorr']],
-    }
-    vectors['avg_z_transformed_corr'] = [o['avg_z_transformed_corr'] for o in params['wxcorr']]
-    vectors['var_z_transformed_corr'] = [o['var_z_transformed_corr'] for o in params['wxcorr']]
-    _add_per_window_columns(vectors, metadata, params['wxcorr'], n_columns_after=2)
-    # DFA per lag
-    dfa_windows = params.get('dfa_windows') or {}
-    if dfa_windows.get('alpha_per_lag') is not None:
-        vectors['dfa_lags'] = [d['lag'] for d in dfa_windows['alpha_per_lag']]
-        vectors['dfa_alpha'] = [d['alpha'] for d in dfa_windows['alpha_per_lag']]
-    else:
-        vectors['dfa_lags'] = ['-']
-        vectors['dfa_alpha'] = ['-']
+    """
+    Writes the windowed correlation of one dyad. params has 'config' (analysis.AnalysisConfig), the signals,
+    'wxcorr', the file names, and optionally 'sampling_rate', 'selected_sheet', 'selected_column', 'dfa_signals',
+    'dfa_windows' and 'stationarity' (stationarity.signal_stationarity).
+    """
+    config = params['config']
+    wxcorr = params['wxcorr']
+    metadata = _metadata_sheet([
+        ('analysis', WINDOWED_ANALYSIS),
+        *_input_rows(params),
+        *_signal_rows(config, params.get('sampling_rate')),
+        *_windowed_settings_rows(config),
+        ('windows', len(wxcorr)),
+        *_dfa_rows(params.get('dfa_signals'), params.get('dfa_windows') or {}),
+        *_kpss_window_rows(params.get('stationarity')),
+    ])
+    stationarity = params.get('stationarity') or {'p_a': [None] * len(wxcorr), 'p_b': [None] * len(wxcorr)}
+    xlsx.write_tables(file_path, [
+        metadata,
+        _windows_sheet(wxcorr, stationarity),
+        _correlations_sheet(wxcorr, _min_lag(config)),
+        _signals_sheet(params, config),
+        _dfa_per_lag_sheet(params.get('dfa_windows')),
+    ])
 
-    metadata.update(_dfa_metadata(params.get('dfa_signals'), dfa_windows))
-    metadata.update(_stationarity_metadata(params.get('stationarity'), windowed=True))
-    min_lag = (
-        min(params['lag_filter_min'], params['lag_filter_max'])
-        if params['checkbox_lag_filter'] else -params['max_lag']
-    )
-    xlsx.write_xlsx(vectors=vectors, single_values=metadata, output_path=file_path,
-                    matrix=_correlation_matrix(params['wxcorr'], min_lag))
-
-def _window_count_metadata(n_windows_averaged, window_counts):
-    """Rows for the end of the metadata that say how much of each dyad the average covers."""
-    if not window_counts:
-        return {}
-    return {
-        'Windows averaged': n_windows_averaged,
-        'Windows per dyad': f"{min(window_counts)} to {max(window_counts)}",
-        'Window note': (
-            "Windows are averaged by position, up to the number of windows of the shortest dyad. "
-            "Later windows of longer dyads are not part of the average."
-        ),
-    }
 
 def export_avg_wxcorr_data(file_path, avg_wxcorr, n_dyads, params, window_counts=None):
     """
-    Export an averaged wxcorr result (from average_wxcorr_matrices) to XLSX.
-    window_counts are the numbers of windows of the averaged dyads, which the export reports.
+    Writes a group average (from average_wxcorr_matrices). params are the analysis parameters, as for
+    AnalysisConfig.from_params. window_counts are the numbers of windows of the averaged dyads.
     """
-    metadata = {
-        'xcorr type':                   'windowed cross-correlation (group average)',
-        'Number of dyads averaged':     n_dyads,
-        'Data type':                    'fixed-rate' if params.get('checkbox_fr') else 'event-based (resampled to 5hz)',
-        'Standardised (z-score)':       params.get('standardised_signals', params.get('is_standardised', '-')),
-        'Window size':                  params.get('window_size', '-'),
-        'Max lag':                      params.get('max_lag', '-'),
-        'Step size':                    params.get('step_size', '-'),
-        'Absolute correlation values':  params.get('checkbox_absolute_corr', '-'),
-        'Per-window averages':          params.get('checkbox_average_windows', '-'),
-        'Lag filter used':              params.get('use_lag_filter', params.get('checkbox_lag_filter', '-')),
-        'Lag filter minimum':           params.get('lag_filter_min', '-'),
-        'Lag filter maximum':           params.get('lag_filter_max', '-'),
-    }
-    vectors = {
-        'window start index':               [o['start_idx']               for o in avg_wxcorr],
-        'peak correlation (r_max)':         [o['r_max']                   for o in avg_wxcorr],
-        'lag of peak correlation (tau_max)':[o['tau_max']                 for o in avg_wxcorr],
-        'avg_z_transformed_corr':           [o['avg_z_transformed_corr']  for o in avg_wxcorr],
-        'var_z_transformed_corr':           [o['var_z_transformed_corr']  for o in avg_wxcorr],
-    }
-    _add_per_window_columns(vectors, metadata, avg_wxcorr)
-    metadata.update(_window_count_metadata(len(avg_wxcorr), window_counts))
-    min_lag = (
-        min(params['lag_filter_min'], params['lag_filter_max'])
-        if params.get('use_lag_filter') else -params['max_lag']
-    )
-    xlsx.write_xlsx(vectors=vectors, single_values=metadata, output_path=file_path, sheet_title="Grand Avg WXCorr",
-                    matrix=_correlation_matrix(avg_wxcorr, min_lag))
+    config = AnalysisConfig.from_params(params)
+    counts = [('windows_per_dyad_min', min(window_counts)), ('windows_per_dyad_max', max(window_counts))] \
+        if window_counts else [('windows_per_dyad_min', None, "not known"), ('windows_per_dyad_max', None, "not known")]
+    metadata = _metadata_sheet([
+        ('analysis', GROUP_AVERAGE_ANALYSIS),
+        ('dyads_averaged', n_dyads),
+        *_signal_rows(config, params.get('sampling_rate')),
+        *_windowed_settings_rows(config),
+        ('windows_averaged', len(avg_wxcorr), "windows are averaged by position, up to the number of windows of "
+                                              "the shortest dyad; later windows of longer dyads are left out"),
+        *counts,
+    ])
+    xlsx.write_tables(file_path, [
+        metadata,
+        _windows_sheet(avg_wxcorr),
+        _correlations_sheet(avg_wxcorr, _min_lag(config)),
+    ])
 
 
 def export_sxcorr_data(file_path, params):
-    metadata = {
-        'xcorr type': "(standard) cross-correlation",
-        'Input dyad directory': f"{os.path.basename(params['selected_dyad_dir'])}",
-        'Input file A': f"{os.path.basename(params['input_file_a'])}",
-        'Input file B': f"{os.path.basename(params['input_file_b'])}",
-        'Data type': 'fixed-rate' if params['checkbox_fr'] else 'event-based (resampled to 5hz)', 
-        'Standardised (z-score)': params['is_standardised'],
-        'Max lag': params['max_lag'],
-        'Absolute correlation values': params['checkbox_absolute_corr'],
-        'Alpha (DFA scaling exponent)': '-',  # kept for existing pipelines: DFA across lags measures nothing useful
-        **_dfa_metadata(params.get('dfa_signals')),
-        **_stationarity_metadata(params.get('stationarity'), windowed=False),
-    }
-    vectors = {
-        'signal_a': params['signal_a_std'] if params['is_standardised'] else params['signal_a'],
-        'signal_b': params['signal_b_std'] if params['is_standardised'] else params['signal_b'],
-        'lag': params['sxcorr']['lags'],
-        'correlation': params['sxcorr']['corr'],
-    }
-    xlsx.write_xlsx(vectors=vectors, single_values=metadata, output_path=file_path)
+    """Writes the standard correlation of one dyad. params as for export_wxcorr_data, with 'sxcorr'."""
+    config = params['config']
+    metadata = _metadata_sheet([
+        ('analysis', STANDARD_ANALYSIS),
+        *_input_rows(params),
+        *_signal_rows(config, params.get('sampling_rate')),
+        ('max_lag_samples', config.max_lag_sxc),
+        ('absolute_correlations', config.absolute_sxc),
+        *_dfa_rows(params.get('dfa_signals')),
+        *_kpss_signal_rows(params.get('stationarity')),
+    ])
+    correlations = {'title': 'correlations', 'columns': ['lag', 'correlation'],
+                    'rows': [[lag, r] for lag, r in zip(params['sxcorr']['lags'], params['sxcorr']['corr'])]}
+    xlsx.write_tables(file_path, [metadata, correlations, _signals_sheet(params, config)])
+
+
+# ---------------------------------------------------------------------------
+# SURROGATE TESTS AND RANDOM PAIRS
+# ---------------------------------------------------------------------------
 
 def _correlation_settings(params):
     """The rows that describe the correlation settings, in the order of earlier random pair exports."""
