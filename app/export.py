@@ -4,6 +4,7 @@ import numpy as np
 
 import xlsx
 from analysis import AnalysisConfig, dfa_category
+from measures import MEAN_ABS_R, MEAN_ABS_R_MAX, MEAN_R, R_AT_LAG_0, dyad_measure, measure_problem
 from plot import plot_surrogate_result, plot_windowed_cross_correlation, save_figure_to_png
 from signal_processing import EVENT_BASED_SAMPLING_RATE_HZ
 from stationarity import ALPHA as KPSS_ALPHA, stationary_share
@@ -223,6 +224,99 @@ def export_sxcorr_data(file_path, params):
     correlations = {'title': 'correlations', 'columns': ['lag', 'correlation'],
                     'rows': [[lag, r] for lag, r in zip(params['sxcorr']['lags'], params['sxcorr']['corr'])]}
     xlsx.write_tables(file_path, [metadata, correlations, _signals_sheet(params, config)])
+
+
+# ---------------------------------------------------------------------------
+# BATCH SUMMARY: one row per dyad, so that dyads can be compared without opening each file
+# ---------------------------------------------------------------------------
+
+SUMMARY_MEASURES = {MEAN_R: 'mean_r', MEAN_ABS_R: 'mean_abs_r', MEAN_ABS_R_MAX: 'mean_abs_r_max', R_AT_LAG_0: 'r_at_lag_0'}
+
+SUMMARY_DESCRIPTIONS = {
+    'dyad': "the dyad folder",
+    'status': "ok, or failed: then the note says why, and the values are empty",
+    'note': "why the dyad failed, or what to know about how it was processed",
+    'file_a': "the recording used as person A", 'file_b': "the recording used as person B",
+    'windows': "number of windows",
+    'r_max': "the correlation of largest size, with its sign", 'tau_max': "its lag in samples; > 0: A leads B",
+    'mean_r': "mean of all correlations, over windows and lags",
+    'mean_abs_r': "mean of all correlations without their sign",
+    'mean_abs_r_max': "mean over windows of the strongest correlation at any lag, without its sign",
+    'r_at_lag_0': "mean over windows of the correlation without delay",
+    'dfa_alpha_a': "DFA alpha of A's input signal", 'dfa_alpha_b': "DFA alpha of B's input signal",
+    'dfa_alpha_correlations_over_time': "DFA alpha of the windowed correlations over time",
+    'kpss_stationary_share_a': f"share of A's windows with KPSS p >= {KPSS_ALPHA}",
+    'kpss_stationary_share_b': f"share of B's windows with KPSS p >= {KPSS_ALPHA}",
+    'kpss_p_a': "KPSS p of A's whole signal", 'kpss_p_b': "KPSS p of B's whole signal",
+}
+
+
+def summary_columns(config):
+    """The columns of the summary's dyads sheet."""
+    first = ['dyad', 'status', 'note', 'file_a', 'file_b']
+    if config.windowed:
+        return first + ['windows', *SUMMARY_MEASURES.values(), 'dfa_alpha_a', 'dfa_alpha_b',
+                        'dfa_alpha_correlations_over_time', 'kpss_stationary_share_a', 'kpss_stationary_share_b']
+    return first + ['r_max', 'tau_max', 'mean_r', 'mean_abs_r', 'r_at_lag_0', 'dfa_alpha_a', 'dfa_alpha_b',
+                    'kpss_p_a', 'kpss_p_b']
+
+
+def summary_values(corr_data, config, dfa_signals, dfa_windows, stationarity):
+    """The summary values of one dyad, from the results its file is written from."""
+    dfa_signals = dfa_signals or {}
+    values = {'dfa_alpha_a': dfa_signals.get('alpha_a'), 'dfa_alpha_b': dfa_signals.get('alpha_b')}
+    columns = summary_columns(config)
+    for measure, column in SUMMARY_MEASURES.items():
+        if column in columns and measure_problem(measure, config) is None:
+            values[column] = dyad_measure(corr_data, config, measure)
+    if config.windowed:
+        values['windows'] = len(corr_data)
+        values['dfa_alpha_correlations_over_time'] = (dfa_windows or {}).get('alpha_window_averages')
+        for person in ('a', 'b'):
+            stationary, tested = stationary_share(stationarity[f'p_{person}']) if stationarity else (0, 0)
+            values[f'kpss_stationary_share_{person}'] = stationary / tested if tested else None
+    else:
+        correlations = np.asarray(corr_data['corr'], dtype=float)
+        if not np.all(np.isnan(correlations)):
+            peak = int(np.nanargmax(np.abs(correlations)))
+            values['r_max'], values['tau_max'] = correlations[peak], int(corr_data['lags'][peak])
+        for person in ('a', 'b'):
+            values[f'kpss_p_{person}'] = stationarity[f'p_{person}'] if stationarity else None
+    return values
+
+
+def export_batch_summary(file_path, rows, params):
+    """
+    Writes the batch summary: 'dyads' with one row per dyad folder (dicts with the keys of summary_columns, missing
+    ones empty), 'metadata' with the settings, and 'columns' with what each column means.
+    """
+    config = AnalysisConfig.from_params(params)
+    columns = summary_columns(config)
+    descriptions = []
+    for column in columns:
+        description = SUMMARY_DESCRIPTIONS[column]
+        measure = next((m for m, name in SUMMARY_MEASURES.items() if name == column), None)
+        problem = measure_problem(measure, config) if measure else None
+        descriptions.append([column, f"{description}. Empty: {problem}." if problem else description])
+    settings = _windowed_settings_rows(config) if config.windowed else [
+        ('max_lag_samples', config.max_lag_sxc), ('absolute_correlations', config.absolute_sxc)]
+    failed = sum(row.get('status') == 'failed' for row in rows)
+    metadata = _metadata_sheet([
+        ('analysis', WINDOWED_ANALYSIS if config.windowed else STANDARD_ANALYSIS),
+        ('input_folder', params.get('batch_input_folder') or None),
+        ('sheet', params.get('selected_sheet') or None),
+        ('column', params.get('selected_column_a') or None),
+        *_signal_rows(config, params.get('sampling_rate')),
+        *settings,
+        ('dyads', len(rows)),
+        ('dyads_ok', len(rows) - failed),
+        ('dyads_failed', failed),
+    ])
+    xlsx.write_tables(file_path, [
+        {'title': 'dyads', 'columns': columns, 'rows': [[row.get(column) for column in columns] for row in rows]},
+        metadata,
+        {'title': 'columns', 'columns': ['column', 'description'], 'rows': descriptions},
+    ])
 
 
 # ---------------------------------------------------------------------------

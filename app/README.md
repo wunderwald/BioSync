@@ -106,7 +106,7 @@ Each α is named after what it says (Hardstone et al., 2012): below 0.4 *anti-pe
 
 ## Output files
 
-Every file BioSync writes is called `BioSync_<analysis>_<dyad or folder>`: `wcc` for windowed and `scc` for standard cross-correlation, `surrogates` for the Surrogates tab. Batch writes an xlsx and a PNG for each dyad, and `BioSync_wcc_group-average` for windowed correlation. Files starting with `BioSync_` are never read as a person's recording.
+Every file BioSync writes is called `BioSync_<analysis>_<dyad or folder>`: `wcc` for windowed and `scc` for standard cross-correlation, `surrogates` for the Surrogates tab. Batch writes an xlsx and a PNG for each dyad, a summary of all dyads, and `BioSync_wcc_group-average` for windowed correlation. A dyad folder called `summary` or `group-average` would have its files replaced by these, and batch warns about it. Files starting with `BioSync_` are never read as a person's recording.
 
 A correlation file has one table per sheet, with column names in the first row, so that each can be read in one call, e.g. `pandas.read_excel(path, sheet_name="windows")`:
 
@@ -117,6 +117,12 @@ A correlation file has one table per sheet, with column names in the first row, 
 | `correlations` | windowed: windows × lags, rows labelled with the window's start index and columns with the lag in samples. Standard: `lag`, `correlation` |
 | `signals` | `sample`, `signal_a`, `signal_b`, as they were correlated (z-scored if "standardise" is on) |
 | `dfa_per_lag` | windowed: `lag`, `alpha` of the correlations over time, empty when DFA over time isn't available |
+
+Batch also writes **`BioSync_<wcc|scc>_summary.xlsx`**, to compare dyads without opening each file:
+
+- `dyads`: one row per dyad folder: `dyad`, `status` (`ok` or `failed`), `note` (why it failed, or e.g. which files were used), `file_a`, `file_b`, then the dyad's values. Windowed: `windows`, `mean_r`, `mean_abs_r`, `mean_abs_r_max`, `r_at_lag_0` (the measures of the Surrogates tab), DFA α and the KPSS shares. Standard: `r_max` and `tau_max` (the largest correlation with its sign, and its lag), `mean_r`, `mean_abs_r`, `r_at_lag_0`, DFA α and the KPSS p.
+- `metadata`: the settings of the run, and how many dyads were processed and failed.
+- `columns`: what each column means, and why a column is empty, e.g. `mean_abs_r_max` with "average windows".
 
 The group average has `metadata`, `windows` (without KPSS) and `correlations`. Numbers are numbers, settings are TRUE/FALSE, and a value that's missing is an empty cell, with the reason in `note`. Lags and windows are in samples; `sampling_rate_hz` converts them to seconds when it is known.
 

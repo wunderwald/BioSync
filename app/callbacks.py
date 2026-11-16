@@ -915,6 +915,8 @@ def _format_failures(failures):
 
 def _format_batch_summary(summary):
     lines = [f"Processed {len(summary['processed'])} dyads, skipped {len(summary['failed'])}."]
+    if summary.get('summary_file'):
+        lines.append(f"All dyads, one row each: {summary['summary_file']}")
     if summary['failed']:
         lines += ["", "Skipped:"] + _format_failures(summary['failed'])
     if summary['warnings']:

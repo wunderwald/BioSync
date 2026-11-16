@@ -4,12 +4,14 @@ import xlsx
 import utils
 from analysis import AnalysisConfig, analyze_dyad, signal_dfa, windowed_dfa
 from stationarity import signal_stationarity
-from export import export_sxcorr_data, export_wxcorr_data, export_avg_wxcorr_data
+from export import export_avg_wxcorr_data, export_batch_summary, export_sxcorr_data, export_wxcorr_data, summary_values
 from cross_correlation import average_wxcorr_matrices
 from datetime import datetime
 from plot import plot_windowed_cross_correlation, plot_standard_cross_correlation, save_figure_to_png
 
 GROUP_AVERAGE_NAME = utils.output_name(utils.WINDOWED, "group-average")
+# a dyad folder with one of these names would have its files overwritten by the files of the whole group
+GROUP_FILE_SUBJECTS = ("group-average", "summary")
 
 
 def _subject(dyad_dir):
@@ -17,7 +19,7 @@ def _subject(dyad_dir):
     return os.path.basename(dyad_dir) if dyad_dir else datetime.now().strftime('%Y%m%d-%H%M%S')
 
 
-def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dyad_dir=''):
+def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dyad_dir='', summary_row=None):
     """
     Processes dyadic data from Excel files, performs cross-correlation analysis, and optionally exports the results.
     Args:
@@ -40,6 +42,8 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
             - 'checkbox_absolute_corr_sxc' (bool): Indicates if absolute values should be used for standard cross-correlation.
             - 'checkbox_fr' (bool): Indicates if the signal type is fixed-rate.
         export (bool, optional): If True, the results will be exported to an Excel file. Defaults to True.
+        summary_row (dict, optional): Gets the dyad's values for the batch summary, see export.summary_values.
+            Needs export.
     Returns:
         dict: Correlation data resulting from the analysis.
     Raises:
@@ -86,6 +90,10 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
             'dfa_signals': signal_dfa(raw_signal_a, raw_signal_b, config) if export else None,
             'stationarity': signal_stationarity(signals, config) if export else None,
         }
+        dfa_windows = windowed_dfa(corr_data, config) if export and config.windowed else None
+        if summary_row is not None:
+            summary_row.update(summary_values(corr_data, config, base_params['dfa_signals'], dfa_windows,
+                                              base_params['stationarity']))
 
         # make and export correlation data
         if params['checkbox_windowed_xcorr']:
@@ -94,7 +102,7 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
             export_params = {
                 **base_params,
                 'wxcorr': corr_data,
-                'dfa_windows': windowed_dfa(corr_data, config) if export else None,
+                'dfa_windows': dfa_windows,
             }
             
             # export data and plot, making the plot first so that a failure leaves no files
@@ -201,6 +209,7 @@ def batch_process(params, progress=_no_progress):
             - processed (list): Names of the dyad folders that were processed.
             - failed (list): (folder name, error message) for each dyad folder that was skipped.
             - warnings (list): Messages about dyad folders that were processed with a caveat.
+            - summary_file (str): The name of the file with one row per dyad, if there were dyad folders.
     """
     summary = {'processed': [], 'failed': [], 'warnings': []}
 
@@ -219,27 +228,48 @@ def batch_process(params, progress=_no_progress):
         dyad_folders.remove(output_folder)
         summary['warnings'].append(f"{output_folder}: skipped, because it is the output folder")
     all_wxcorr_results = []
+    summary_rows = []
     for dyad_index, dyad_folder in enumerate(dyad_folders):
         progress(dyad_index, len(dyad_folders), dyad_folder)
+        row = {'dyad': dyad_folder}
+        summary_rows.append(row)
+        notes = []
+        if dyad_folder in GROUP_FILE_SUBJECTS:
+            notes.append(f"its result files have the name of a file for the whole group, which replaces them; "
+                         f"rename the folder to keep them")
+            summary['warnings'].append(f"{dyad_folder}: {notes[-1]}")
         dyad_path = os.path.join(batch_input_folder, dyad_folder)
         xlsx_files = utils.list_dyad_files(dyad_path)
         if len(xlsx_files) < 2:
-            summary['failed'].append((dyad_folder, f"needs 2 xlsx files, found {len(xlsx_files)}"))
+            reason = f"needs 2 xlsx files, found {len(xlsx_files)}"
+            summary['failed'].append((dyad_folder, reason))
+            row.update(status='failed', note=reason)
             continue
         file_a, file_b, sheets_match = xlsx.choose_dyad_files(dyad_path, xlsx_files)
+        row.update(file_a=file_a, file_b=file_b)
         if len(xlsx_files) > 2:
             caveat = "" if sheets_match else ", because no two have the same sheets"
-            summary['warnings'].append(f"{dyad_folder}: found {len(xlsx_files)} xlsx files, used {file_a} and {file_b}{caveat}")
+            notes.append(f"found {len(xlsx_files)} xlsx files, used {file_a} and {file_b}{caveat}")
+            summary['warnings'].append(f"{dyad_folder}: {notes[-1]}")
         file_path_a = os.path.join(dyad_path, file_a)
         file_path_b = os.path.join(dyad_path, file_b)
         try:
-            corr_data = _process_dyad(file_path_a, file_path_b, output_dir, params, dyad_dir=dyad_path, export=True)
+            values = {}
+            corr_data = _process_dyad(file_path_a, file_path_b, output_dir, params, dyad_dir=dyad_path, export=True,
+                                      summary_row=values)
             if params['checkbox_windowed_xcorr'] and corr_data:
                 all_wxcorr_results.append(corr_data)
             summary['processed'].append(dyad_folder)
+            row.update(values, status='ok', note="; ".join(notes) or None)
         except Exception as e:
             print(f"! Skipping {dyad_folder}: {e}")
             summary['failed'].append((dyad_folder, str(e)))
+            row.update(status='failed', note="; ".join([str(e), *notes]))
+
+    if summary_rows:
+        analysis = utils.WINDOWED if params['checkbox_windowed_xcorr'] else utils.STANDARD
+        summary['summary_file'] = f"{utils.output_name(analysis, 'summary')}.xlsx"
+        export_batch_summary(os.path.join(output_dir, summary['summary_file']), summary_rows, params)
 
     # export group-average heatmap after all dyads are processed
     if params['checkbox_windowed_xcorr'] and all_wxcorr_results:

@@ -15,7 +15,7 @@ import callbacks
 import state
 import validation
 from signal_processing import guess_is_event_based
-from helpers import FakeTimer, batch_params, write_dyad, write_person
+from helpers import read_table, FakeTimer, batch_params, write_dyad, write_person
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +122,9 @@ def test_failure_while_plotting_leaves_no_files(tmp_path, monkeypatch):
     monkeypatch.setattr(batch_processing, "plot_windowed_cross_correlation", broken_plot)
     summary = batch_processing.batch_process(batch_params(tmp_path / "in", tmp_path / "out"))
     assert summary['failed'] == [("dyad0", "plot failed")]
-    assert os.listdir(tmp_path / "out") == []
+    assert os.listdir(tmp_path / "out") == ["BioSync_wcc_summary.xlsx"]     # no files of the dyad, only the summary
+    rows = read_table(tmp_path / "out" / "BioSync_wcc_summary.xlsx", "dyads")[1]
+    assert [row[:3] for row in rows] == [["dyad0", "failed", "plot failed"]]
 
 
 # ---------------------------------------------------------------------------
