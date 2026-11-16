@@ -11,6 +11,45 @@ def resource_path(file_name):
     return os.path.join(base_dir, file_name)
 
 
+def set_macos_app_name(name):
+    """
+    Names the app in the macOS menu bar. Run from source, the app is Python's, so the menu bar says "Python"; a
+    built app has the name of its bundle. Tk reads the name when the first window is created, so this has to run
+    before. It changes the name in the running program only, through the Objective-C runtime, and does nothing
+    elsewhere or if anything is unexpected.
+    """
+    if sys.platform != 'darwin' or getattr(sys, 'frozen', False):
+        return
+    try:
+        import ctypes
+        import ctypes.util
+        objc = ctypes.cdll.LoadLibrary(ctypes.util.find_library('objc'))
+        ctypes.cdll.LoadLibrary(ctypes.util.find_library('Foundation'))
+        objc.objc_getClass.restype = ctypes.c_void_p
+        objc.objc_getClass.argtypes = [ctypes.c_char_p]
+        objc.sel_registerName.restype = ctypes.c_void_p
+        objc.sel_registerName.argtypes = [ctypes.c_char_p]
+
+        def send(receiver, selector, *args, restype=ctypes.c_void_p):
+            # objc_msgSend takes the types of each call, which must be given exactly on Apple silicon
+            message = ctypes.CFUNCTYPE(restype, ctypes.c_void_p, ctypes.c_void_p,
+                                       *(ctypes.c_char_p if isinstance(arg, bytes) else ctypes.c_void_p for arg in args))
+            return message(ctypes.cast(objc.objc_msgSend, ctypes.c_void_p).value)(
+                receiver, objc.sel_registerName(selector), *args)
+
+        def text(value):
+            return send(objc.objc_getClass(b"NSString"), b"stringWithUTF8String:", value.encode())
+
+        bundle = send(objc.objc_getClass(b"NSBundle"), b"mainBundle")
+        for dictionary in (send(bundle, b"localizedInfoDictionary"), send(bundle, b"infoDictionary")):
+            # only a mutable dictionary can be changed; changing another one would end the program
+            if dictionary and send(dictionary, b"respondsToSelector:", objc.sel_registerName(b"setObject:forKey:"),
+                                   restype=ctypes.c_bool):
+                send(dictionary, b"setObject:forKey:", text(name), text("CFBundleName"))
+    except Exception:
+        pass        # the name is cosmetic
+
+
 def count_subdirectories(directory):
     """
     Returns the number of subdirectories in the given directory.

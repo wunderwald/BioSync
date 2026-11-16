@@ -12,6 +12,7 @@ import corr_plot
 # APP INITIALIZATION
 # ------------------
 
+utils.set_macos_app_name("BioSync")   # before the window: Tk reads the name for the menu bar then
 tk.set_appearance_mode("Light")
 tk.set_default_color_theme(utils.resource_path("theme_dark_grey.json"))
 
