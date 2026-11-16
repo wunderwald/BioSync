@@ -12,7 +12,7 @@ import callbacks
 from measures import MEAN_R
 import surrogates
 from surrogates import _eligible_random_pairs
-from helpers import FakeTimer, batch_params, write_dyad
+from helpers import FakeTimer, batch_params, read_metadata, read_table, write_dyad
 
 
 def _dyad(root, name, files):
@@ -171,8 +171,7 @@ def _run(app):
 
 
 def _rows(app):
-    sheet = openpyxl.load_workbook(app.output).worksheets[0]
-    return {row[0]: row[1] for row in sheet.iter_rows(max_col=2, values_only=True) if row[0]}
+    return read_metadata(app.output)
 
 
 def _run_and_read(app):
@@ -183,45 +182,26 @@ def _run_and_read(app):
 def test_entered_seed_is_used_and_recorded(app):
     app.val_rp_seed_input.set("1234")
     metadata = _run_and_read(app)
-    assert metadata['Random seed'] == 1234
-    assert metadata['Different random pairs possible'] == 12
+    assert metadata['seed'] == 1234
+    assert metadata['random_pairs_possible'] == 12
 
 
 def test_empty_seed_gets_a_new_recorded_seed_which_repeats_the_run(app):
     first = _run_and_read(app)
     second = _run_and_read(app)
-    assert isinstance(first['Random seed'], int)
-    assert first['Random seed'] != second['Random seed']
+    assert isinstance(first['seed'], int)
+    assert first['seed'] != second['seed']
 
-    app.val_rp_seed_input.set(str(first['Random seed']))
+    app.val_rp_seed_input.set(str(first['seed']))
     repeated = _run_and_read(app)
-    assert repeated['Random seed'] == first['Random seed']
-    assert repeated['p-value'] == first['p-value']
-    assert repeated['t-statistic'] == first['t-statistic']
+    assert repeated['seed'] == first['seed']
+    assert repeated['p_value'] == first['p_value']
+    assert repeated['t_statistic'] == first['t_statistic']
 
 
 def test_seed_of_zero_is_a_seed(app):
     app.val_rp_seed_input.set("0")
-    assert _run_and_read(app)['Random seed'] == 0
-
-
-# The rows of the first sheet before the surrogate tests were added (commit b76a0dd), which pipelines read by position
-EARLIER_ROWS = [
-    't-statistic', 'p-value', 'xcorr type', 'Data type', 'Window size', 'Max lag', 'Step size',
-    'Absolute correlation values', 'Standardised (z-score)', 'Lag filter used', 'Lag filter minimum',
-    'Lag filter maximum', 'Input dyad directory', 'Random seed', 'Different random pairs possible',
-    'Random pairs requested', 'Random pairs used', 'Real dyads used',
-]
-
-
-def test_new_rows_come_after_the_existing_ones(app):
-    app.val_rp_seed_input.set("1")
-    _run(app)
-    sheet = openpyxl.load_workbook(app.output).worksheets[0]
-    names = [row[0] for row in sheet.iter_rows(max_col=1, values_only=True) if row[0]]
-    assert names[:len(EARLIER_ROWS)] == EARLIER_ROWS
-    assert names[len(EARLIER_ROWS):] == ['Files not used for random pairs', 'Method', 'Measure', 'Sides', 'Summary']
-    assert [cell.value for cell in sheet[1][3:5]] == ['random pair correlation', 'real pair correlation']
+    assert _run_and_read(app)['seed'] == 0
 
 
 def test_seed_is_read_before_the_job_starts(app):
@@ -230,7 +210,7 @@ def test_seed_is_read_before_the_job_starts(app):
     app.val_rp_seed_input.set("99")
     app.timer.run_until_idle(60)
     callbacks.export_surrogate_data()
-    assert _rows(app)['Random seed'] == 1234
+    assert _rows(app)['seed'] == 1234
 
 
 def test_group_to_dyads_copies_end_to_end(tmp_path, monkeypatch):
@@ -295,9 +275,10 @@ def test_failed_pairs_give_a_warning_and_are_recorded(app, dyads, monkeypatch):
     app.val_rp_n.set(20)
     app.val_rp_seed_input.set("1")
     metadata = _run_and_read(app)
-    assert metadata['Random pairs requested'] == 20
-    assert metadata['Random pairs used'] < 20
-    assert metadata['Real dyads used'] == 2
+    assert metadata['random_pairs_requested'] == 20
+    assert metadata['random_pairs_used'] < 20
+    assert metadata['real_dyads_used'] == 2
+    assert metadata['skipped'] == len(read_table(app.output, "skipped")[1]) > 0
     assert warnings and "random pairs were skipped" in warnings[0]
 
 
@@ -362,12 +343,16 @@ def test_left_out_files_are_shown_and_recorded(app, dyads_with_stray_files, monk
     metadata = _run_and_read(app)
     expected = [os.path.join("dyad1", "wx_dyad1_wxcorr.xlsx") + " (no sheet 'Sheet')",
                 os.path.join("dyad2", "broken.xlsx") + " (can't be read)"]
-    assert metadata['Files not used for random pairs'] == "; ".join(expected)
+    assert metadata['files_left_out'] == 2
+    assert read_table(app.output, "files_left_out")[1] == [
+        [os.path.join("dyad1", "wx_dyad1_wxcorr.xlsx"), "no sheet 'Sheet'"],
+        [os.path.join("dyad2", "broken.xlsx"), "can't be read"]]
     assert "Not used for random pairs:\n" + "\n".join(expected) in shown[0]
 
 
-def test_without_left_out_files_the_row_has_a_dash(app):
-    assert _run_and_read(app)['Files not used for random pairs'] == '-'
+def test_without_left_out_files_the_sheet_is_empty(app):
+    assert _run_and_read(app)['files_left_out'] == 0
+    assert read_table(app.output, "files_left_out") == (['file', 'reason'], [])
 
 
 # ---------------------------------------------------------------------------

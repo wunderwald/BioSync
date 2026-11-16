@@ -1,6 +1,6 @@
 """
-The export of a surrogate test: what it says on its first sheet, the dyads and shuffled versions sheets, skipped
-dyads, and the figure, which is saved on its own.
+The export of a surrogate test: its tables (metadata, surrogate sets, dyads, shuffled versions, random pairs,
+files left out, skipped), Welch's group averages, and the figure, which is saved on its own.
 """
 import os
 
@@ -10,7 +10,7 @@ import pytest
 
 import export
 import surrogates
-from helpers import N_BEATS, batch_params, write_dyad, write_person
+from helpers import N_BEATS, batch_params, read_column, read_metadata, read_notes, read_table, write_dyad, write_person
 from measures import MEAN_ABS_R_MAX, MEAN_R
 from surrogates import BLOCKS, REPAIRED, WELCH, surrogate_analysis
 
@@ -30,69 +30,70 @@ def _export(dyads, tmp_path, method, measure=MEAN_ABS_R_MAX, **params):
     result = surrogate_analysis(method, params, str(dyads), N_SURROGATES, 4, measure, block_length=BLOCK_LENGTH)
     path = tmp_path / "result.xlsx"
     export.export_surrogate_result(str(path), params, str(dyads), result)
-    return result, openpyxl.load_workbook(path)
-
-
-def _rows(workbook):
-    return {row[0]: row[1] for row in workbook.worksheets[0].iter_rows(max_col=2, values_only=True) if row[0]}
-
-
-def _column(sheet, header):
-    headers = [cell.value for cell in sheet[1]]
-    index = headers.index(header)
-    return [row[index] for row in sheet.iter_rows(min_row=2, values_only=True) if row[index] is not None]
-
-
-def _sheet_rows(sheet):
-    return list(sheet.iter_rows(values_only=True))
+    return result, path
 
 
 # ---------------------------------------------------------------------------
-# FIRST SHEET
+# METADATA
 # ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("method, sheets", [
+    (BLOCKS, ["metadata", "surrogate_sets", "dyads", "shuffled_versions", "skipped"]),
+    (REPAIRED, ["metadata", "surrogate_sets", "dyads", "random_pairs", "files_left_out", "skipped"]),
+    (WELCH, ["metadata", "dyads", "random_pairs", "files_left_out", "skipped"]),
+])
+def test_every_method_writes_its_tables_even_when_empty(dyads, tmp_path, method, sheets):
+    _, path = _export(dyads, tmp_path, method, measure=MEAN_R)
+    assert openpyxl.load_workbook(path).sheetnames == sheets
+    assert read_table(path, "skipped") == (['dyad_or_pair', 'reason'], [])
+
 
 @pytest.mark.parametrize("method", [REPAIRED, BLOCKS])
-def test_first_sheet_has_the_result_and_how_it_was_made(dyads, tmp_path, method):
-    result, workbook = _export(dyads, tmp_path, method)
-    rows = _rows(workbook)
-    assert workbook.sheetnames[0] == "Surrogate Analysis"
-    assert rows['p-value'] == pytest.approx(result.p_value)
-    assert rows['Method'] == method
-    assert rows['Measure'] == MEAN_ABS_R_MAX
-    assert rows['Sides'] == surrogates.GREATER
-    assert rows['Summary'] == surrogates.result_summary(result)
-    assert rows['Real group mean'] == pytest.approx(result.real_value)
-    assert rows['Surrogate mean'] == pytest.approx(np.mean(result.null_values))
-    assert rows['Random seed'] == 4
-    assert rows['Surrogate sets'] == N_SURROGATES
-    assert rows['Real dyads used'] == 3
-    assert rows['Window size'] == 150 and rows['Max lag'] == 30
-    assert _column(workbook.worksheets[0], 'surrogate set mean') == pytest.approx(list(result.null_values))
-    assert _column(workbook.worksheets[0], 'real dyad value') == pytest.approx(result.real_values)
+def test_metadata_has_the_result_and_how_it_was_made(dyads, tmp_path, method):
+    result, path = _export(dyads, tmp_path, method)
+    metadata = read_metadata(path)
+    assert metadata['analysis'] == "surrogate test"
+    assert (metadata['method'], metadata['measure'], metadata['sides']) == (method, MEAN_ABS_R_MAX, surrogates.GREATER)
+    assert metadata['p_value'] == pytest.approx(result.p_value)
+    assert metadata['summary'] == surrogates.result_summary(result)
+    assert metadata['real_mean'] == pytest.approx(result.real_value)
+    assert metadata['surrogate_mean'] == pytest.approx(np.mean(result.null_values))
+    assert (metadata['seed'], metadata['surrogate_sets'], metadata['real_dyads_used'], metadata['skipped']) == (
+        4, N_SURROGATES, 3, 0)
+    assert (metadata['window_size_samples'], metadata['max_lag_samples']) == (150, 30)
+    assert (metadata['correlation'], metadata['standardised']) == ("windowed cross-correlation", False)
+    assert metadata['input_folder'] == str(dyads)
+    assert (metadata['sheet'], metadata['column']) == ("Sheet", "Coupled")
+    assert read_column(path, "surrogate_sets", "value") == pytest.approx(list(result.null_values))
+    assert 't_statistic' not in metadata
 
 
 def test_repaired_rows(dyads, tmp_path):
-    result, workbook = _export(dyads, tmp_path, REPAIRED)
-    rows = _rows(workbook)
-    assert rows['Different random pairs possible'] == rows['Random pairs used'] == 12
-    assert rows['Different surrogate sets possible'] == result.n_sets_possible == 220
-    assert rows['Files not used for random pairs'] == '-'
-    assert 'Block length (samples)' not in rows
+    result, path = _export(dyads, tmp_path, REPAIRED)
+    metadata = read_metadata(path)
+    assert metadata['random_pairs_possible'] == metadata['random_pairs_used'] == 12
+    assert metadata['different_sets_possible'] == result.n_sets_possible == 220
+    assert metadata['files_left_out'] == 0
+    assert 'block_length_samples' not in metadata
 
 
 def test_blocks_rows(dyads, tmp_path):
-    result, workbook = _export(dyads, tmp_path, BLOCKS)
-    rows = _rows(workbook)
-    assert rows['Block length (samples)'] == BLOCK_LENGTH
-    assert rows['Dyads with p < 0.05'] == sum(p < 0.05 for p in result.dyad_p_values)
-    assert rows['Different surrogate sets possible'] == "more than 10^15"
-    assert 'Random pairs used' not in rows
+    result, path = _export(dyads, tmp_path, BLOCKS)
+    metadata, notes = read_metadata(path), read_notes(path)
+    assert metadata['block_length_samples'] == BLOCK_LENGTH
+    assert metadata['dyads_significant'] == sum(p < 0.05 for p in result.dyad_p_values)
+    assert "not corrected" in notes['dyads_significant']
+    assert metadata['different_sets_possible'] == pytest.approx(float(result.n_sets_possible))
+    assert notes['different_sets_possible'] == "rounded: Excel keeps 15 digits"
+    assert 'random_pairs_used' not in metadata
 
 
-@pytest.mark.parametrize("count, written", [(None, '-'), (220, 220), (10 ** 15 - 1, 10 ** 15 - 1),
-                                            (10 ** 15, "more than 10^15"), (10 ** 400, "more than 10^15")])
-def test_counts_too_large_for_excel_are_text(count, written):
-    assert export._count(count) == written
+@pytest.mark.parametrize("count, row", [
+    (None, ('n', None, "not known")), (220, ('n', 220)), (10 ** 15 - 1, ('n', 10 ** 15 - 1)),
+    (10 ** 15, ('n', 1e15, "rounded: Excel keeps 15 digits")), (10 ** 400, ('n', None, "more than 10^308")),
+])
+def test_counts_too_large_for_excel(count, row):
+    assert export._count_row('n', count) == row
 
 
 # ---------------------------------------------------------------------------
@@ -100,63 +101,125 @@ def test_counts_too_large_for_excel_are_text(count, written):
 # ---------------------------------------------------------------------------
 
 def test_dyads_sheet_of_repaired_people(dyads, tmp_path):
-    result, workbook = _export(dyads, tmp_path, REPAIRED)
-    assert workbook.sheetnames == ["Surrogate Analysis", "dyads"]
-    header, *rows = _sheet_rows(workbook["dyads"])
-    assert header == ('dyad', 'value')
+    result, path = _export(dyads, tmp_path, REPAIRED)
+    columns, rows = read_table(path, "dyads")
+    assert columns == ['dyad', 'value']
     assert [row[0] for row in rows] == result.dyad_names
     assert [row[1] for row in rows] == pytest.approx(result.real_values)
 
 
 def test_dyads_sheet_of_shuffled_blocks(dyads, tmp_path):
-    result, workbook = _export(dyads, tmp_path, BLOCKS)
-    header, *rows = _sheet_rows(workbook["dyads"])
-    assert header == ('dyad', 'value', 'p-value', 'shuffled 2.5%', 'shuffled median', 'shuffled 97.5%',
-                      'block orders possible')
+    result, path = _export(dyads, tmp_path, BLOCKS)
+    columns, rows = read_table(path, "dyads")
+    assert columns == ['dyad', 'value', 'p_value', 'shuffled_percentile_2_5', 'shuffled_median',
+                       'shuffled_percentile_97_5', 'block_orders_possible']
     for row, value, p_value, null_values, orders in zip(rows, result.real_values, result.dyad_p_values,
                                                          result.dyad_null_values, result.dyad_orders_possible):
-        assert row[1:3] == pytest.approx((value, p_value))
-        assert row[3:6] == pytest.approx(tuple(np.percentile(null_values, [2.5, 50, 97.5])))
+        assert row[1:3] == pytest.approx([value, p_value])
+        assert row[3:6] == pytest.approx(list(np.percentile(null_values, [2.5, 50, 97.5])))
         assert row[6] == orders
 
 
 def test_every_shuffled_version_is_in_the_export(dyads, tmp_path):
-    result, workbook = _export(dyads, tmp_path, BLOCKS)
-    header, *rows = _sheet_rows(workbook["shuffled versions"])
-    assert header == ('version', *result.dyad_names)
+    result, path = _export(dyads, tmp_path, BLOCKS)
+    columns, rows = read_table(path, "shuffled_versions")
+    assert columns == ['version', *result.dyad_names]
     assert [row[0] for row in rows] == list(range(1, N_SURROGATES + 1))
     assert np.array([row[1:] for row in rows]) == pytest.approx(np.array(result.dyad_null_values).T)
 
 
-def test_skipped_dyads_and_pairs_get_a_sheet(dyads, tmp_path):
+def test_random_pairs_of_repaired_people_are_every_pair_with_its_value(dyads, tmp_path):
+    result, path = _export(dyads, tmp_path, REPAIRED)
+    columns, rows = read_table(path, "random_pairs")
+    assert columns == ['pair', 'file_a', 'file_b', 'value']
+    assert len(rows) == result.n_pairs_used == 12
+    assert [row[0] for row in rows] == list(range(1, 13))
+    for _, file_a, file_b, _ in rows:
+        assert file_a.split(os.sep)[0] != file_b.split(os.sep)[0]       # never two people of one dyad
+    assert sorted(frozenset((a, b)) for _, a, b, _ in rows) == sorted(
+        frozenset((os.path.relpath(a, dyads), os.path.relpath(b, dyads))) for a, b in result.pair_files)
+    # each set is the mean of real_dyads_used different pairs from this list
+    values = np.array([row[3] for row in rows])
+    assert min(result.null_values) >= np.sort(values)[:3].mean() - 1e-12
+
+
+def test_random_pairs_of_welch_are_the_drawn_pairs_in_order(dyads, tmp_path):
+    result, path = _export(dyads, tmp_path, WELCH, measure=MEAN_R)
+    rows = read_table(path, "random_pairs")[1]
+    assert [row[3] for row in rows] == pytest.approx(list(result.null_values))
+    assert [(a, b) for _, a, b, _ in rows] == [
+        (os.path.relpath(a, dyads), os.path.relpath(b, dyads)) for a, b in result.pair_files]
+    assert len(rows) == N_SURROGATES        # drawn with replacement: pairs drawn again are listed again
+
+
+def test_welch_lists_only_pairs_with_a_value_next_to_their_value(dyads, tmp_path):
     os.remove(dyads / "dyad1" / "P2.xlsx")
     write_person(dyads / "dyad1" / "P2.xlsx", {"Other": np.ones(N_BEATS)})
-    result, workbook = _export(dyads, tmp_path, REPAIRED)
-    header, *rows = _sheet_rows(workbook["skipped"])
-    assert header == ('dyad or pair', 'reason')
-    assert rows == [tuple(failure) for failure in result.failures]
-    assert ("dyad1", "P2.xlsx has no column 'Coupled'") in rows
-    assert _rows(workbook)['Dyads or pairs skipped'] == len(result.failures)
+    result, path = _export(dyads, tmp_path, WELCH, measure=MEAN_R)
+    rows = read_table(path, "random_pairs")[1]
+    assert any(name.startswith("random pair") for name, _ in result.failures)
+    assert len(rows) == len(result.null_values) < N_SURROGATES
+    assert not [row for row in rows if os.path.join("dyad1", "P2.xlsx") in row[1:3]]
+    assert [row[3] for row in rows] == pytest.approx(list(result.null_values))
 
 
-def test_no_skipped_sheet_without_skipped_dyads(dyads, tmp_path):
-    _, workbook = _export(dyads, tmp_path, BLOCKS)
-    assert "skipped" not in workbook.sheetnames
+def test_counts_of_block_orders_are_numbers_excel_can_store():
+    result = surrogates.SurrogateResult(
+        method=BLOCKS, measure=MEAN_R, side=surrogates.TWO_SIDED, seed=1, dyad_names=["small", "large", "huge"],
+        real_values=[0.1, 0.2, 0.3], real_value=0.2, null_values=np.zeros(3), p_value=0.5, n_surrogates=3,
+        n_sets_possible=10, failures=[], block_length=10, dyad_null_values=[np.zeros(3)] * 3,
+        dyad_p_values=[0.5] * 3, dyad_orders_possible=[719, 10 ** 20, 10 ** 400],
+    )
+    orders = [row[-1] for row in export._dyads_table(result)['rows']]
+    assert orders == [719, 1e20, None] and type(orders[1]) is float
+
+
+def test_skipped_dyads_and_pairs_are_listed(dyads, tmp_path):
+    os.remove(dyads / "dyad1" / "P2.xlsx")
+    write_person(dyads / "dyad1" / "P2.xlsx", {"Other": np.ones(N_BEATS)})
+    result, path = _export(dyads, tmp_path, REPAIRED)
+    rows = read_table(path, "skipped")[1]
+    assert rows == [list(failure) for failure in result.failures]
+    assert ["dyad1", "P2.xlsx has no column 'Coupled'"] in rows
+    assert read_metadata(path)['skipped'] == len(result.failures)
+
+
+def test_files_left_out_of_random_pairs_are_listed(dyads, tmp_path):
+    workbook = openpyxl.Workbook()
+    workbook.active.title = "Other"
+    workbook.save(dyads / "dyad1" / "notes.xlsx")
+    result, path = _export(dyads, tmp_path, REPAIRED)
+    assert read_table(path, "files_left_out")[1] == [[os.path.join("dyad1", "notes.xlsx"), "no sheet 'Sheet'"]]
+    assert read_metadata(path)['files_left_out'] == 1
 
 
 # ---------------------------------------------------------------------------
 # WELCH
 # ---------------------------------------------------------------------------
 
-def test_welch_keeps_its_earlier_file_and_adds_rows_and_sheets(dyads, tmp_path):
-    result, workbook = _export(dyads, tmp_path, WELCH, measure=MEAN_R)
-    rows = _rows(workbook)
-    assert workbook.sheetnames == ["Random Pair Analysis", "dyads"]
-    assert list(rows)[:2] == ['t-statistic', 'p-value']
-    assert list(rows)[-4:] == ['Method', 'Measure', 'Sides', 'Summary']
-    assert rows['Method'] == WELCH and rows['Measure'] == MEAN_R and rows['Sides'] == surrogates.TWO_SIDED
-    assert "t = " in rows['Summary']
-    assert os.path.exists(tmp_path / "result_avg_real_pairs.xlsx")
+def test_welch_has_t_and_the_mean_of_the_random_pairs(dyads, tmp_path):
+    result, path = _export(dyads, tmp_path, WELCH, measure=MEAN_R)
+    metadata, notes = read_metadata(path), read_notes(path)
+    assert (metadata['method'], metadata['measure'], metadata['sides']) == (WELCH, MEAN_R, surrogates.TWO_SIDED)
+    assert (metadata['t_statistic'], metadata['p_value']) == (pytest.approx(result.t_statistic), pytest.approx(result.p_value))
+    assert metadata['random_pair_mean'] == pytest.approx(np.mean(result.null_values))
+    assert (metadata['random_pairs_requested'], metadata['random_pairs_used']) == (N_SURROGATES, N_SURROGATES)
+    assert notes['random_pairs_used'] == "pairs drawn more than once count again"
+    assert "t = " in metadata['summary']
+    assert 'surrogate_sets' not in metadata and 'surrogate_mean' not in metadata
+
+
+def test_welch_writes_its_group_averages_next_to_the_file(dyads, tmp_path):
+    result, path = _export(dyads, tmp_path, WELCH, measure=MEAN_R)
+    for name, n in (("real_pairs", 3), ("random_pairs", N_SURROGATES)):
+        side_file = tmp_path / f"result_avg_{name}.xlsx"
+        assert read_metadata(side_file)['dyads_averaged'] == n
+        assert (tmp_path / f"result_avg_{name}.png").exists()
+
+
+def test_welch_with_standard_correlation_has_no_group_averages(dyads, tmp_path):
+    _export(dyads, tmp_path, WELCH, measure=MEAN_R, checkbox_windowed_xcorr=False, max_lag_sxc=40)
+    assert sorted(os.listdir(tmp_path)) == ["in", "result.xlsx"]
 
 
 # ---------------------------------------------------------------------------

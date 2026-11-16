@@ -124,7 +124,21 @@ Batch also writes **`BioSync_<wcc|scc>_summary.xlsx`**, to compare dyads without
 - `metadata`: the settings of the run, and how many dyads were processed and failed.
 - `columns`: what each column means, and why a column is empty, e.g. `mean_abs_r_max` with "average windows".
 
-The group average has `metadata`, `windows` (without KPSS) and `correlations`. Numbers are numbers, settings are TRUE/FALSE, and a value that's missing is an empty cell, with the reason in `note`. Lags and windows are in samples; `sampling_rate_hz` converts them to seconds when it is known.
+The group average has `metadata`, `windows` (without KPSS) and `correlations`.
+
+An export of the **Surrogates** tab (`BioSync_surrogates_<folder>.xlsx`) has the same kind of tables:
+
+| Sheet | Content |
+|---|---|
+| `metadata` | method, measure, sides, p (and t for Welch), the `summary` sentence, the means, the correlation settings, seed and counts |
+| `surrogate_sets` | shuffled blocks and re-paired people: `set`, `value` of each surrogate set |
+| `dyads` | `dyad`, `value`; shuffled blocks also each dyad's own `p_value`, the range of its shuffled versions and `block_orders_possible` |
+| `shuffled_versions` | shuffled blocks: the value of every shuffled version, one column per dyad |
+| `random_pairs` | re-paired people and Welch: `pair`, `file_a`, `file_b`, `value` of each random pair (Welch: in the order drawn, repeats included) |
+| `files_left_out` | re-paired people and Welch: recordings that couldn't be in a random pair, and why |
+| `skipped` | dyads or pairs without a value, and why |
+
+Sheets a method has are always there, empty when there is nothing to list. Welch with windowed correlation also writes the group averages of the real dyads and the random pairs next to the file (`…_avg_real_pairs`, `…_avg_random_pairs`). Numbers are numbers, settings are TRUE/FALSE, and a value that's missing is an empty cell, with the reason in `note`. Lags and windows are in samples; `sampling_rate_hz` converts them to seconds when it is known.
 
 ## Surrogate analysis
 
@@ -160,7 +174,7 @@ The app decides this from the measure and settings, so it can't be chosen after 
 
 ### Results
 
-Before a run, the tab says in one sentence what will be tested, in red what stops the run, and in orange what will limit the result. A run doesn't write anything: the plot area of the tab shows the result until the next run. If settings change, the result stays and is marked as coming from the earlier settings. The Export section below the run saves the last result with the settings it was run with: **Export XLSX** writes the summary, the settings and each dyad's values, and **Export PNG** saves the figure. Report the method, the measure, the sides, the number of surrogates, the seed, the block length for shuffled blocks, and p: the export's "Summary" row has them in one sentence.
+Before a run, the tab says in one sentence what will be tested, in red what stops the run, and in orange what will limit the result. A run doesn't write anything: the plot area of the tab shows the result until the next run. If settings change, the result stays and is marked as coming from the earlier settings. The Export section below the run saves the last result with the settings it was run with: **Export XLSX** writes the result as tables (see "Output files"), and **Export PNG** saves the figure. Report the method, the measure, the sides, the number of surrogates, the seed, the block length for shuffled blocks, and p: the `summary` row of the export's `metadata` has them in one sentence.
 
 ---
 
@@ -205,7 +219,7 @@ pytest
 | `stationarity.py` | KPSS test of level stationarity (`kpss_p_values`, `window_p_values`), and what the Correlation tab shows (`signal_stationarity`, `format_stationarity`). Vectorised over windows; the same values as statsmodels, which isn't a dependency. |
 | `dfa.py` | Detrended Fluctuation Analysis — `dfa`, `dfa_wxcorr`, `dfa_wxcorr_window_averages`. `analysis.py` decides which series it runs on. |
 | `plot.py` | Matplotlib figure factories for preprocessing preview, windowed xcorr, and standard xcorr plots, and for surrogate test results (`plot_surrogate_result`). |
-| `export.py` | Writes XLSX result files: correlation results of a dyad and the group average as one table per sheet (`export_wxcorr_data`, `export_sxcorr_data`, `export_avg_wxcorr_data`, see "Output files"), and surrogate tests (`export_surrogate_result`; `export_surrogate_figure` saves the result figure as PNG). The Welch export keeps the first sheet of earlier versions and adds rows at its end. Always exports raw (non-sigmoid) correlation values. |
+| `export.py` | Writes XLSX result files: correlation results of a dyad and the group average as one table per sheet (`export_wxcorr_data`, `export_sxcorr_data`, `export_avg_wxcorr_data`, see "Output files"), and surrogate tests, also as tables (`export_surrogate_result`; `export_surrogate_figure` saves the result figure as PNG). Always exports raw (non-sigmoid) correlation values. |
 | `batch_processing.py` | Iterates a folder of dyads, runs the full analysis pipeline on each, and saves per-dyad XLSX + PNG output (`BioSync_wcc_<dyad>`, `BioSync_scc_<dyad>`) and the group average (`BioSync_wcc_group-average`). Finds the results of earlier runs, also under the names of earlier versions. |
 | `xlsx.py` | Thin wrappers around openpyxl for reading and writing Excel files. `read_xlsx` returns the values of all sheets and closes the file. `write_tables` writes one table per sheet, with typed cells (`typed_cell`: numbers, TRUE/FALSE, text, and empty cells for missing values). |
 | `utils.py` | Small helpers (`is_numeric_array`, `count_subdirectories`, `resource_path`, …), and the names of output files: `output_name` gives `BioSync_<analysis>_<subject>`, and `list_dyad_files` skips such files in dyad folders. |

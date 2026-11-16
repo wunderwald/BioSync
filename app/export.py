@@ -320,111 +320,18 @@ def export_batch_summary(file_path, rows, params):
 
 
 # ---------------------------------------------------------------------------
-# SURROGATE TESTS AND RANDOM PAIRS
-# ---------------------------------------------------------------------------
-
-def _correlation_settings(params):
-    """The rows that describe the correlation settings, in the order of earlier random pair exports."""
-    data_type = 'fixed-rate' if params['checkbox_fr'] else 'event-based (resampled to 5hz)'
-    if params['checkbox_windowed_xcorr']:
-        return {
-            'xcorr type': "windowed cross-correlation",
-            'Data type': data_type,
-            'Window size': params['window_size'],
-            'Max lag': params['max_lag'],
-            'Step size': params['step_size'],
-            'Absolute correlation values': params['checkbox_absolute_corr'],
-            'Standardised (z-score)': params['standardised_signals'],
-            'Lag filter used': params['use_lag_filter'],
-            'Lag filter minimum': params['lag_filter_min'] if params['use_lag_filter'] else '-',
-            'Lag filter maximum': params['lag_filter_max'] if params['use_lag_filter'] else '-',
-        }
-    return {
-        'xcorr type': "(standard) cross-correlation",
-        'Data type': data_type,
-        'Standardised (z-score)': params['standardised_signals'],
-        'Max lag': params['max_lag_sxc'],
-        'Absolute correlation values': params['checkbox_absolute_corr_sxc'],
-    }
-
-
-def export_random_pair_data(file_path, params, input_dir, t_stat, p_value, avg_corr_rp, avg_corr_real,
-                            avg_wxcorr_real=None, avg_wxcorr_rp=None, seed='-', n_eligible_pairs='-',
-                            n_random_pairs_requested='-', window_counts_real=None, window_counts_rp=None,
-                            left_out_files=None, extra_rows=None, extra_sheets=()):
-    """
-    The export of earlier versions. Pipelines read its first sheet, so its rows and columns stay as they are:
-    extra_rows go after them, and extra_sheets after the first sheet.
-    """
-    # collect metadata
-    is_windowed_xcorr = params['checkbox_windowed_xcorr']
-    metadata = _correlation_settings(params)
-    metadata['Input dyad directory'] = f"{input_dir}"
-
-    # collect single-value data
-    single_values = {
-        't-statistic': t_stat,
-        'p-value': p_value,
-        **metadata,
-        'Random seed': seed,
-        'Different random pairs possible': n_eligible_pairs,
-        'Random pairs requested': n_random_pairs_requested,
-        'Random pairs used': len(avg_corr_rp),
-        'Real dyads used': len(avg_corr_real),
-        'Files not used for random pairs': "; ".join(left_out_files) if left_out_files else '-',
-        **(extra_rows or {}),
-    }
-
-    # collect vector data
-    vectors = {
-        'random pair correlation': avg_corr_rp,
-        'real pair correlation': avg_corr_real,
-    }
-
-    # write main stats xlsx
-    xlsx.write_xlsx(vectors=vectors, single_values=single_values, output_path=file_path, sheet_title="Random Pair Analysis",
-                    extra_sheets=extra_sheets)
-
-    # export group-average heatmaps when wxcorr was used
-    if is_windowed_xcorr and avg_wxcorr_real is not None and avg_wxcorr_rp is not None:
-        base = os.path.splitext(file_path)[0]
-
-        if avg_wxcorr_real:
-            export_avg_wxcorr_data(f"{base}_avg_real_pairs.xlsx", avg_wxcorr_real, len(avg_corr_real), params, window_counts_real)
-            fig_real = plot_windowed_cross_correlation(
-                wxc_data=avg_wxcorr_real,
-                signal_a=[], signal_b=[],
-                window_size=params['window_size'],
-                max_lag=params['max_lag'],
-                step_size=params['step_size'],
-                show_sigmoid_correlations=params.get('sigmoid_correlations', False),
-                use_lag_filter=params['use_lag_filter'],
-                lag_filter_min=params['lag_filter_min'],
-                lag_filter_max=params['lag_filter_max'],
-            )
-            save_figure_to_png(fig_real, f"{base}_avg_real_pairs.png")
-
-        if avg_wxcorr_rp:
-            export_avg_wxcorr_data(f"{base}_avg_random_pairs.xlsx", avg_wxcorr_rp, len(avg_corr_rp), params, window_counts_rp)
-            fig_rp = plot_windowed_cross_correlation(
-                wxc_data=avg_wxcorr_rp,
-                signal_a=[], signal_b=[],
-                window_size=params['window_size'],
-                max_lag=params['max_lag'],
-                step_size=params['step_size'],
-                show_sigmoid_correlations=params.get('sigmoid_correlations', False),
-                use_lag_filter=params['use_lag_filter'],
-                lag_filter_min=params['lag_filter_min'],
-                lag_filter_max=params['lag_filter_max'],
-            )
-            save_figure_to_png(fig_rp, f"{base}_avg_random_pairs.png")
-
-
-# ---------------------------------------------------------------------------
 # SURROGATE TESTS
+# Tables as for correlation results:
+#   metadata           result, settings and counts
+#   surrogate_sets     the value of each surrogate set (shuffled blocks, re-paired people)
+#   dyads              each real dyad's value; for shuffled blocks also its own test
+#   shuffled_versions  the value of every shuffled version of each dyad (shuffled blocks)
+#   random_pairs       each random pair and its value (re-paired people, Welch)
+#   files_left_out     recordings that couldn't be in a random pair, and why (re-paired people, Welch)
+#   skipped            dyads or pairs without a value, and why
 # ---------------------------------------------------------------------------
 
-# Excel stores numbers as floating point, so counts beyond this are written as text
+# Excel keeps 15 significant digits, so larger counts are rounded
 LARGEST_EXACT_COUNT = 10 ** 15
 
 
@@ -433,46 +340,125 @@ def left_out_names(left_out_files, input_dir):
     return [f"{os.path.relpath(path, input_dir)} ({reason})" for path, reason in left_out_files or []]
 
 
-def _count(value):
+def _count_cell(value):
+    """A count as a number Excel can store: rounded when it's too large to keep exactly, None beyond floats."""
+    if value is None or value < LARGEST_EXACT_COUNT:
+        return value
+    try:
+        return float(value)
+    except OverflowError:
+        return None
+
+
+def _count_row(name, value):
     if value is None:
-        return '-'
-    return value if value < LARGEST_EXACT_COUNT else f"more than 10^{len(str(LARGEST_EXACT_COUNT)) - 1}"
+        return (name, None, "not known")
+    cell = _count_cell(value)
+    if cell is None:
+        return (name, None, "more than 10^308")
+    return (name, cell, "rounded: Excel keeps 15 digits") if value >= LARGEST_EXACT_COUNT else (name, cell)
 
 
-def _result_rows(result):
-    """Rows that every surrogate export has: for Welch at the end, for the others at the start."""
-    return {
-        'Method': result.method,
-        'Measure': result.measure,
-        'Sides': result.side,
-        'Summary': result_summary(result),
-    }
+def _settings_rows(params):
+    config = AnalysisConfig.from_params(params)
+    settings = _windowed_settings_rows(config) if config.windowed else [
+        ('max_lag_samples', config.max_lag_sxc), ('absolute_correlations', config.absolute_sxc)]
+    return [
+        ('correlation', WINDOWED_ANALYSIS if config.windowed else STANDARD_ANALYSIS),
+        *_signal_rows(config, params.get('sampling_rate')),
+        *settings,
+    ]
 
 
-def _dyad_sheet(result):
-    columns = ['value']
-    rows = [[value] for value in result.real_values]
+def _surrogate_metadata(params, input_dir, result):
+    null_values = np.asarray(result.null_values, dtype=float)
+    welch = result.method == WELCH
+    rows = [
+        ('analysis', "surrogate test"),
+        ('method', result.method),
+        ('measure', result.measure),
+        ('sides', result.side),
+        *([('t_statistic', result.t_statistic)] if welch else []),
+        ('p_value', result.p_value),
+        ('summary', result_summary(result)),
+        ('real_mean', result.real_value, "mean of the real dyads' values"),
+    ]
+    if welch:
+        rows.append(('random_pair_mean', float(np.nanmean(null_values)) if len(null_values) else None,
+                     "mean of the random pairs' values"))
+    else:
+        rows += [('surrogate_mean', float(np.nanmean(null_values)), "mean of the surrogate sets' values"),
+                 ('surrogate_sd', float(np.nanstd(null_values)), "their standard deviation")]
+    rows += [
+        ('input_folder', input_dir),
+        ('sheet', params.get('selected_sheet') or None),
+        ('column', params.get('selected_column_a') or None),
+        *_settings_rows(params),
+        ('seed', result.seed),
+    ]
+    if welch:
+        rows.append(('random_pairs_requested', result.n_surrogates))
+    else:
+        rows += [('surrogate_sets', result.n_surrogates), _count_row('different_sets_possible', result.n_sets_possible)]
+    rows += [
+        ('real_dyads_used', len(result.real_values)),
+        ('skipped', len(result.failures), "dyads or pairs without a value, see sheet 'skipped'"),
+    ]
+    if result.method in (REPAIRED, WELCH):
+        rows += [
+            ('random_pairs_possible', result.n_pairs_possible, "pairs of people from different dyads"),
+            ('random_pairs_used', result.n_pairs_used,
+             "pairs drawn more than once count again" if welch else "each possible pair, once"),
+            ('files_left_out', len(result.left_out_files or []), "see sheet 'files_left_out'"),
+        ]
     if result.method == BLOCKS:
-        columns += ['p-value', 'shuffled 2.5%', 'shuffled median', 'shuffled 97.5%', 'block orders possible']
+        rows += [
+            ('block_length_samples', result.block_length),
+            ('dyads_significant', sum(p < SIGNIFICANCE_LEVEL for p in result.dyad_p_values),
+             f"dyads with their own p < {SIGNIFICANCE_LEVEL}, not corrected for testing many dyads"),
+        ]
+    return _metadata_sheet(rows)
+
+
+def _dyads_table(result):
+    columns = ['dyad', 'value']
+    rows = [[name, value] for name, value in zip(result.dyad_names, result.real_values)]
+    if result.method == BLOCKS:
+        columns += ['p_value', 'shuffled_percentile_2_5', 'shuffled_median', 'shuffled_percentile_97_5',
+                    'block_orders_possible']
         for row, null_values, p_value, orders in zip(rows, result.dyad_null_values, result.dyad_p_values,
                                                      result.dyad_orders_possible):
-            null_values = np.asarray(null_values, dtype=float)
-            row += [p_value, *np.nanpercentile(null_values, [2.5, 50, 97.5]), _count(orders)]
-    return {'title': 'dyads', 'corner': 'dyad', 'row_labels': result.dyad_names, 'column_labels': columns,
-            'rows': rows}
+            row += [p_value, *np.nanpercentile(np.asarray(null_values, dtype=float), [2.5, 50, 97.5]),
+                    _count_cell(orders)]
+    return {'title': 'dyads', 'columns': columns, 'rows': rows}
 
 
-def _shuffled_versions_sheet(result):
+def _surrogate_sets_table(result):
+    return {'title': 'surrogate_sets', 'columns': ['set', 'value'],
+            'rows': [[number, value] for number, value in enumerate(result.null_values, start=1)]}
+
+
+def _shuffled_versions_table(result):
     """The measure of every shuffled version, one column per dyad, so that the test can be checked or redone."""
-    return {
-        'title': 'shuffled versions', 'corner': 'version', 'row_labels': range(1, result.n_surrogates + 1),
-        'column_labels': result.dyad_names, 'rows': np.array(result.dyad_null_values, dtype=float).T,
-    }
+    versions = np.array(result.dyad_null_values, dtype=float).T
+    return {'title': 'shuffled_versions', 'columns': ['version', *result.dyad_names],
+            'rows': [[number, *values] for number, values in enumerate(versions, start=1)]}
 
 
-def _skipped_sheet(result):
-    return {'title': 'skipped', 'corner': 'dyad or pair', 'row_labels': [name for name, _ in result.failures],
-            'column_labels': ['reason'], 'rows': [[reason] for _, reason in result.failures]}
+def _random_pairs_table(result, input_dir):
+    pairs = zip(result.pair_files or [], result.pair_values or [])
+    return {'title': 'random_pairs', 'columns': ['pair', 'file_a', 'file_b', 'value'],
+            'rows': [[number, os.path.relpath(file_a, input_dir), os.path.relpath(file_b, input_dir), value]
+                     for number, ((file_a, file_b), value) in enumerate(pairs, start=1)]}
+
+
+def _files_left_out_table(result, input_dir):
+    return {'title': 'files_left_out', 'columns': ['file', 'reason'],
+            'rows': [[os.path.relpath(path, input_dir), reason] for path, reason in result.left_out_files or []]}
+
+
+def _skipped_table(result):
+    return {'title': 'skipped', 'columns': ['dyad_or_pair', 'reason'], 'rows': [list(f) for f in result.failures]}
 
 
 def _figure(result):
@@ -489,65 +475,39 @@ def export_surrogate_figure(file_path, result):
     save_figure_to_png(_figure(result), file_path)
 
 
+def _export_welch_group_averages(file_path, params, result):
+    """Welch, as in earlier versions: the group averages of the real dyads and the random pairs, next to the file."""
+    base = os.path.splitext(file_path)[0]
+    for name, average, n_averaged, window_counts in (
+        ("real_pairs", result.avg_wxcorr_real, len(result.real_values), result.window_counts_real),
+        ("random_pairs", result.avg_wxcorr_surrogates, result.n_pairs_used, result.window_counts_surrogates),
+    ):
+        if not average:
+            continue
+        export_avg_wxcorr_data(f"{base}_avg_{name}.xlsx", average, n_averaged, params, window_counts)
+        fig = plot_windowed_cross_correlation(
+            wxc_data=average, signal_a=[], signal_b=[], window_size=params['window_size'], max_lag=params['max_lag'],
+            step_size=params['step_size'], show_sigmoid_correlations=params.get('sigmoid_correlations', False),
+            use_lag_filter=params['use_lag_filter'], lag_filter_min=params['lag_filter_min'],
+            lag_filter_max=params['lag_filter_max'],
+        )
+        save_figure_to_png(fig, f"{base}_avg_{name}.png")
+
+
 def export_surrogate_result(file_path, params, input_dir, result):
     """
-    Writes a surrogates.SurrogateResult to file_path as xlsx. Welch keeps the file of earlier versions, with the
-    new rows at the end of its first sheet.
+    Writes a surrogates.SurrogateResult to file_path, as the tables listed above. For Welch with windowed
+    correlation, the group averages of the real dyads and the random pairs are written next to it.
     """
-    left_out = left_out_names(result.left_out_files, input_dir)
-    sheets = [_dyad_sheet(result)]
+    sheets = [_surrogate_metadata(params, input_dir, result)]
+    if result.method != WELCH:
+        sheets.append(_surrogate_sets_table(result))
+    sheets.append(_dyads_table(result))
     if result.method == BLOCKS:
-        sheets.append(_shuffled_versions_sheet(result))
-    if result.failures:
-        sheets.append(_skipped_sheet(result))
-
-    if result.method == WELCH:
-        export_random_pair_data(
-            file_path=file_path,
-            params=params,
-            input_dir=input_dir,
-            t_stat=result.t_statistic,
-            p_value=result.p_value,
-            avg_corr_rp=list(result.null_values),
-            avg_corr_real=result.real_values,
-            avg_wxcorr_real=result.avg_wxcorr_real,
-            avg_wxcorr_rp=result.avg_wxcorr_surrogates,
-            seed=result.seed,
-            n_eligible_pairs=result.n_pairs_possible,
-            n_random_pairs_requested=result.n_surrogates,
-            window_counts_real=result.window_counts_real,
-            window_counts_rp=result.window_counts_surrogates,
-            left_out_files=left_out,
-            extra_rows=_result_rows(result),
-            extra_sheets=sheets,
-        )
+        sheets.append(_shuffled_versions_table(result))
     else:
-        null_values = np.asarray(result.null_values, dtype=float)
-        single_values = {
-            'p-value': result.p_value,
-            **_result_rows(result),
-            'Real group mean': result.real_value,
-            'Surrogate mean': float(np.nanmean(null_values)),
-            'Surrogate SD': float(np.nanstd(null_values)),
-            **_correlation_settings(params),
-            'Input dyad directory': f"{input_dir}",
-            'Random seed': result.seed,
-            'Surrogate sets': result.n_surrogates,
-            'Different surrogate sets possible': _count(result.n_sets_possible),
-            'Real dyads used': len(result.real_values),
-            'Dyads or pairs skipped': len(result.failures),
-        }
-        if result.method == REPAIRED:
-            single_values.update({
-                'Different random pairs possible': result.n_pairs_possible,
-                'Random pairs used': result.n_pairs_used,
-                'Files not used for random pairs': "; ".join(left_out) if left_out else '-',
-            })
-        if result.method == BLOCKS:
-            single_values.update({
-                'Block length (samples)': result.block_length,
-                f'Dyads with p < {SIGNIFICANCE_LEVEL}': sum(p < SIGNIFICANCE_LEVEL for p in result.dyad_p_values),
-            })
-        vectors = {'surrogate set mean': null_values, 'real dyad value': result.real_values}
-        xlsx.write_xlsx(vectors=vectors, single_values=single_values, output_path=file_path,
-                        sheet_title="Surrogate Analysis", extra_sheets=sheets)
+        sheets += [_random_pairs_table(result, input_dir), _files_left_out_table(result, input_dir)]
+    sheets.append(_skipped_table(result))
+    xlsx.write_tables(file_path, sheets)
+    if result.method == WELCH and params['checkbox_windowed_xcorr']:
+        _export_welch_group_averages(file_path, params, result)

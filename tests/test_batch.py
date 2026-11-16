@@ -22,15 +22,6 @@ import export
 import utils
 from helpers import N_BEATS, FakeTimer, batch_params, ibi, read_column, read_metadata, read_notes, write_dyad, write_person
 
-def _read_export(path):
-    """Returns (metadata, columns) of an exported file."""
-    sheet = openpyxl.load_workbook(path).active
-    metadata = {row[0].value: row[1].value for row in sheet.iter_rows(max_col=2) if row[0].value}
-    columns = {}
-    for column in sheet.iter_cols(min_col=4):
-        columns[column[0].value] = [cell.value for cell in column[1:] if cell.value is not None]
-    return metadata, columns
-
 
 @pytest.fixture
 def batch_dirs(tmp_path):
@@ -183,14 +174,13 @@ def test_standard_xcorr_with_short_lag_range_is_exported_without_dfa(batch_dirs)
     assert read_notes(path)['max_lag_samples'] is None and metadata['max_lag_samples'] == 40
 
 
-def test_random_pair_metadata_reports_standard_xcorr_settings(tmp_path):
-    path = tmp_path / "random_pairs.xlsx"
+def test_surrogate_metadata_reports_standard_xcorr_settings():
     params = batch_params("", "", checkbox_windowed_xcorr=False, max_lag=30, max_lag_sxc=150,
                      checkbox_absolute_corr=False, checkbox_absolute_corr_sxc=True)
-    export.export_random_pair_data(str(path), params, "input", 0.1, 0.5, [0.1], [0.2])
-    metadata, _ = _read_export(path)
-    assert metadata['Max lag'] == 150
-    assert metadata['Absolute correlation values'] == 'True'
+    rows = {row[0]: row[1] for row in export._settings_rows(params)}
+    assert (rows['correlation'], rows['max_lag_samples'], rows['absolute_correlations']) == (
+        "standard cross-correlation", 150, True)
+    assert 'window_size_samples' not in rows
 
 
 # ---------------------------------------------------------------------------

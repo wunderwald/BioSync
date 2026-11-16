@@ -63,6 +63,8 @@ class SurrogateResult:
     n_pairs_possible: int = None        # pairs of people from different dyads
     n_pairs_used: int = None            # of those, the pairs that gave a value. For Welch, repeats count again.
     left_out_files: list = None         # (file path, reason) of recordings that can't be in a random pair
+    pair_files: list = None             # (file path A, file path B) of each random pair that gave a value,
+    pair_values: list = None            # and that value. For Welch in the order drawn, repeats included.
     # shuffled blocks, with one entry per dyad in dyad_names
     block_length: int = None
     dyad_null_values: list = None       # the measure of each of the dyad's surrogates
@@ -318,11 +320,12 @@ def repaired_pair_test(params, input_dir, n_surrogates=1000, progress=_no_progre
         except Exception as e:
             failures.append((name, str(e)))
 
-    pair_values = []
+    pair_values, pair_files = [], []
     for index, (file_path_a, file_path_b) in enumerate(ordered_pairs):
         progress(len(real_dyads) + index, total_steps, "Random pairs")
         try:
             pair_values.append(_pair_value(recordings, file_path_a, file_path_b, params, config, measure))
+            pair_files.append((file_path_a, file_path_b))
         except Exception as e:
             failures.append((f"random pair {os.path.basename(file_path_a)}, {os.path.basename(file_path_b)}", str(e)))
 
@@ -354,6 +357,8 @@ def repaired_pair_test(params, input_dir, n_surrogates=1000, progress=_no_progre
         n_sets_possible=math.comb(len(pair_values), len(real_values)),
         failures=failures,
         left_out_files=left_out,
+        pair_files=pair_files,
+        pair_values=pair_values,
     )
 
 
@@ -544,10 +549,11 @@ def welch_random_pair_test(params, input_dir, n_random_pairs=100, progress=_no_p
             failures.append((name, str(e)))
             return False
 
-    pair_values, wxcorr_surrogates = [], []
+    pair_values, pair_files, wxcorr_surrogates = [], [], []
     for index, (file_path_a, file_path_b) in enumerate(random_pairs):
         progress(index, total_steps, "Random pairs")
-        analyse(_random_pair_name(file_path_a, file_path_b), file_path_a, file_path_b, pair_values, wxcorr_surrogates)
+        if analyse(_random_pair_name(file_path_a, file_path_b), file_path_a, file_path_b, pair_values, wxcorr_surrogates):
+            pair_files.append((file_path_a, file_path_b))
 
     dyad_names, real_values, wxcorr_real = [], [], []
     for index, (name, file_path_a, file_path_b) in enumerate(real_dyads):
@@ -572,6 +578,8 @@ def welch_random_pair_test(params, input_dir, n_random_pairs=100, progress=_no_p
         n_pairs_possible=len(eligible_pairs),
         n_pairs_used=len(pair_values),
         left_out_files=left_out,
+        pair_files=pair_files,
+        pair_values=list(pair_values),
         t_statistic=float(t_statistic),
         avg_wxcorr_real=_group_average(wxcorr_real, params) if config.windowed else None,
         avg_wxcorr_surrogates=_group_average(wxcorr_surrogates, params) if config.windowed else None,

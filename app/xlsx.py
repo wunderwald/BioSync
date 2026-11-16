@@ -10,78 +10,6 @@ from openpyxl import Workbook, load_workbook
 MAX_ROWS = 1048576
 MAX_COLUMNS = 16384
 
-def _cell_value(value):
-    """
-    The value to store in a cell. Numbers are stored as numbers, so that they can be calculated with.
-    Everything else is text, including booleans. NaN and infinity have no cell type and would make Excel
-    report the file as damaged, so they are text too.
-    """
-    if isinstance(value, np.generic):
-        value = value.item()
-    if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
-        return value
-    return str(value)
-
-def write_matrix_sheet(workbook: Workbook, matrix: dict):
-    """
-    Add a sheet with one row per entry of matrix['row_labels'] and one column per entry of matrix['column_labels'].
-    Args:
-        workbook (Workbook): The workbook to add the sheet to.
-        matrix (dict): 'title', 'corner' (text for the top left cell), 'row_labels', 'column_labels', and 'rows'.
-    """
-    if len(matrix['row_labels']) + 1 > MAX_ROWS or len(matrix['column_labels']) + 1 > MAX_COLUMNS:
-        raise ValueError(f"Too much data for an Excel sheet: {len(matrix['row_labels'])} rows, {len(matrix['column_labels'])} columns.")
-    sheet = workbook.create_sheet(matrix['title'])
-    sheet.append([matrix['corner'], *(_cell_value(label) for label in matrix['column_labels'])])
-    for label, row in zip(matrix['row_labels'], matrix['rows']):
-        sheet.append([_cell_value(label), *(_cell_value(value) for value in row)])
-
-def write_xlsx(vectors: dict, single_values: dict, output_path: str, sheet_title: str="xcorr data", matrix: dict=None,
-               extra_sheets: list=()):
-    """
-    Write data to an Excel file. Existing analysis pipelines read the first sheet, so its layout and its text
-    must stay as they are. New data belongs on another sheet.
-    Args:
-        vectors (dict): A dictionary where keys are column names and values are lists of time series data.
-        single_value (dict): A dictionary where keys are column names and values are single data values.
-        output_path (str): The file path where the Excel file will be saved.
-        matrix (dict, optional): Data for a second sheet, see write_matrix_sheet.
-        extra_sheets (list, optional): Data for more sheets after it, each as for write_matrix_sheet.
-    Returns:
-        None
-    """
-    longest_vector = max((len(vector) for vector in vectors.values()), default=0)
-    if longest_vector + 1 > MAX_ROWS:
-        raise ValueError(f"Too much data for an Excel sheet: {longest_vector} rows.")
-
-    # Create a new workbook
-    wb = Workbook()
-    sheet = wb.active
-    sheet.title = sheet_title
-
-    # Write the single valued data to columns 
-    # (column 1 -> names, column 2 -> values)
-    row_index = 1
-    for name, value in single_values.items():
-        sheet.cell(row=row_index, column=1, value=name)  
-        sheet.cell(row=row_index, column=2, value=_cell_value(value))
-        row_index += 1
-    
-    # Write the time series data to columns
-    # (one vector with title per column, starting in column 4)
-    column_index = 4
-    for name in vectors.keys():
-        sheet.cell(row=1, column=column_index, value=name)
-        for row_index, value in enumerate(vectors[name]):  
-            sheet.cell(row=row_index+2, column=column_index, value=_cell_value(value))
-        column_index += 1
-
-    for sheet_data in ([matrix] if matrix is not None else []) + list(extra_sheets):
-        write_matrix_sheet(wb, sheet_data)
-
-    # Save the workbook
-    wb.save(output_path)
-
 def typed_cell(value):
     """
     The value to store in a cell of a table that programs read: numbers as numbers, booleans as TRUE/FALSE,
@@ -97,7 +25,10 @@ def typed_cell(value):
 
 
 def matrix_table(matrix: dict):
-    """A matrix for write_matrix_sheet as a table for write_tables: its row labels become the first column."""
+    """
+    A matrix as a table for write_tables: 'title', 'corner' (the top left cell), 'row_labels', 'column_labels'
+    and 'rows'. Its row labels become the first column.
+    """
     return {
         'title': matrix['title'],
         'columns': [matrix['corner'], *matrix['column_labels']],

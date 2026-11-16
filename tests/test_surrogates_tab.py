@@ -14,7 +14,7 @@ import gui_updates
 import plot
 import surrogates
 from analysis import AnalysisConfig
-from helpers import FakeTimer, FakeWidget, batch_params, write_dyad
+from helpers import FakeTimer, FakeWidget, batch_params, read_metadata, write_dyad
 from measures import MEAN_ABS_R_MAX, MEAN_R, R_AT_LAG_0
 from surrogates import (
     BLOCKS, GREATER, REPAIRED, SURROGATE_DISTRIBUTION, TWO_SIDED, WELCH, SurrogateChoice, choice_problem,
@@ -314,9 +314,9 @@ def test_run_writes_the_chosen_test_and_says_what_it_found(run, method, block_le
     assert not run.output.exists()          # running doesn't export
     callbacks.export_surrogate_data()
     kind, title, text = run.dialogs[0]
-    rows = {row[0]: row[1] for row in openpyxl.load_workbook(run.output).worksheets[0].iter_rows(max_col=2, values_only=True)}
-    assert rows['Method'] == method and rows['Surrogate sets'] == 30 and rows['Random seed'] == 7
-    assert text.splitlines()[0] == rows['Summary']
+    rows = read_metadata(run.output)
+    assert rows['method'] == method and rows['surrogate_sets'] == 30 and rows['seed'] == 7
+    assert text.splitlines()[0] == rows['summary']
     assert not os.path.exists(run.output.with_suffix(".png"))      # the plot has its own button
     callbacks.export_surrogate_plot()
     assert os.path.getsize(run.output.with_suffix(".png")) > 0
@@ -324,7 +324,7 @@ def test_run_writes_the_chosen_test_and_says_what_it_found(run, method, block_le
         assert (kind, title) == ("showinfo", "Surrogate analysis finished")
     else:
         # 3 dyads of about 13 blocks: plenty of orders, so no problem either
-        assert rows['Block length (samples)'] == block_length
+        assert rows['block_length_samples'] == block_length
         assert (kind, title) == ("showinfo", "Surrogate analysis finished")
 
 
@@ -472,8 +472,8 @@ def test_export_has_the_settings_of_the_run_even_after_they_changed(ran):
     _set_n(ran, 50)
     callbacks.update_surrogate_plan()
     callbacks.export_surrogate_data()
-    rows = {row[0]: row[1] for row in openpyxl.load_workbook(ran.output).worksheets[0].iter_rows(max_col=2, values_only=True)}
-    assert rows['Window size'] == 150 and rows['Surrogate sets'] == 20
+    rows = read_metadata(ran.output)
+    assert rows['window_size_samples'] == 150 and rows['surrogate_sets'] == 20
 
 
 @pytest.mark.parametrize("export, extension", [

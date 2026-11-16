@@ -114,6 +114,7 @@ def test_metadata_has_the_settings_of_the_run(dirs):
     metadata = read_metadata(output_dir / WINDOWED_SUMMARY)
     assert (metadata['analysis'], metadata['input_folder']) == ("windowed cross-correlation", str(input_dir))
     assert (metadata['window_size_samples'], metadata['step_size_samples'], metadata['standardised']) == (200, 100, False)
+    assert (metadata['sheet'], metadata['column']) == ("Sheet", "Coupled")
     described = [column for column, _ in read_table(output_dir / WINDOWED_SUMMARY, "columns")[1]]
     assert described == read_table(output_dir / WINDOWED_SUMMARY, "dyads")[0]     # every column, in order
 
