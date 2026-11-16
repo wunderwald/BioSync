@@ -340,6 +340,9 @@ def update_preproc_plots(params):
     fig = plot_preprocessed_signals(signal_a, signal_b, plot_titles)
     return fig
 
+PNG_DPI = 300      # resolution of saved figures; the tests lower it, as rendering takes most of a batch's time
+
+
 def save_figure_to_png(fig, filepath):
     """
     Save a matplotlib figure to a PNG file.
@@ -348,7 +351,7 @@ def save_figure_to_png(fig, filepath):
         fig (matplotlib.figure.Figure): The figure object to save.
         filepath (str): The full path where the PNG file should be saved.
     """
-    fig.savefig(filepath, dpi=300, bbox_inches='tight')
+    fig.savefig(filepath, dpi=PNG_DPI, bbox_inches='tight')
 
 # ---------------------------------------------------------------------------
 # SURROGATE TESTS

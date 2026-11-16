@@ -339,7 +339,8 @@ def test_long_preview_title_stays_inside_the_figure():
 
 
 @pytest.mark.parametrize("retina", [True, False])
-def test_batch_figure_has_room_for_its_text(retina, tmp_path, recwarn):
+def test_batch_figure_has_room_for_its_text(retina, tmp_path, recwarn, monkeypatch):
+    monkeypatch.setattr(plot, "PNG_DPI", 300)        # as batch saves it
     plot.plot_init(is_retina=retina)
     signal = np.convolve(np.random.default_rng(0).normal(size=600), np.ones(9) / 9, mode="same")
     windows = analysis.windowed_cross_correlation(signal, np.roll(signal, 3), 150, 75, 30)

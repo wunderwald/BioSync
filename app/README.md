@@ -189,6 +189,18 @@ pip install -r app/requirements-dev.txt
 pytest
 ```
 
+All tests take about two minutes. While working, run only what you need:
+
+| Command | Runs |
+|---|---|
+| `pytest -m "not slow"` | everything except the surrogate simulation and the real-window check (about 1.5 minutes) |
+| `pytest tests/test_dfa.py` | one file; each `tests/test_*.py` covers one part of the app |
+| `pytest -k stationarity` | tests whose name contains a word |
+| `pytest --lf` | only the tests that failed last time |
+| `pytest -x` | stops at the first failure |
+
+Run all of them before a commit. Figures are saved at a low resolution in the tests (`plot.PNG_DPI`), as writing them at 300 dpi took most of the time of every test that runs a batch.
+
 `tests/surrogate_simulation.py` checks the surrogate tests on simulated dyads with known coupling. The test suite runs a small version; the full run takes about half an hour: `python tests/surrogate_simulation.py --groups 200`.
 
 ### Entry point

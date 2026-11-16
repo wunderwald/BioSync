@@ -11,6 +11,8 @@ import pytest
 
 import callbacks
 
+pytestmark = pytest.mark.slow      # left out of quick runs: pytest -m "not slow"
+
 
 @pytest.fixture(scope="module")
 def report():

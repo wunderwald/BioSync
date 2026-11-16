@@ -5,6 +5,8 @@ in a session shares. The limits leave room for chance in few groups; the full ru
 """
 import pytest
 
+pytestmark = pytest.mark.slow      # left out of quick runs: pytest -m "not slow"
+
 import surrogate_simulation as sim
 from measures import MEAN_ABS_R_MAX, MEAN_R, MEASURES, R_AT_LAG_0
 from surrogates import BLOCKS, REPAIRED, WELCH

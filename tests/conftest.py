@@ -24,6 +24,16 @@ class FakeVar:
         self.value = value
 
 
+@pytest.fixture(autouse=True)
+def fast_png(monkeypatch):
+    """
+    Saves figures at a low resolution: at 300 dpi, writing PNGs takes most of the time of every test that runs a
+    batch. What a figure shows doesn't depend on it. A test that needs the real resolution sets plot.PNG_DPI back.
+    """
+    import plot
+    monkeypatch.setattr(plot, "PNG_DPI", 30)
+
+
 @pytest.fixture
 def fake_state(monkeypatch):
     """Replaces every tk.Var in state, so GUI logic can run without a window."""
