@@ -183,15 +183,20 @@ plot.bind('<Configure>', lambda event: plot_resizes.append((event.width, event.h
 for name in ("Input Data", "Correlation", "Export & Batch", "Surrogates", "Input Data"):
     tabview._segmented_button_callback(name)
     settle()
-    scrollbar = next(child for child in tabview.tab(name).winfo_children()[0].winfo_children()
-                     if 'Scrollbar' in type(child).__name__)
+    scroll_area = tabview.tab(name).winfo_children()[0]
+    scrollbar = next(child for child in scroll_area.winfo_children() if 'Scrollbar' in type(child).__name__)
+    canvas = next(child for child in scroll_area.winfo_children() if child.winfo_class() == 'Canvas')
     report['tabs'][name] = {
         'tabview_width': tabview.winfo_width(),
         'plot_width': plot.winfo_width(),
         'scrollbar_shown': bool(scrollbar.winfo_ismapped()),
+        'content_height': canvas.winfo_children()[0].winfo_reqheight(),
+        'visible_height': canvas.winfo_height(),
     }
 
 report['plot_resizes_during_tab_changes'] = len(plot_resizes)
+# the window may be smaller than asked for, on a small screen
+report['window'] = {'height': app.winfo_height(), 'screen': [app.winfo_screenwidth(), app.winfo_screenheight()]}
 report['tab_bar_fits'] = tabview._segmented_button.winfo_reqwidth() <= tabview.winfo_width()
 state.val_job_running.set(False)
 state.val_checkbox_lag_filter.set(False)

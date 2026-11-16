@@ -41,8 +41,17 @@ def test_tab_changes_keep_the_panel_and_the_plot_the_same_size(report):
 
 
 def test_only_tabs_that_dont_fit_get_a_scrollbar(report):
-    assert report['tabs']['Input Data']['scrollbar_shown'] is False
-    assert report['tabs']['Surrogates']['scrollbar_shown'] is True
+    for name, tab in report['tabs'].items():
+        assert tab['scrollbar_shown'] is (tab['content_height'] > tab['visible_height']), name
+
+
+def test_at_720_pixels_input_data_fits_and_surrogates_scroll(report):
+    """The check asks for a 1280x720 window. A smaller screen, such as a CI machine's, gives a smaller one."""
+    if report['window']['height'] != 720:
+        pytest.skip(f"the window is {report['window']['height']} pixels high on a screen of {report['window']['screen']}")
+    heights = {name: (tab['content_height'], tab['visible_height']) for name, tab in report['tabs'].items()}
+    assert report['tabs']['Input Data']['scrollbar_shown'] is False, f"content and visible heights: {heights}"
+    assert report['tabs']['Surrogates']['scrollbar_shown'] is True, f"content and visible heights: {heights}"
 
 
 def test_every_tab_name_fits_in_the_tab_bar(report):
