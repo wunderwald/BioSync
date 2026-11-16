@@ -31,11 +31,29 @@ def count_subdirectories(directory):
         return 0
 
 
+# Every file BioSync writes is called BioSync_<analysis>_<subject>, see output_name
+OUTPUT_PREFIX = "BioSync"
+WINDOWED, STANDARD, SURROGATES = "wcc", "scc", "surrogates"
+
+
+def output_name(analysis, subject=None):
+    """
+    The name of a file BioSync writes, without extension: BioSync_<analysis>_<subject>, or BioSync_<analysis>
+    without a subject. analysis is WINDOWED, STANDARD or SURROGATES; subject is a dyad or folder name.
+    """
+    return f"{OUTPUT_PREFIX}_{analysis}_{subject}" if subject else f"{OUTPUT_PREFIX}_{analysis}"
+
+
+def is_biosync_output(file_name):
+    """True for files BioSync wrote, also with the lower-case prefix of earlier versions' suggested names."""
+    return file_name.casefold().startswith(f"{OUTPUT_PREFIX}_".casefold())
+
+
 def list_dyad_files(directory):
     """
     Returns the xlsx file names in a dyad folder in a fixed order, which decides who is person A and B.
-    os.listdir has no defined order. Excel lock files (~$) and hidden files (.) are ignored, and the
-    extension can be in any case (.xlsx, .XLSX).
+    os.listdir has no defined order. Excel lock files (~$), hidden files (.) and BioSync's own results
+    (BioSync_..., see output_name) are ignored, and the extension can be in any case (.xlsx, .XLSX).
 
     Parameters:
     directory (str): The path to the dyad folder.
@@ -45,7 +63,7 @@ def list_dyad_files(directory):
     """
     file_names = [
         f for f in os.listdir(directory)
-        if f.lower().endswith('.xlsx') and not f.startswith(('~$', '.'))
+        if f.lower().endswith('.xlsx') and not f.startswith(('~$', '.')) and not is_biosync_output(f)
     ]
     return sorted(file_names, key=str.casefold)
 

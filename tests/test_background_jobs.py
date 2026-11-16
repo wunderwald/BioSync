@@ -154,7 +154,7 @@ def test_batch_does_not_touch_state_on_its_thread(app, tmp_path, monkeypatch):
 
     assert violations == []
     assert app.dialogs and app.dialogs[0][:2] == ("showinfo", "Batch processing finished")
-    assert (tmp_path / "out" / "wx_dyad0_wxcorr.xlsx").exists()
+    assert (tmp_path / "out" / "BioSync_wcc_dyad0.xlsx").exists()
 
 
 def test_random_pairs_do_not_touch_state_on_their_thread(app, tmp_path, monkeypatch):
@@ -338,7 +338,7 @@ def test_cancelled_batch_keeps_finished_dyads_and_skips_the_group_average(app, t
     app.timer.run_until_idle(60)
 
     written = sorted(path.name for path in (tmp_path / "out").glob("*.xlsx"))
-    assert written == ["wx_dyad0_wxcorr.xlsx", "wx_dyad1_wxcorr.xlsx"]
+    assert written == ["BioSync_wcc_dyad0.xlsx", "BioSync_wcc_dyad1.xlsx"]
     assert app.dialogs[0][1] == "Batch processing cancelled"
 
 

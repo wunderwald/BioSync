@@ -736,12 +736,11 @@ def _export_sxcorr_data(file_path):
     export_sxcorr_data(file_path, params)
 
 
-def _export_file_name(kind):
-    """The suggested name for an export: biosync_<wxc|xc>_<data|plot>, followed by the dyad folder if there is one."""
-    correlation_type = "wxc" if state.val_checkbox_windowed_xcorr.get() else "xc"
+def _export_file_name():
+    """The suggested name for an export, the one batch gives the dyad: BioSync_<wcc|scc>_<dyad folder>."""
+    analysis = utils.WINDOWED if state.val_checkbox_windowed_xcorr.get() else utils.STANDARD
     selected_dir = state.val_selected_dyad_dir.get()
-    name = f"biosync_{correlation_type}_{kind}"
-    return f"{name}_{os.path.basename(selected_dir)}" if selected_dir else name
+    return utils.output_name(analysis, os.path.basename(selected_dir) if selected_dir else None)
 
 
 def _while_exporting(kind, write):
@@ -759,7 +758,7 @@ def _while_exporting(kind, write):
 
 def export_data():
     corr_plot.flush_update()  # results must match settings typed just before clicking
-    filename_init  = _export_file_name("data")
+    filename_init  = _export_file_name()
     file_path = filedialog.asksaveasfilename(
         title="Save As",
         defaultextension=".xlsx",
@@ -780,7 +779,7 @@ def export_plot():
     fig = state.dat_plot_data["fig"]
     if not fig:
         return
-    filename_init = _export_file_name("plot")
+    filename_init = _export_file_name()
     file_path = filedialog.asksaveasfilename(
         title="Save As",
         defaultextension=".png",
@@ -1109,7 +1108,7 @@ def _export_surrogates(kind, extension, file_type, write):
     file_path = filedialog.asksaveasfilename(
         title="Save As",
         defaultextension=extension,
-        initialfile=f"biosync_surrogates_{os.path.basename(run['folder'])}",
+        initialfile=utils.output_name(utils.SURROGATES, os.path.basename(run['folder'])),
         filetypes=((f"{file_type} files", f"*{extension}"),)
     )
     if not file_path:

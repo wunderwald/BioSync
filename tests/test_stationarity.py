@@ -215,8 +215,8 @@ def test_export_without_a_result_has_dashes(tmp_path):
 
 
 @pytest.mark.parametrize("windowed, name, key", [
-    (True, "wx_dyad0_wxcorr.xlsx", 'KPSS share of stationary windows, signal A'),
-    (False, "dyad0_sxcorr.xlsx", 'KPSS p, signal A'),
+    (True, "BioSync_wcc_dyad0.xlsx", 'KPSS share of stationary windows, signal A'),
+    (False, "BioSync_scc_dyad0.xlsx", 'KPSS p, signal A'),
 ])
 def test_batch_files_have_the_rows(tmp_path, windowed, name, key):
     input_dir, output_dir = tmp_path / "in", tmp_path / "out"

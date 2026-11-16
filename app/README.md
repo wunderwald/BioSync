@@ -184,9 +184,9 @@ pytest
 | `dfa.py` | Detrended Fluctuation Analysis — `dfa`, `dfa_wxcorr`, `dfa_wxcorr_window_averages`. `analysis.py` decides which series it runs on. |
 | `plot.py` | Matplotlib figure factories for preprocessing preview, windowed xcorr, and standard xcorr plots, and for surrogate test results (`plot_surrogate_result`). |
 | `export.py` | Writes XLSX result files for wxcorr, sxcorr, and surrogate tests (`export_surrogate_result`; `export_surrogate_figure` saves the result figure as PNG). The Welch export keeps the first sheet of earlier versions and adds rows at its end. Always exports raw (non-sigmoid) correlation values. |
-| `batch_processing.py` | Iterates a folder of dyads, runs the full analysis pipeline on each, and saves per-dyad XLSX + PNG output. |
+| `batch_processing.py` | Iterates a folder of dyads, runs the full analysis pipeline on each, and saves per-dyad XLSX + PNG output (`BioSync_wcc_<dyad>`, `BioSync_scc_<dyad>`) and the group average (`BioSync_wcc_group-average`). Finds the results of earlier runs, also under the names of earlier versions. |
 | `xlsx.py` | Thin wrappers around openpyxl for reading and writing Excel files. `read_xlsx` returns the values of all sheets and closes the file. |
-| `utils.py` | Small helpers (`is_numeric_array`, `count_subdirectories`, `resource_path`, …). |
+| `utils.py` | Small helpers (`is_numeric_array`, `count_subdirectories`, `resource_path`, …), and the names of output files: `output_name` gives `BioSync_<analysis>_<subject>`, and `list_dyad_files` skips such files in dyad folders. |
 
 ### Initialization order
 

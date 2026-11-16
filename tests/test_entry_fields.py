@@ -96,16 +96,15 @@ def test_only_characters_int_can_read_are_accepted(text, accepted):
         int(text)
 
 
-@pytest.mark.parametrize("windowed, kind, folder, expected", [
-    (True, "data", "/study/ex1", "biosync_wxc_data_ex1"),
-    (False, "data", "/study/ex1", "biosync_xc_data_ex1"),
-    (True, "plot", "/study/ex1", "biosync_wxc_plot_ex1"),
-    (False, "plot", "", "biosync_xc_plot"),
+@pytest.mark.parametrize("windowed, folder, expected", [
+    (True, "/study/ex1", "BioSync_wcc_ex1"),
+    (False, "/study/ex1", "BioSync_scc_ex1"),
+    (False, "", "BioSync_scc"),
 ])
-def test_export_names(fake_state, windowed, kind, folder, expected):
+def test_export_names(fake_state, windowed, folder, expected):
     fake_state.val_checkbox_windowed_xcorr.set(windowed)
     fake_state.val_selected_dyad_dir.set(folder)
-    assert callbacks._export_file_name(kind) == expected
+    assert callbacks._export_file_name() == expected
 
 
 @pytest.mark.parametrize("export, kind", [(callbacks.export_data, "data"), (callbacks.export_plot, "plot")])
@@ -117,7 +116,7 @@ def test_save_dialog_suggests_the_name(fake_state, monkeypatch, export, kind):
     suggested = []
     monkeypatch.setattr(callbacks.filedialog, "asksaveasfilename", lambda **kwargs: suggested.append(kwargs["initialfile"]) or "")
     export()
-    assert suggested == [f"biosync_xc_{kind}_ex1"]
+    assert suggested == ["BioSync_scc_ex1"]     # the same as batch, with .xlsx or .png
 
 
 @pytest.fixture

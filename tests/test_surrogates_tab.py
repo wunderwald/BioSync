@@ -483,7 +483,7 @@ def test_export_suggests_a_name_and_can_be_cancelled(ran, monkeypatch, export, e
     asked = []
     monkeypatch.setattr(callbacks.filedialog, "asksaveasfilename", lambda **kwargs: asked.append(kwargs) or "")
     export()
-    assert (asked[0]['initialfile'], asked[0]['defaultextension']) == ("biosync_surrogates_in", extension)
+    assert (asked[0]['initialfile'], asked[0]['defaultextension']) == ("BioSync_surrogates_in", extension)
     assert asked[0]['filetypes'][0][1] == f"*{extension}"
     assert not ran.output.exists() and not ran.output.with_suffix(".png").exists()
 

@@ -4,6 +4,7 @@ Batch processing and random pair analysis, using small synthetic dyads where eac
     'Independent' columns of a dyad are unrelated.
 """
 import os
+import shutil
 import subprocess
 import time
 import sys
@@ -78,7 +79,7 @@ def test_grand_average_tau_stays_inside_the_lag_filter(batch_dirs):
     input_dir, output_dir = batch_dirs
     params = batch_params(input_dir, output_dir, use_lag_filter=True, lag_filter_min=10, lag_filter_max=30)
     batch_processing.batch_process(params)
-    _, columns = _read_export(output_dir / "grand_avg_wxcorr.xlsx")
+    _, columns = _read_export(output_dir / "BioSync_wcc_group-average.xlsx")
     taus = [int(tau) for tau in columns['lag of peak correlation (tau_max)']]
     assert taus and all(10 <= tau <= 30 for tau in taus)
 
@@ -86,7 +87,7 @@ def test_grand_average_tau_stays_inside_the_lag_filter(batch_dirs):
 def test_grand_average_without_filter_keeps_all_lags(batch_dirs):
     input_dir, output_dir = batch_dirs
     batch_processing.batch_process(batch_params(input_dir, output_dir))
-    _, columns = _read_export(output_dir / "grand_avg_wxcorr.xlsx")
+    _, columns = _read_export(output_dir / "BioSync_wcc_group-average.xlsx")
     assert len(columns['w_0_correlations']) == 61
     # The beat noise of each person adds up to about one sample of timing drift over the recording.
     assert all(abs(int(tau)) <= 2 for tau in columns['lag of peak correlation (tau_max)'])
@@ -116,6 +117,46 @@ def test_dyad_files_ignore_lock_hidden_and_other_files(tmp_path):
     assert utils.list_dyad_files(tmp_path) == ["P1.xlsx", "P2.xlsx"]
 
 
+def test_dyad_files_ignore_biosync_results(tmp_path):
+    names = ("BioSync_wcc_dyad0.xlsx", "BIOSYNC_scc_dyad0.xlsx", "biosync_wxc_data_dyad0.xlsx",
+             "BioSync_surrogates_in.xlsx", "P1.xlsx", "P2.xlsx", "BioSyncData.xlsx")
+    for name in names:
+        (tmp_path / name).touch()
+    assert utils.list_dyad_files(tmp_path) == ["BioSyncData.xlsx", "P1.xlsx", "P2.xlsx"]
+
+
+def test_an_export_in_a_dyad_folder_is_not_a_person(tmp_path):
+    """A result saved into a dyad folder, such as by Export XLSX, used to be read as a third person."""
+    input_dir, output_dir = tmp_path / "in", tmp_path / "out"
+    output_dir.mkdir()
+    for index in range(2):
+        write_dyad(input_dir / f"dyad{index}", seed=index)
+    batch_processing.batch_process(batch_params(input_dir, output_dir))
+    shutil.copy(output_dir / "BioSync_wcc_dyad0.xlsx", input_dir / "dyad0")      # a result saved into a dyad folder
+    summary = batch_processing.batch_process(batch_params(input_dir, output_dir))
+    assert summary['processed'] == ["dyad0", "dyad1"] and summary['warnings'] == []
+    pairs = surrogates._eligible_random_pairs(str(input_dir), ["dyad0", "dyad1"])
+    assert len(pairs) == 4 and not [pair for pair in pairs if any("BioSync" in path for path in pair)]
+
+
+@pytest.mark.parametrize("analysis, subject, name", [
+    (utils.WINDOWED, "dyad 1", "BioSync_wcc_dyad 1"), (utils.STANDARD, "d", "BioSync_scc_d"),
+    (utils.SURROGATES, "in", "BioSync_surrogates_in"), (utils.WINDOWED, None, "BioSync_wcc"),
+])
+def test_output_names(analysis, subject, name):
+    assert utils.output_name(analysis, subject) == name
+
+
+def test_without_a_dyad_folder_xlsx_and_png_have_the_same_time_in_their_name(tmp_path, monkeypatch):
+    times = iter(["20261116-142300", "20261116-142301"])
+    monkeypatch.setattr(batch_processing, "_subject", lambda dyad_dir: next(times))
+    write_dyad(tmp_path / "in" / "dyad0", seed=0)
+    (tmp_path / "out").mkdir()
+    batch_processing._process_dyad(tmp_path / "in" / "dyad0" / "P1.xlsx", tmp_path / "in" / "dyad0" / "P2.xlsx",
+                                   str(tmp_path / "out"), batch_params(tmp_path / "in", tmp_path / "out"))
+    assert sorted(os.listdir(tmp_path / "out")) == ["BioSync_wcc_20261116-142300.png", "BioSync_wcc_20261116-142300.xlsx"]
+
+
 def test_extra_file_is_reported_and_first_two_are_used(tmp_path):
     input_dir, output_dir = tmp_path / "in", tmp_path / "out"
     output_dir.mkdir()
@@ -123,7 +164,7 @@ def test_extra_file_is_reported_and_first_two_are_used(tmp_path):
     summary = batch_processing.batch_process(batch_params(input_dir, output_dir))
     assert summary['processed'] == ["dyad0"]
     assert "P1.xlsx and P2.xlsx" in summary['warnings'][0]
-    metadata, _ = _read_export(output_dir / "wx_dyad0_wxcorr.xlsx")
+    metadata, _ = _read_export(output_dir / "BioSync_wcc_dyad0.xlsx")
     assert (metadata['Input file A'], metadata['Input file B']) == ("P1.xlsx", "P2.xlsx")
 
 
@@ -136,7 +177,7 @@ def test_standard_xcorr_with_short_lag_range_is_exported_without_dfa(batch_dirs)
     params = batch_params(input_dir, output_dir, checkbox_windowed_xcorr=False, max_lag_sxc=40)
     summary = batch_processing.batch_process(params)
     assert summary['failed'] == []
-    metadata, _ = _read_export(output_dir / "dyad0_sxcorr.xlsx")
+    metadata, _ = _read_export(output_dir / "BioSync_scc_dyad0.xlsx")
     assert metadata['Alpha (DFA scaling exponent)'] == '-'
 
 
@@ -159,8 +200,8 @@ def test_batch_leaves_no_open_figures(batch_dirs):
     plt.close('all')
     batch_processing.batch_process(batch_params(input_dir, output_dir))
     assert plt.get_fignums() == []
-    assert (output_dir / "wx_dyad0_wxcorr.png").exists()
-    assert (output_dir / "grand_avg_wxcorr.png").exists()
+    assert (output_dir / "BioSync_wcc_dyad0.png").exists()
+    assert (output_dir / "BioSync_wcc_group-average.png").exists()
 
 
 def test_app_modules_do_not_load_pyplot():
@@ -229,6 +270,6 @@ def test_button_is_enabled_again_and_error_shown_after_a_crash(
 def test_batch_group_average_of_averaged_windows_has_no_lag(batch_dirs):
     input_dir, output_dir = batch_dirs
     batch_processing.batch_process(batch_params(input_dir, output_dir, checkbox_average_windows=True))
-    for name in ("wx_dyad0_wxcorr.xlsx", "grand_avg_wxcorr.xlsx"):
+    for name in ("BioSync_wcc_dyad0.xlsx", "BioSync_wcc_group-average.xlsx"):
         _, columns = _read_export(output_dir / name)
         assert set(columns['lag of peak correlation (tau_max)']) == {0}

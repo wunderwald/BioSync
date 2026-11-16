@@ -153,7 +153,7 @@ def test_gui_and_batch_write_identical_files(gui, dyad_files, tmp_path, settings
     output_dir.mkdir()
     dyad_dir = str(dyad_files[0].parent)
     batch_processing._process_dyad(*dyad_files, str(output_dir), _batch_params(), export=True, dyad_dir=dyad_dir)
-    name = f"wx_{dyad_files[0].parent.name}_wxcorr.xlsx" if windowed else f"{dyad_files[0].parent.name}_sxcorr.xlsx"
+    name = f"BioSync_{'wcc' if windowed else 'scc'}_{dyad_files[0].parent.name}.xlsx"
 
     assert _sheets(gui_file) == _sheets(output_dir / name)
     kpss = {row[0]: row[1] for row in _sheets(gui_file)[next(iter(_sheets(gui_file)))] if row[0] and 'KPSS' in row[0]}
@@ -370,8 +370,8 @@ def test_batch_group_average_reports_the_window_counts(tmp_path):
     def windows(name):
         return openpyxl.load_workbook(tmp_path / "out" / name)["correlations"].max_row - 1
 
-    short, long = windows("wx_short_wxcorr.xlsx"), windows("wx_long_wxcorr.xlsx")
-    metadata = _metadata(tmp_path / "out" / "grand_avg_wxcorr.xlsx")
+    short, long = windows("BioSync_wcc_short.xlsx"), windows("BioSync_wcc_long.xlsx")
+    metadata = _metadata(tmp_path / "out" / "BioSync_wcc_group-average.xlsx")
     assert short < long
-    assert metadata['Windows averaged'] == windows("grand_avg_wxcorr.xlsx") == short
+    assert metadata['Windows averaged'] == windows("BioSync_wcc_group-average.xlsx") == short
     assert metadata['Windows per dyad'] == f"{short} to {long}"

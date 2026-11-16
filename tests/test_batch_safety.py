@@ -168,15 +168,21 @@ def test_same_folder_ignores_case_where_the_system_does(monkeypatch):
 # RESULTS OF AN EARLIER RUN
 # ---------------------------------------------------------------------------
 
-RESULTS = ["wx_d0_wxcorr.xlsx", "wx_d0_wxcorr.png", "d0_sxcorr.xlsx", "d0_sxcorr.png", "grand_avg_wxcorr.xlsx", "grand_avg_wxcorr.png"]
-OTHER = ["notes.xlsx", "wx_d0_wxcorr.xlsx.bak", "my_wxcorr.xlsx", "grand_avg_wxcorr_old.xlsx", "summary.png"]
+RESULTS = ["BioSync_wcc_d0.xlsx", "BioSync_wcc_d0.png", "BioSync_scc_d0.xlsx", "BioSync_scc_d0.png",
+           "BioSync_wcc_group-average.xlsx", "BioSync_wcc_group-average.png"]
+EARLIER_VERSIONS = ["wx_d0_wxcorr.xlsx", "wx_d0_wxcorr.png", "d0_sxcorr.xlsx", "d0_sxcorr.png", "grand_avg_wxcorr.xlsx",
+                    "grand_avg_wxcorr.png"]
+OTHER = ["notes.xlsx", "wx_d0_wxcorr.xlsx.bak", "my_wxcorr.xlsx", "grand_avg_wxcorr_old.xlsx", "summary.png",
+         "BioSync_wcc_d0.xlsx.bak", "BioSync_surrogates_in.xlsx", "BioSync_wcc_d0.csv",
+         "biosync_wxc_data_d0.xlsx"]     # the last is a name the Export XLSX button suggested before
 
 
 def test_only_files_a_batch_writes_count_as_earlier_results(tmp_path):
-    for name in RESULTS + OTHER:
+    for name in RESULTS + EARLIER_VERSIONS + OTHER:
         (tmp_path / name).write_text("x")
     (tmp_path / "wx_folder_wxcorr.xlsx").mkdir()
-    assert batch_processing.find_result_files(str(tmp_path)) == sorted(RESULTS)
+    (tmp_path / "BioSync_wcc_folder.xlsx").mkdir()
+    assert batch_processing.find_result_files(str(tmp_path)) == sorted(RESULTS + EARLIER_VERSIONS)
 
 
 def test_missing_output_folder_has_no_earlier_results(tmp_path):
@@ -204,7 +210,7 @@ def app(fake_state, tmp_path, monkeypatch):
 
 
 def _put_earlier_results(folder):
-    for name in RESULTS + OTHER:
+    for name in RESULTS + EARLIER_VERSIONS + OTHER:
         (folder / name).write_text("earlier run")
 
 
@@ -212,16 +218,16 @@ def test_empty_output_folder_starts_without_asking(app):
     callbacks.handle_run_batch_button()
     app.timer.run_until_idle(60)
     assert app.asked == []
-    assert (app.out / "wx_d0_wxcorr.xlsx").exists()
+    assert (app.out / "BioSync_wcc_d0.xlsx").exists()
 
 
 def test_earlier_results_are_deleted_when_confirmed(app):
     _put_earlier_results(app.out)
     callbacks.handle_run_batch_button()
     app.timer.run_until_idle(60)
-    assert "6 files from an earlier run" in app.asked[0]
-    assert not (app.out / "d0_sxcorr.xlsx").exists()
-    assert (app.out / "wx_d0_wxcorr.xlsx").read_bytes() != b"earlier run"     # written by this run
+    assert "12 files from an earlier run" in app.asked[0]
+    assert not (app.out / "BioSync_scc_d0.xlsx").exists() and not (app.out / "d0_sxcorr.xlsx").exists()
+    assert (app.out / "BioSync_wcc_d0.xlsx").read_bytes() != b"earlier run"     # written by this run
     assert all((app.out / name).read_text() == "earlier run" for name in OTHER)
 
 

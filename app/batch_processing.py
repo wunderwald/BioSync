@@ -9,6 +9,14 @@ from cross_correlation import average_wxcorr_matrices
 from datetime import datetime
 from plot import plot_windowed_cross_correlation, plot_standard_cross_correlation, save_figure_to_png
 
+GROUP_AVERAGE_NAME = utils.output_name(utils.WINDOWED, "group-average")
+
+
+def _subject(dyad_dir):
+    """What a dyad's result files are named after: its folder, or the time without one."""
+    return os.path.basename(dyad_dir) if dyad_dir else datetime.now().strftime('%Y%m%d-%H%M%S')
+
+
 def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dyad_dir=''):
     """
     Processes dyadic data from Excel files, performs cross-correlation analysis, and optionally exports the results.
@@ -54,6 +62,7 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
         # process data
         config = AnalysisConfig.from_params(params)
         signals, corr_data = analyze_dyad(raw_signal_a, raw_signal_b, config)
+        name = utils.output_name(utils.WINDOWED if config.windowed else utils.STANDARD, _subject(dyad_dir))
         _signal_a, _signal_b, _signal_a_z_scored, _signal_b_z_scored = signals
 
         # select signals based on standardisation flag
@@ -98,11 +107,11 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
                     use_lag_filter=params['use_lag_filter'], lag_filter_min=params['lag_filter_min'], lag_filter_max=params['lag_filter_max'],
                     window_size=params['window_size'], max_lag=params['max_lag'], step_size=params['step_size']
                 )
-                output_file_name = f"wx_{os.path.basename(dyad_dir) if dyad_dir else datetime.now().strftime('%Y%m%d%H%M%S')}_wxcorr.xlsx"
+                output_file_name = f"{name}.xlsx"
                 output_file_path = os.path.join(output_dir, output_file_name)
                 export_wxcorr_data(output_file_path, export_params)
 
-                plot_file_name = f"wx_{os.path.basename(dyad_dir) if dyad_dir else datetime.now().strftime('%Y%m%d%H%M%S')}_wxcorr.png"
+                plot_file_name = f"{name}.png"
                 plot_file_path = os.path.join(output_dir, plot_file_name)
                 save_figure_to_png(fig=fig, filepath=plot_file_path)
 
@@ -133,11 +142,11 @@ def _process_dyad(file_path_a, file_path_b, output_dir, params, export=True, dya
             # export data and plot, making the plot first so that a failure leaves no files
             if export:
                 fig = plot_standard_cross_correlation(sxc_data=corr_data, signal_a=signal_a, signal_b=signal_b)
-                output_file_name = f"{os.path.basename(dyad_dir) if dyad_dir else datetime.now().strftime('%Y%m%d%H%M%S')}_sxcorr.xlsx"
+                output_file_name = f"{name}.xlsx"
                 output_file_path = os.path.join(output_dir, output_file_name)
                 export_sxcorr_data(output_file_path, export_params)
 
-                plot_file_name = f"{os.path.basename(dyad_dir) if dyad_dir else datetime.now().strftime('%Y%m%d%H%M%S')}_sxcorr.png"
+                plot_file_name = f"{name}.png"
                 plot_file_path = os.path.join(output_dir, plot_file_name)
                 save_figure_to_png(fig=fig, filepath=plot_file_path)
 
@@ -158,6 +167,8 @@ def _same_folder(path_a, path_b):
 # ---------------------------------------------------------------------------
 
 RESULT_FILE_PATTERNS = (
+    re.compile(rf"^{utils.OUTPUT_PREFIX}_({utils.WINDOWED}|{utils.STANDARD})_.+\.(xlsx|png)$"),
+    # the names of earlier versions, so that their results are found too
     re.compile(r"^wx_.+_wxcorr\.(xlsx|png)$"),
     re.compile(r"^.+_sxcorr\.(xlsx|png)$"),
     re.compile(r"^grand_avg_wxcorr\.(xlsx|png)$"),
@@ -258,7 +269,7 @@ def batch_process(params, progress=_no_progress):
         avg_wxcorr = average_wxcorr_matrices(all_wxcorr_results, min_lag, params['checkbox_average_windows'])
         if avg_wxcorr:
             export_avg_wxcorr_data(
-                os.path.join(output_dir, 'grand_avg_wxcorr.xlsx'),
+                os.path.join(output_dir, f"{GROUP_AVERAGE_NAME}.xlsx"),
                 avg_wxcorr, len(all_wxcorr_results), params,
                 window_counts=[len(wxcorr) for wxcorr in all_wxcorr_results],
             )
@@ -273,6 +284,6 @@ def batch_process(params, progress=_no_progress):
                 lag_filter_min=params['lag_filter_min'],
                 lag_filter_max=params['lag_filter_max'],
             )
-            save_figure_to_png(fig=fig, filepath=os.path.join(output_dir, 'grand_avg_wxcorr.png'))
+            save_figure_to_png(fig=fig, filepath=os.path.join(output_dir, f"{GROUP_AVERAGE_NAME}.png"))
 
     return summary
