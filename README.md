@@ -5,7 +5,9 @@ by [Moritz Wunderwald](mailto:code@moritzwunderwald.de), 2025-2026
 
 Interactive visual toolbox for working with windowed cross-correlation, optimized for IBI and EDA data. Validate data, tune parameters, run batches and further analysis.
 
-**→ [Installation, running, building and updating](app/README.md)**
+## Using BioSync
+
+Detailed instruction on installation, running, building and updating BioSync are provided here: **[app/README.md](app/README.md)**.
 
 ## Citing BioSync
 
