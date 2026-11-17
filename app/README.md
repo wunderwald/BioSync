@@ -5,7 +5,64 @@ Interactive visual toolbox for windowed cross-correlation analysis, optimized fo
 
 ---
 
-## Requirements
+## Installing the release
+
+The easiest way to use BioSync is a ready-built release: no Python or code needed. Download it from the [Releases page](https://github.com/wunderwald/BioSync/releases), under **Assets** of the newest release:
+
+| System | File |
+|---|---|
+| macOS (Apple silicon: M1 or newer) | `BioSync-<version>-macOS-AppleSilicon.zip` |
+| Windows (64-bit) | `BioSync-<version>-Windows-x64.zip` |
+| Linux (64-bit) | `BioSync-<version>-Linux-x64.tar.gz` |
+
+There is no release for Intel Macs (check under **Apple menu → About This Mac → Chip**). On an Intel Mac, [build the app yourself](#building-a-standalone-app).
+
+### macOS
+
+1. Unzip the download by double-clicking it (Safari may already have done that).
+2. Drag `BioSync.app` into **Applications**.
+
+BioSync isn't signed with a paid Apple developer certificate, so macOS blocks it the first time it is opened, with a warning like *"BioSync" Not Opened: Apple could not verify "BioSync" is free of malware*. This doesn't mean anything is wrong with the app. To allow it, once:
+
+1. Double-click BioSync, and close the warning with **Done** (not **Move to Trash**).
+2. Open **System Settings → Privacy & Security** and scroll down to **Security**. Next to the message about BioSync, click **Open Anyway**. The button is only there for about an hour after step 1.
+3. Confirm with **Open Anyway** and your password or Touch ID.
+
+From then on, BioSync opens normally. On macOS 14 (Sonoma) and earlier, there's a shortcut: right-click the app, choose **Open**, then **Open** again.
+
+If macOS instead says *"BioSync" is damaged and can't be opened. You should move it to the Trash.*, the app isn't damaged either: macOS says this about some downloaded apps without a signature. Remove the "downloaded from the internet" mark in **Terminal** (in Applications → Utilities), then open BioSync normally:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/BioSync.app
+```
+
+### Windows
+
+1. Right-click the download and choose **Extract All…**. BioSync doesn't run from inside the zip.
+2. Open the extracted `BioSync` folder and double-click `BioSync.exe`. Keep the whole folder together: the exe needs the files next to it. For a desktop shortcut, right-click `BioSync.exe` → **Send to → Desktop (create shortcut)** (on Windows 11, under **Show more options**).
+
+The first time, Windows may show *Windows protected your PC*, because the app isn't signed. Click **More info**, then **Run anyway**.
+
+### Linux
+
+```bash
+tar -xzf BioSync-<version>-Linux-x64.tar.gz
+./BioSync/BioSync
+```
+
+The release is built on Ubuntu 22.04 and needs a distribution at least that recent.
+
+### Updating the release
+
+Download the new release and replace the old app or folder with it. On macOS, the new version has to be allowed once again, as above.
+
+---
+
+## Running and building from source
+
+Only needed to change the code, to run the newest unreleased version, or on a system without a release (such as an Intel Mac).
+
+### Requirements
 
 - **Python 3.11.9 from python.org** ([macOS](https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg), [Windows](https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe)). On Windows, tick **Add python.exe to PATH** in the installer.
   - On macOS, Python before 3.11.7 includes Tk 8.6.12, which makes the window ignore clicks until its title bar is clicked ([python/cpython#110218](https://github.com/python/cpython/issues/110218)).
@@ -14,15 +71,11 @@ Interactive visual toolbox for windowed cross-correlation analysis, optimized fo
 
 The commands below use `python3.11` on macOS. On Windows, use `py -3.11` instead.
 
----
-
-## Getting the code
+### Getting the code
 
 Clone `https://github.com/wunderwald/BioSync`, for example in GitHub Desktop with **Add → Clone Repository…**, then open the folder in VS Code.
 
----
-
-## Installation
+### Installing the packages
 
 In a terminal (in VS Code: **Terminal → New Terminal**):
 
@@ -48,9 +101,7 @@ python -m pip install -r requirements.txt
 
 The environment only needs to be created once. On subsequent sessions, just re-run the `activate` line before launching the app.
 
----
-
-## Running
+### Running
 
 Open `app/app.py` in VS Code and click the play button, or from inside `app/`:
 
@@ -60,9 +111,7 @@ python3.11 app.py
 
 If VS Code reports a missing module, check the Python version shown at the bottom right when `app.py` is open, and choose Python 3.11.
 
----
-
-## Building a standalone app
+### Building a standalone app
 
 BioSync ships a `build.py` script that runs PyInstaller with `BioSync.spec`. From inside the `app/` directory:
 
@@ -73,14 +122,13 @@ python3.11 build.py
 
 The build doesn't ask anything. The result is in `app/dist/`:
 
-- **macOS:** `BioSync.app`. The first time it is opened, macOS may say it can't check the developer: right-click the app, choose **Open**, then **Open** again.
+- **macOS:** `BioSync.app`. An app built on your own Mac opens without the warning described under [macOS](#macos). A copy sent to another Mac, e.g. by AirDrop or download, gets the warning there and has to be allowed in the same way.
 - **Windows:** the folder `BioSync`, with `BioSync.exe` inside. Keep the whole folder together.
+- **Linux:** the folder `BioSync`, with the program `BioSync` inside.
 
-A Windows app has to be built on Windows, and a macOS app on a Mac. If the build warns about Tk, the Python used is too old, and the app would ignore clicks. Files the app loads at runtime, such as the theme, are listed in `datas` in `BioSync.spec`.
+A Windows app has to be built on Windows, a Linux app on Linux, and a macOS app on a Mac. The app runs only on the kind of Mac it was built on: Apple silicon or Intel. The releases are built the same way by `.github/workflows/release.yml`. If the build warns about Tk, the Python used is too old, and the app would ignore clicks. Files the app loads at runtime, such as the theme, are listed in `datas` in `BioSync.spec`.
 
----
-
-## Updating
+### Updating the code
 
 Pull the newest version, for example with **Fetch origin** and **Pull origin** in GitHub Desktop. Then run the installation command again, because the required packages may have changed, and rebuild a built app.
 
