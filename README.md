@@ -13,7 +13,7 @@ Detailed instruction on installation, running, building and updating BioSync are
 
 If you use BioSync in your research, please cite it:
 
-> Wunderwald, M. (2026). *BioSync* [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.24318412
+>Wunderwald, M., Stefanie, H., Tünte, M., & Gordon, I. (2026). BioSync (Version v1.0.1) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.24318412
 
 That DOI always points to the latest version. To cite the exact version you used, pick it from the version list on the [Zenodo record](https://doi.org/10.5281/zenodo.24318412). GitHub's "Cite this repository" button gives APA and BibTeX formats.
 
