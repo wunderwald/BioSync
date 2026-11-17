@@ -1,6 +1,8 @@
 # BioSync: App
 by [Moritz Wunderwald](mailto:code@moritzwunderwald.de), 2025-2026
 
+[![DOI](https://zenodo.org/badge/917213362.svg)](https://doi.org/10.5281/zenodo.24318412)
+
 Interactive visual toolbox for windowed cross-correlation analysis, optimized for IBI and EDA biosignal data. Load dyad recordings, tune parameters, inspect results, and export or batch-process datasets.
 
 ---
