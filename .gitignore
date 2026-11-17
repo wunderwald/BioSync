@@ -12,6 +12,8 @@
 /data
 /simulated_data/*save
 .claude
+.github
+.pytest_cache
 TODO.md
 
 # Jupyter
@@ -20,4 +22,5 @@ TODO.md
 
 # Virtual environments
 */.venv
+
 
