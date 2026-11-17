@@ -6,5 +6,6 @@ authors:
   - family-names: Wunderwald
     given-names: Moritz
     orcid: "https://orcid.org/0009-0009-0905-1377"
-license: MIT            
+license: MIT
+doi: "10.5281/zenodo.24318412"
 repository-code: "https://github.com/wunderwald/BioSync"

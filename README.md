@@ -7,6 +7,14 @@ Interactive visual toolbox for working with windowed cross-correlation, optimize
 
 **→ [Installation, running, building and updating](app/README.md)**
 
+## Citing BioSync
+
+If you use BioSync in your research, please cite it:
+
+> Wunderwald, M. (2026). *BioSync* [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.24318412
+
+That DOI always points to the latest version. To cite the exact version you used, pick it from the version list on the [Zenodo record](https://doi.org/10.5281/zenodo.24318412). GitHub's "Cite this repository" button gives APA and BibTeX formats.
+
 ---
 
 ## Project Structure
