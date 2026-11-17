@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use BioSync, please cite it as below."
+title: "BioSync"
+type: software
+authors:
+  - family-names: Wunderwald
+    given-names: Moritz
+    orcid: "https://orcid.org/0009-0009-0905-1377"
+license: MIT            
+repository-code: "https://github.com/wunderwald/BioSync"
